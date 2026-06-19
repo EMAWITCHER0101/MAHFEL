@@ -1017,7 +1017,7 @@ const AppInner: React.FC = () => {
                         <Suspense fallback={null}>
                             <FullScreenPlayer
                                 track={currentTrack} isPlaying={isPlaying} progress={audioProgress} duration={audioDuration}
-                                authors={authors} onPlayPause={togglePlay} onSeek={(p) => { if (audioRef.current) { audioRef.current.currentTime = p * (audioRef.current.duration || 1); audioRef.current.play().catch(()=>{}); setIsPlaying(true); } }}
+                                authors={authors} onPlayPause={togglePlay} onSeek={(p) => { if (audioRef.current && isFinite(p) && isFinite(audioRef.current.duration) && audioRef.current.duration > 0) { audioRef.current.currentTime = p * audioRef.current.duration; audioRef.current.play().catch(()=>{}); setIsPlaying(true); } }}
                                 onMinimize={() => setIsPlayerExpanded(false)} onClose={handleClosePlayer} onNext={playNext} onPrev={playPrev}
                                 comments={comments} onAddComment={async (text, track, timestamp, parentId) => { const newComment = await addComment({ type: 'podcast', podcastId: track.podcast.id || (track.podcast as any)._id, author: user?.name || 'کاربر', text, episodeIndex: track.episodeIndex, parentId, audioTimestamp: timestamp, authorAvatarUrl: user?.avatar }); if (newComment) { setComments(prev => insertCommentIntoTree(prev, newComment)); refreshComments(); } }}
                                 onDeleteComment={handleDeleteComment} onLikeComment={handleLikeComment} onUpdateComment={handleUpdateComment}

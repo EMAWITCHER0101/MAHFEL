@@ -6,6 +6,7 @@ import { toPersianDigits } from '../utils/helpers';
 interface BookReaderProps {
   book: PublishedBook;
   onClose: () => void;
+  startPage?: number;
 }
 
 interface PageContent {
@@ -15,8 +16,16 @@ interface PageContent {
   subtitle?: string;
 }
 
-const BookReader: React.FC<BookReaderProps> = ({ book, onClose }) => {
-  const [currentPage, setCurrentPage] = useState(0);
+const BookReader: React.FC<BookReaderProps> = ({ book, onClose, startPage }) => {
+  const [currentPage, setCurrentPage] = useState(() => {
+    if (startPage && startPage > 0) return startPage;
+    try {
+      const progress: Array<{ bookTitle: string; currentPage: number }> = JSON.parse(localStorage.getItem('soha_reading_progress') || '[]');
+      const saved = progress.find(p => p.bookTitle === book.title);
+      if (saved && saved.currentPage > 0) return saved.currentPage;
+    } catch {}
+    return 0;
+  });
   const [isFlipping, setIsFlipping] = useState(false);
   const [flipDirection, setFlipDirection] = useState<'next' | 'prev'>('next');
   const [showMenu, setShowMenu] = useState(false);
@@ -70,6 +79,17 @@ const BookReader: React.FC<BookReaderProps> = ({ book, onClose }) => {
 
   const pages = generatePages();
   const totalPages = pages.length;
+
+  useEffect(() => {
+    if (totalPages <= 0) return;
+    try {
+      const existing: Array<{ bookTitle: string; currentPage: number; totalPages: number; lastRead: string; bookmarks: number[] }> = JSON.parse(localStorage.getItem('soha_reading_progress') || '[]');
+      const idx = existing.findIndex(p => p.bookTitle === book.title);
+      const entry = { bookTitle: book.title, currentPage, totalPages, lastRead: new Date().toISOString(), bookmarks: idx >= 0 ? existing[idx].bookmarks : [] };
+      if (idx >= 0) existing[idx] = entry; else existing.push(entry);
+      localStorage.setItem('soha_reading_progress', JSON.stringify(existing));
+    } catch {}
+  }, [currentPage, totalPages, book.title]);
 
   const flipToPage = useCallback((target: number) => {
     if (target < 0 || target >= totalPages || isFlipping) return;
@@ -306,7 +326,7 @@ const BookReader: React.FC<BookReaderProps> = ({ book, onClose }) => {
 
         {/* Buttons */}
         <div className="flex items-center justify-between px-6 pb-6 pt-2 max-w-sm mx-auto">
-          <button onClick={(e) => { e.stopPropagation(); goNext(); }} disabled={currentPage >= totalPages - 1} className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center disabled:opacity-20 active:scale-90 transition-all hover:bg-white/15 border border-white/5">
+          <button onClick={(e) => { e.stopPropagation(); goPrev(); }} disabled={currentPage <= 0} className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center disabled:opacity-20 active:scale-90 transition-all hover:bg-white/15 border border-white/5">
             <i className="fas fa-chevron-right text-white/80 text-sm" />
           </button>
 
@@ -316,7 +336,7 @@ const BookReader: React.FC<BookReaderProps> = ({ book, onClose }) => {
             </button>
           </div>
 
-          <button onClick={(e) => { e.stopPropagation(); goPrev(); }} disabled={currentPage <= 0} className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center disabled:opacity-20 active:scale-90 transition-all hover:bg-white/15 border border-white/5">
+          <button onClick={(e) => { e.stopPropagation(); goNext(); }} disabled={currentPage >= totalPages - 1} className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center disabled:opacity-20 active:scale-90 transition-all hover:bg-white/15 border border-white/5">
             <i className="fas fa-chevron-left text-white/80 text-sm" />
           </button>
         </div>

@@ -823,6 +823,7 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
   });
   const [showOrders, setShowOrders] = useState(false);
   const [readingBook, setReadingBook] = useState<PublishedBook | null>(null);
+  const [readingStartPage, setReadingStartPage] = useState(0);
   const [toast, setToast] = useState<{ message: string; icon: string } | null>(null);
   const [walletBalance, setWalletBalance] = useState<number>(() => {
     try { return Number(localStorage.getItem('soha_wallet') || '0'); } catch { return 0; }
@@ -1008,8 +1009,8 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
     if (selectedItem.type === 'note') return <NoteDetailView note={selectedItem} allPodcasts={allPodcasts} comments={comments} onAddComment={onAddComment} onClose={() => setSelectedItem(null)} onDeleteComment={onDeleteComment} onLikeComment={onLikeComment} onUpdateComment={onUpdateComment} currentUserName={user?.name} />;
     return <BookDetailView book={selectedItem} allPodcasts={allPodcasts} comments={comments} onAddComment={onAddComment} onClose={() => setSelectedItem(null)} onAddToCart={addToCart} onReadBook={setReadingBook} onDeleteComment={onDeleteComment} onLikeComment={onLikeComment} onUpdateComment={onUpdateComment} currentUserName={user?.name} />;
   }
-  if (showOrders) return <OrdersPage orders={orders} onBack={() => setShowOrders(false)} onReadBook={(order, idx) => { const found = publishedBooks.find(b => b.title === order.items[idx]?.title); if (found) { setReadingBook(found); setShowOrders(false); } }} />;
-  if (readingBook) return <BookReader book={readingBook} onClose={() => setReadingBook(null)} />;
+  if (showOrders) return <OrdersPage orders={orders} publishedBooks={publishedBooks} onBack={() => setShowOrders(false)} onReadBook={(book, page) => { setReadingBook(book); setReadingStartPage(page || 0); setShowOrders(false); }} />;
+  if (readingBook) return <BookReader book={readingBook} startPage={readingStartPage} onClose={() => { setReadingBook(null); setReadingStartPage(0); }} />;
 
   return (
     <>
