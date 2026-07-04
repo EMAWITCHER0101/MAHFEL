@@ -1031,11 +1031,13 @@ const PostCommentsPage: React.FC<PostCommentsPageProps> = ({ post, video, podcas
                 )}
 
                 <div className="flex items-end gap-2 p-2.5 lg:p-3">
+                    {(userRole === 'author' || userRole === 'admin') && (
                     <button type="button" onClick={() => fileInputRef.current?.click()}
                         className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 active:scale-90 transition-all"
                         style={{ color: 'var(--text-2)', border: '1.5px solid var(--border)', background: 'var(--surface-2)' }}>
                         <i className="fas fa-plus text-[11px]"></i>
                     </button>
+                    )}
                     <input ref={fileInputRef} type="file" accept="image/*,audio/*,video/*" onChange={handleFileChange} className="hidden" />
                     {hasAudio && (
                       <button type="button" onClick={() => setMarkAudioTimestamp(!markAudioTimestamp)}

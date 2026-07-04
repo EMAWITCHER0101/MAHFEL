@@ -459,7 +459,13 @@ const AppInner: React.FC = () => {
                 media: (selectedAttachment?.type === 'image' ? [{ type: 'image', url: selectedAttachment.data }] : postMedia.length > 0 ? postMedia : undefined),
             };
             const newPost = await createPost(postData);
-            if (newPost) {
+            if (newPost && (newPost as any).banned) {
+                alert('🚫 شما از سایت اخراج شده‌اید');
+                setSendingPost(false);
+                return;
+            } else if (newPost && (newPost as any).warnings) {
+                alert(`⚠️ اخطار ${(newPost as any).warnings} از ۳ — پیام شما حذف شد`);
+            } else if (newPost) {
                 setPosts([newPost, ...posts]);
             }
             if (selectedAttachment?.type === 'book') {
@@ -485,7 +491,11 @@ const AppInner: React.FC = () => {
         setChatSending(true);
         const postData = { text: chatInputText.trim() };
         const newPost = await createPost(postData);
-        if (newPost) {
+        if (newPost && (newPost as any).banned) {
+            alert('🚫 شما از سایت اخراج شده‌اید');
+        } else if (newPost && (newPost as any).warnings) {
+            alert(`⚠️ اخطار ${(newPost as any).warnings} از ۳ — پیام شما حذف شد`);
+        } else if (newPost) {
             setPosts([newPost, ...posts]);
             setChatInputText('');
         }
@@ -700,7 +710,11 @@ const AppInner: React.FC = () => {
                     }
                 } else {
                     const updatedPost = await addPostComment(String(_postId), text, replyTo as any, media, quotedText, audioTimestamp, videoTimestamp);
-                    if (updatedPost) {
+                    if (updatedPost && (updatedPost as any).banned) {
+                        alert('🚫 شما از سایت اخراج شده‌اید');
+                    } else if (updatedPost && (updatedPost as any).warnings) {
+                        alert(`⚠️ اخطار ${(updatedPost as any).warnings} از ۳ — پیام شما حذف شد`);
+                    } else if (updatedPost) {
                         setPosts(prev => prev.map(p => String(p.id) === String(_postId) ? { ...p, comments: updatedPost.comments } : p));
                         setSelectedPostForComments({ ...freshPost, comments: updatedPost.comments });
                     }
@@ -1090,7 +1104,8 @@ onPlayVideo={(v) => { setIsVideoMini(false); handlePlayVideo(v); }}
                 onAuthorSelect={setSelectedAuthor}
              />
              
-                {appState === 'ready' && !isWriting && !selectedPodcast && !isPlayerExpanded && (
+                {appState === 'ready' && !isWriting && !selectedPodcast && !isPlayerExpanded && activeTab === 'mahfel' && (
+                   <div className="hidden lg:block">
                    <BottomTabs activeTab={activeTab} onTabChange={(tab) => {
                        if (tab === 'mahfel' && activeTab === 'mahfel') {
                            setShowChatInput(v => !v);
@@ -1099,6 +1114,13 @@ onPlayVideo={(v) => { setIsVideoMini(false); handlePlayVideo(v); }}
                            setShowChatInput(false);
                        }
                    }} onLongPressCentral={() => setIsWriting(true)} newMahfelMessages={0} userRole={user?.role} hidden={tabsHidden || !!selectedPodcast || isPlayerExpanded} onToggle={setTabsHidden} chatInput={showChatInput && activeTab === 'mahfel'} chatInputText={chatInputText} onChatInputChange={setChatInputText} onChatSend={handleChatSend} onChatClose={() => setShowChatInput(false)} chatSending={chatSending} theme={theme} />
+                   </div>
+              )}
+              {appState === 'ready' && !isWriting && !selectedPodcast && !isPlayerExpanded && activeTab !== 'mahfel' && (
+                   <BottomTabs activeTab={activeTab} onTabChange={(tab) => {
+                       setActiveTab(tab);
+                       setShowChatInput(false);
+                   }} onLongPressCentral={() => setIsWriting(true)} newMahfelMessages={0} userRole={user?.role} hidden={tabsHidden || !!selectedPodcast || isPlayerExpanded} onToggle={setTabsHidden} chatInput={false} chatInputText={chatInputText} onChatInputChange={setChatInputText} onChatSend={handleChatSend} onChatClose={() => setShowChatInput(false)} chatSending={chatSending} theme={theme} />
               )}
               {appState === 'ready' && activeTab === 'mahfel' && !isPlayerExpanded && (
                  <div className="lg:hidden"><MahfelSidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); setSelectedPodcast(null); setSelectedAuthor(null); setSelectedBook(null); setSelectedPublishedBook(null); setShowChatInput(false); }} open={mahfelSidebarOpen} onOpenChange={setMahfelSidebarOpen} theme={theme} onToggleTheme={toggleTheme} onOpenProfile={() => setIsProfileOpen(true)} /></div>

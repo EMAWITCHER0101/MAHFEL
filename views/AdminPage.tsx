@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import type { Podcast, Episode, Video, PublishedBook, Author, Book } from '../types';
 import { toPersianDigits } from '../utils/helpers';
-import { uploadFile, getAdminStats, getAdminUsers, updateUserRole, deleteUser, getAdminPosts, adminDeletePost, adminUpdatePost, getAdminComments, adminDeleteComment, adminUpdateComment, getPodcasts, getBooks, getAuthors, getVideos, getComments, getPosts, getPublishedBooks, getAdminAnalytics, getAdminActivity, adminExportData, adminSearchGlobal, adminBulkUsers, adminBulkPosts, adminBulkComments } from '../services/api';
+import { uploadFile, getAdminStats, getAdminUsers, updateUserRole, deleteUser, getAdminPosts, adminDeletePost, adminUpdatePost, getAdminComments, adminDeleteComment, adminUpdateComment, getPodcasts, getBooks, getAuthors, getVideos, getComments, getPosts, getPublishedBooks, getAdminAnalytics, getAdminActivity, adminExportData, adminSearchGlobal, adminBulkUsers, adminBulkPosts, adminBulkComments, muteUser, unmuteUser, unbanUser, resetUserWarnings } from '../services/api';
 import { fetchAparatVideoDetails, extractAparatId } from '../utils/aparatApi';
 import { GoogleGenAI } from "@google/genai";
 
@@ -505,7 +505,11 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                         />
                         <img src={u.avatar || `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" rx="20" fill="#1ab394"/><text x="20" y="20" font-size="16" fill="white" text-anchor="middle" dominant-baseline="central" font-family="Arial">${(u.name || 'ک').charAt(0)}</text></svg>`)}`} className="w-10 h-10 rounded-full object-cover shadow-sm" />
                         <div className="flex-1 min-w-0">
-                            <p className="text-[11px] font-black text-gray-800 truncate">{u.name || 'بدون نام'}</p>
+                            <p className="text-[11px] font-black text-gray-800 truncate">{u.name || 'بدون نام'}
+                                {u.banned && <span className="text-red-500 text-[8px] mr-1">🚫 بن شده</span>}
+                                {u.muted && <span className="text-orange-500 text-[8px] mr-1">🔇 سکوت</span>}
+                                {(u.warnings || 0) > 0 && !u.banned && <span className="text-amber-500 text-[8px] mr-1">⚠️{toPersianDigits(u.warnings)}</span>}
+                            </p>
                             <p className="text-[9px] text-gray-400">{toPersianDigits(u.phoneNumber)}</p>
                             <p className="text-[8px] text-gray-300">{u.interests?.length ? `${toPersianDigits(u.interests.length)} علاقه‌مندی` : ''} {u.library?.podcasts?.length ? `• ${toPersianDigits(u.library.podcasts.length)} پادکست` : ''}</p>
                         </div>
@@ -518,6 +522,22 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                                 <option value="author">نویسنده</option>
                                 <option value="admin">ادمین</option>
                             </select>
+                            {u.banned ? (
+                                <button onClick={async () => { const r = await unbanUser(u._id); if (r) setUsers(prev => prev.map(x => x._id === u._id ? { ...x, banned: false, warnings: 0 } : x)); }} className="px-2 py-1.5 bg-green-50 text-green-500 rounded-xl text-[9px] font-black hover:bg-green-100 transition-all" title="رفع بن">✅ رفع بن</button>
+                            ) : u.warnings > 0 ? (
+                                <button onClick={async () => { const r = await resetUserWarnings(u._id); if (r) setUsers(prev => prev.map(x => x._id === u._id ? { ...x, warnings: 0 } : x)); }} className="px-2 py-1.5 bg-amber-50 text-amber-500 rounded-xl text-[9px] font-black hover:bg-amber-100 transition-all" title="پاک کردن اخطارها">⚠️ {toPersianDigits(u.warnings)}</button>
+                            ) : null}
+                            {u.muted ? (
+                                <button onClick={async () => { const r = await unmuteUser(u._id); if (r) setUsers(prev => prev.map(x => x._id === u._id ? { ...x, muted: false, mutedUntil: null } : x)); }} className="px-2 py-1.5 bg-blue-50 text-blue-500 rounded-xl text-[9px] font-black hover:bg-blue-100 transition-all" title="رفع سکوت">🔊 رفع سکوت</button>
+                            ) : (
+                                <button onClick={async () => {
+                                    const val = prompt('مدت سکوت به دقیقه (بدون مقدار = سکوت دائم):');
+                                    if (val === null) return;
+                                    const mins = parseInt(val) || 0;
+                                    const r = await muteUser(u._id, mins > 0 ? mins : undefined, 'سکوت توسط ادمین');
+                                    if (r) setUsers(prev => prev.map(x => x._id === u._id ? { ...x, muted: true, mutedUntil: r.mutedUntil } : x));
+                                }} className="px-2 py-1.5 bg-orange-50 text-orange-500 rounded-xl text-[9px] font-black hover:bg-orange-100 transition-all" title="سکوت کاربر">🔇 سکوت</button>
+                            )}
                             <button onClick={async () => {
                                 if (!confirm('آیا از حذف این کاربر اطمینان دارید؟')) return;
                                 const r = await deleteUser(u._id);
@@ -812,6 +832,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                         <div key={p.id} className="bg-white p-3 rounded-2xl border shadow-sm flex items-center justify-between group hover:border-primary transition-all">
                             <div className="flex items-center gap-3"><img src={p.cover || 'https://via.placeholder.com/80'} className="w-11 h-11 rounded-xl object-cover shadow-sm"/><div><p className="font-black text-[11px] text-gray-700">{p.title || 'بی‌عنوان'}</p><p className="text-[9px] text-gray-400 font-bold">{toPersianDigits(p.year)} • {toPersianDigits(p.episodes.length)} جلسه</p></div></div>
                             <div className="flex items-center gap-2">
+                                <button onClick={async () => { const { shareToMahfel } = await import('../services/api'); const ok = await shareToMahfel('podcast', p.id); if (ok) alert('در محفل شیر شد!'); }} className="text-green-500 font-black text-[9px] bg-green-50 px-4 py-2 rounded-xl hover:bg-green-100 transition-colors whitespace-nowrap"><i className="fas fa-share-alt ml-1"></i>محفل</button>
                                 <button onClick={() => setEditingItem({ type: 'Podcast', id: p.id })} className="bg-blue-50 text-blue-600 px-5 py-2 rounded-xl text-[10px] font-black transition-colors hover:bg-blue-100">ویرایش</button>
                                 <button onClick={() => handleDelete('podcasts', p.id)} className="w-8 h-8 rounded-xl bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100"><i className="fas fa-trash text-[10px]"></i></button>
                             </div>
@@ -906,6 +927,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                     <div key={b.id} className="bg-white p-3 rounded-2xl border shadow-sm flex items-center justify-between group hover:border-blue-300 transition-all">
                         <div className="flex items-center gap-3"><img src={b.cover || 'https://via.placeholder.com/100'} className="w-10 h-14 rounded-lg object-cover shadow-sm" /><p className="font-black text-[11px] text-gray-800">{b.title || 'بی‌عنوان'}</p></div>
                         <div className="flex items-center gap-2">
+                            <button onClick={async () => { const { shareToMahfel } = await import('../services/api'); const ok = await shareToMahfel('book', b.id); if (ok) alert('در محفل شیر شد!'); }} className="text-green-500 font-black text-[9px] bg-green-50 px-4 py-2 rounded-xl hover:bg-green-100 transition-colors whitespace-nowrap"><i className="fas fa-share-alt ml-1"></i>محفل</button>
                             <button onClick={() => setEditingItem({ type: 'PublishedBook', id: b.id })} className="bg-blue-50 text-blue-600 px-5 py-2 rounded-xl text-[10px] font-black hover:bg-blue-100 transition-colors">ویرایش</button>
                             <button onClick={() => handleDelete('publishedBooks', b.id)} className="w-8 h-8 rounded-xl bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100"><i className="fas fa-trash text-[10px]"></i></button>
                         </div>
@@ -948,6 +970,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                     <div key={v.id} className="bg-white p-2 rounded-2xl border shadow-sm flex items-center justify-between group hover:border-secondary transition-all">
                         <div className="flex items-center gap-3"><img src={v.thumbnailUrl || 'https://via.placeholder.com/120x68?text=Video'} className="w-16 h-10 rounded-lg object-cover shadow-sm"/><p className="text-[10px] font-black text-gray-700 truncate max-w-[150px]">{v.title}</p></div>
                         <div className="flex items-center gap-2">
+                            <button onClick={async () => { const { shareToMahfel } = await import('../services/api'); const ok = await shareToMahfel('video', v.id); if (ok) alert('در محفل شیر شد!'); }} className="text-green-500 font-black text-[9px] bg-green-50 px-4 py-2 rounded-xl hover:bg-green-100 transition-colors whitespace-nowrap"><i className="fas fa-share-alt ml-1"></i>محفل</button>
                             <button onClick={() => setEditingItem({ type: 'Video', id: v.id })} className="text-blue-500 font-black text-[9px] bg-blue-50 px-5 py-2 rounded-xl hover:bg-blue-100 transition-colors">ویرایش</button>
                             <button onClick={() => handleDelete('videos', v.id)} className="w-8 h-8 rounded-xl bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100"><i className="fas fa-trash text-[10px]"></i></button>
                         </div>

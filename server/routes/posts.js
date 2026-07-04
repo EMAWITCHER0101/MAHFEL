@@ -2,6 +2,7 @@ import { Router } from 'express';
 import Post from '../models/Post.js';
 import User from '../models/User.js';
 import { requireAuth, requireRole, auth } from '../middleware/auth.js';
+import { containsProfanity } from '../utils/profanityFilter.js';
 
 const router = Router();
 
@@ -50,7 +51,27 @@ router.get('/:id', async (req, res) => {
 
 router.post('/', requireAuth, async (req, res) => {
   try {
+    if (req.user.banned) {
+      return res.status(403).json({ error: 'شما به دلیل تخلفات مکرر از سایت اخراج شده‌اید.', banned: true });
+    }
+    if (req.user.muted) {
+      const until = req.user.mutedUntil ? new Date(req.user.mutedUntil).toLocaleString('fa-IR') : 'نامحدود';
+      return res.status(403).json({ error: `شما در حالت سکوت هستید تا ${until}`, muted: true, mutedUntil: req.user.mutedUntil });
+    }
     const body = { ...req.body };
+    if (body.text) {
+      const check = containsProfanity(body.text);
+      if (check.hasProfanity) {
+        req.user.warnings = (req.user.warnings || 0) + 1;
+        if (req.user.warnings >= 3) {
+          req.user.banned = true;
+          await req.user.save();
+          return res.status(403).json({ error: 'شما به دلیل ۳ بار تخلف از سایت اخراج شدید.', banned: true, warnings: req.user.warnings });
+        }
+        await req.user.save();
+        return res.status(400).json({ error: `متن شما نامناسب است. اخطار ${req.user.warnings} از ۳`, warnings: req.user.warnings });
+      }
+    }
     const clientAvatar = body.authorAvatarUrl || '';
     delete body.authorAvatarUrl;
     const avatarUrl = req.user.avatar || clientAvatar || '';
@@ -74,10 +95,30 @@ router.post('/', requireAuth, async (req, res) => {
 
 router.put('/:id', requireAuth, async (req, res) => {
   try {
+    if (req.user.banned) {
+      return res.status(403).json({ error: 'شما به دلیل تخلفات مکرر از سایت اخراج شده‌اید.', banned: true });
+    }
+    if (req.user.muted) {
+      const until = req.user.mutedUntil ? new Date(req.user.mutedUntil).toLocaleString('fa-IR') : 'نامحدود';
+      return res.status(403).json({ error: `شما در حالت سکوت هستید تا ${until}`, muted: true, mutedUntil: req.user.mutedUntil });
+    }
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ error: 'پست یافت نشد' });
     if (post.author !== req.user.name && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'دسترسی غیرمجاز' });
+    }
+    if (req.body.text) {
+      const check = containsProfanity(req.body.text);
+      if (check.hasProfanity) {
+        req.user.warnings = (req.user.warnings || 0) + 1;
+        if (req.user.warnings >= 3) {
+          req.user.banned = true;
+          await req.user.save();
+          return res.status(403).json({ error: 'شما به دلیل ۳ بار تخلف از سایت اخراج شدید.', banned: true, warnings: req.user.warnings });
+        }
+        await req.user.save();
+        return res.status(400).json({ error: `متن شما نامناسب است. اخطار ${req.user.warnings} از ۳`, warnings: req.user.warnings });
+      }
     }
     Object.assign(post, req.body, { isEdited: true });
     await post.save();
@@ -144,6 +185,13 @@ router.delete('/:id/comments/:commentId', requireAuth, async (req, res) => {
 
 router.put('/:id/comments/:commentId', requireAuth, async (req, res) => {
   try {
+    if (req.user.banned) {
+      return res.status(403).json({ error: 'شما به دلیل تخلفات مکرر از سایت اخراج شده‌اید.', banned: true });
+    }
+    if (req.user.muted) {
+      const until = req.user.mutedUntil ? new Date(req.user.mutedUntil).toLocaleString('fa-IR') : 'نامحدود';
+      return res.status(403).json({ error: `شما در حالت سکوت هستید تا ${until}`, muted: true, mutedUntil: req.user.mutedUntil });
+    }
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ error: 'پست یافت نشد' });
 
@@ -154,7 +202,20 @@ router.put('/:id/comments/:commentId', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'شما نمی‌توانید نظر دیگران را ویرایش کنید' });
     }
 
-    if (req.body.text !== undefined) comment.text = req.body.text;
+    if (req.body.text !== undefined) {
+      const check = containsProfanity(req.body.text);
+      if (check.hasProfanity) {
+        req.user.warnings = (req.user.warnings || 0) + 1;
+        if (req.user.warnings >= 3) {
+          req.user.banned = true;
+          await req.user.save();
+          return res.status(403).json({ error: 'شما به دلیل ۳ بار تخلف از سایت اخراج شدید.', banned: true, warnings: req.user.warnings });
+        }
+        await req.user.save();
+        return res.status(400).json({ error: `متن شما نامناسب است. اخطار ${req.user.warnings} از ۳`, warnings: req.user.warnings });
+      }
+      comment.text = req.body.text;
+    }
     if (req.body.media !== undefined) comment.media = req.body.media;
     comment.isEdited = true;
 
@@ -167,8 +228,29 @@ router.put('/:id/comments/:commentId', requireAuth, async (req, res) => {
 
 router.post('/:id/comments', requireAuth, async (req, res) => {
   try {
+    if (req.user.banned) {
+      return res.status(403).json({ error: 'شما به دلیل تخلفات مکرر از سایت اخراج شده‌اید.', banned: true });
+    }
+    if (req.user.muted) {
+      const until = req.user.mutedUntil ? new Date(req.user.mutedUntil).toLocaleString('fa-IR') : 'نامحدود';
+      return res.status(403).json({ error: `شما در حالت سکوت هستید تا ${until}`, muted: true, mutedUntil: req.user.mutedUntil });
+    }
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ error: 'پست یافت نشد' });
+
+    if (req.body.text) {
+      const check = containsProfanity(req.body.text);
+      if (check.hasProfanity) {
+        req.user.warnings = (req.user.warnings || 0) + 1;
+        if (req.user.warnings >= 3) {
+          req.user.banned = true;
+          await req.user.save();
+          return res.status(403).json({ error: 'شما به دلیل ۳ بار تخلف از سایت اخراج شدید.', banned: true, warnings: req.user.warnings });
+        }
+        await req.user.save();
+        return res.status(400).json({ error: `متن شما نامناسب است. اخطار ${req.user.warnings} از ۳`, warnings: req.user.warnings });
+      }
+    }
 
     const clientAvatar = req.body.authorAvatarUrl || '';
     const avatarUrl = req.user.avatar || clientAvatar || '';

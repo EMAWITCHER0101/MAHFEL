@@ -78,8 +78,10 @@ const CustomVideoPlayer = forwardRef<CustomVideoPlayerHandle, CustomVideoPlayerP
   const [hoverTime, setHoverTime] = useState(0);
   const [isSeeking, setIsSeeking] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [doubleClickIndicator, setDoubleClickIndicator] = useState<'forward' | 'backward' | null>(null);
 
   const loadingRef = useRef(true);
+  const singleClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { loadingRef.current = loading; }, [loading]);
 
   const fmt = (sec: number) => {
@@ -287,8 +289,34 @@ const CustomVideoPlayer = forwardRef<CustomVideoPlayerHandle, CustomVideoPlayerP
     document.fullscreenElement ? document.exitFullscreen() : c.requestFullscreen?.();
   };
 
-  const handleVideoClick = () => {
-    togglePlay();
+  const handleVideoClick = (e: React.MouseEvent) => {
+    if (isMini) { togglePlay(); return; }
+    if (singleClickTimer.current) {
+      clearTimeout(singleClickTimer.current);
+      singleClickTimer.current = null;
+      return;
+    }
+    singleClickTimer.current = setTimeout(() => {
+      singleClickTimer.current = null;
+      togglePlay();
+    }, 250);
+  };
+
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    if (isMini) return;
+    const v = videoRef.current;
+    if (!v) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const isRightHalf = clickX > rect.width / 2;
+    if (isRightHalf) {
+      v.currentTime = Math.min(v.duration || 0, v.currentTime + 10);
+      setDoubleClickIndicator('forward');
+    } else {
+      v.currentTime = Math.max(0, v.currentTime - 10);
+      setDoubleClickIndicator('backward');
+    }
+    setTimeout(() => setDoubleClickIndicator(null), 800);
   };
 
   const pct = duration > 0 ? (currentTime / duration) * 100 : 0;
@@ -319,13 +347,23 @@ const CustomVideoPlayer = forwardRef<CustomVideoPlayerHandle, CustomVideoPlayerP
   );
 
   return (
-    <div ref={containerRef} className="relative w-full h-full bg-black select-none" onClick={isMini ? undefined : handleVideoClick}>
+    <div ref={containerRef} className="relative w-full h-full bg-black select-none" onClick={handleVideoClick} onDoubleClick={handleDoubleClick}>
       <video ref={videoRef} src={videoUrl} poster={poster} className="w-full h-full object-contain" preload="metadata" playsInline />
+
+      {/* Double-click indicator */}
+      {doubleClickIndicator && (
+        <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none animate-fadeIn">
+          <div className={`px-5 py-3 rounded-2xl bg-black/60 backdrop-blur-xl border border-white/10 shadow-2xl flex items-center gap-2`}>
+            <i className={`fas ${doubleClickIndicator === 'forward' ? 'fa-forward' : 'fa-backward'} text-white text-xl`}></i>
+            <span className="text-white font-black text-lg">۱۰ ثانیه</span>
+          </div>
+        </div>
+      )}
 
       {/* Center play button when paused - always visible */}
       {!isPlaying && (
         <div className="absolute inset-0 flex items-center justify-center z-10"
-          onClick={isMini ? undefined : (e => { e.stopPropagation(); handleVideoClick(); })}>
+          onClick={isMini ? (e => { e.stopPropagation(); handleVideoClick(e); }) : undefined}>
           <div className={`${isMini ? 'w-7 h-7' : 'w-[72px] h-[72px]'} rounded-full bg-black/40 backdrop-blur-xl flex items-center justify-center border border-white/10 shadow-2xl pointer-events-none`}>
             <i className={`fas fa-play text-white ${isMini ? 'text-[10px]' : 'text-2xl'} mr-[-2px]`} />
           </div>
@@ -348,7 +386,7 @@ const CustomVideoPlayer = forwardRef<CustomVideoPlayerHandle, CustomVideoPlayerP
           {/* Center pause/play button */}
           {isPlaying && (
             <div className="absolute inset-0 flex items-center justify-center z-10"
-              onClick={e => { e.stopPropagation(); handleVideoClick(); }}>
+              onClick={e => { e.stopPropagation(); handleVideoClick(e); }}>
               <div className="w-[72px] h-[72px] rounded-full bg-black/40 backdrop-blur-xl flex items-center justify-center border border-white/10 shadow-2xl pointer-events-none">
                 <i className="fas fa-pause text-white text-2xl" />
               </div>

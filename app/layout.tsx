@@ -1,15 +1,14 @@
 import './globals.css';
-import { Vazirmatn } from 'next/font/google';
 import localFont from 'next/font/local';
 import ExternalScripts from '../components/ExternalScripts';
 import StructuredData from '../components/StructuredData';
 import type { Metadata, Viewport } from 'next';
 
-const vazir = Vazirmatn({
-  subsets: ['latin', 'arabic'],
-  weight: ['300', '400', '500', '600', '700', '800', '900'],
+const vazir = localFont({
+  src: '../fonts/Vazirmatn-Regular.ttf',
   variable: '--font-vazir',
   display: 'swap',
+  weight: '400',
 });
 
 const iranNastaliq = localFont({

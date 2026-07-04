@@ -1,8 +1,105 @@
 import { Router } from 'express';
 import User from '../models/User.js';
 import { auth, requireAuth, generateToken } from '../middleware/auth.js';
+import { isIranianIP, getClientIP } from '../utils/ipCheck.js';
 
 const router = Router();
+
+router.post('/register', async (req, res) => {
+  try {
+    const { name, email, password, phoneNumber } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: 'نام الزامی است' });
+    if (!email || !email.trim()) return res.status(400).json({ error: 'ایمیل الزامی است' });
+    if (!password || password.length < 4) return res.status(400).json({ error: 'رمز عبور باید حداقل ۴ کاراکتر باشد' });
+    if (!phoneNumber || !/^09\d{9}$/.test(phoneNumber)) return res.status(400).json({ error: 'شماره موبایل نامعتبر است' });
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) return res.status(400).json({ error: 'ایمیل نامعتبر است' });
+
+    const existingEmail = await User.findOne({ email: email.toLowerCase() });
+    if (existingEmail) return res.status(409).json({ error: 'ایمیل قبلاً ثبت شده است' });
+
+    const existingPhone = await User.findOne({ phoneNumber });
+    if (existingPhone) return res.status(409).json({ error: 'شماره موبایل قبلاً ثبت شده است' });
+
+    const user = new User({
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
+      password,
+      phoneNumber,
+      avatar: generateDefaultAvatar(name),
+      role: 'user',
+      interests: [],
+      library: { podcasts: [], episodes: [], videos: [], books: [], notes: [] },
+    });
+    await user.save();
+
+    const token = generateToken(user._id);
+    res.status(201).json({
+      success: true,
+      token,
+      user: {
+        id: user._id,
+        email: user.email,
+        phoneNumber: user.phoneNumber,
+        name: user.name,
+        avatar: user.avatar,
+        role: user.role,
+        interests: user.interests,
+        library: user.library,
+      },
+    });
+  } catch (error) {
+    console.error('REGISTER ERROR:', error);
+    res.status(500).json({ error: 'خطای سرور' });
+  }
+});
+
+router.post('/login', async (req, res) => {
+  try {
+    const { email, phoneNumber, password } = req.body;
+    if (!password) return res.status(400).json({ error: 'رمز عبور الزامی است' });
+    if (!email && !phoneNumber) return res.status(400).json({ error: 'ایمیل یا شماره موبایل الزامی است' });
+
+    let user;
+    if (email) {
+      user = await User.findOne({ email: email.toLowerCase() });
+    } else if (phoneNumber) {
+      user = await User.findOne({ phoneNumber });
+    }
+    if (!user || !user.password) return res.status(401).json({ error: 'ایمیل/شماره موبایل یا رمز عبور اشتباه است' });
+
+    if (user.banned) return res.status(403).json({ error: 'شما از سایت اخراج شده‌اید.', banned: true });
+
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) return res.status(401).json({ error: 'ایمیل/شماره موبایل یا رمز عبور اشتباه است' });
+
+    const token = generateToken(user._id);
+    const ip = getClientIP(req);
+    const iranian = isIranianIP(ip);
+    res.json({
+      success: true,
+      token,
+      isIranianIP: iranian,
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        avatar: user.avatar,
+        role: user.role,
+        interests: user.interests,
+        library: user.library,
+        warnings: user.warnings || 0,
+        muted: user.muted || false,
+        mutedUntil: user.mutedUntil || null,
+        mutedReason: user.mutedReason || '',
+      },
+    });
+  } catch (error) {
+    console.error('LOGIN ERROR:', error);
+    res.status(500).json({ error: 'خطای سرور' });
+  }
+});
 
 router.post('/send-otp', async (req, res) => {
   try {
@@ -128,15 +225,24 @@ router.post('/interests', requireAuth, async (req, res) => {
 });
 
 router.get('/me', requireAuth, async (req, res) => {
+  const ip = getClientIP(req);
+  const iranian = isIranianIP(ip);
   res.json({
+    isIranianIP: iranian,
     user: {
       id: req.user._id,
+      email: req.user.email,
       phoneNumber: req.user.phoneNumber,
       name: req.user.name,
       avatar: req.user.avatar,
       role: req.user.role,
       interests: req.user.interests,
       library: req.user.library,
+      warnings: req.user.warnings || 0,
+      banned: req.user.banned || false,
+      muted: req.user.muted || false,
+      mutedUntil: req.user.mutedUntil || null,
+      mutedReason: req.user.mutedReason || '',
     },
   });
 });
@@ -168,6 +274,24 @@ router.put('/profile', requireAuth, async (req, res) => {
         interests: req.user.interests,
         library: req.user.library,
       },
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'خطای سرور' });
+  }
+});
+
+router.put('/muted', requireAuth, async (req, res) => {
+  try {
+    if (req.user.muted && req.user.mutedUntil && new Date() > req.user.mutedUntil) {
+      req.user.muted = false;
+      req.user.mutedUntil = null;
+      req.user.mutedReason = '';
+      await req.user.save();
+    }
+    res.json({
+      muted: req.user.muted || false,
+      mutedUntil: req.user.mutedUntil || null,
+      mutedReason: req.user.mutedReason || '',
     });
   } catch (error) {
     res.status(500).json({ error: 'خطای سرور' });

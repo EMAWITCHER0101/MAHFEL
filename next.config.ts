@@ -14,7 +14,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
       "img-src 'self' data: blob: http: https: *",
-      "media-src 'self' http: https: dl.soha-sima.ir",
+      "media-src 'self' http: https: data: blob: dl.soha-sima.ir",
       "connect-src 'self' http://localhost:5000 https://soha-sima.ir http://soha-sima.ir",
       "frame-src 'self' https://www.aparat.com https://aparat.com https://player.aparat.com",
     ].join('; '),
@@ -30,9 +30,6 @@ const nextConfig: NextConfig = {
   },
   typescript: {
     ignoreBuildErrors: true,
-  },
-  devIndicators: {
-    position: 'top-left',
   },
   images: {
     remotePatterns: [

@@ -1,9 +1,14 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import { isIranianIP, getClientIP } from '../utils/ipCheck.js';
 
 export const auth = async (req, res, next) => {
   try {
     const token = req.header('Authorization')?.replace('Bearer ', '');
+    const ip = getClientIP(req);
+    req.clientIP = ip;
+    req.isIranianIP = isIranianIP(ip);
+    
     if (!token) {
       req.user = null;
       return next();
@@ -14,6 +19,12 @@ export const auth = async (req, res, next) => {
     if (!user) {
       req.user = null;
       return next();
+    }
+    if (user.muted && user.mutedUntil && new Date() > user.mutedUntil) {
+      user.muted = false;
+      user.mutedUntil = null;
+      user.mutedReason = '';
+      await user.save();
     }
     req.user = user;
     next();
@@ -31,6 +42,14 @@ export const requireAuth = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.id);
     if (!user) return res.status(401).json({ error: 'کاربر یافت نشد' });
+    if (user.banned) return res.status(403).json({ error: 'شما از سایت اخراج شده‌اید.', banned: true });
+
+    if (user.muted && user.mutedUntil && new Date() > user.mutedUntil) {
+      user.muted = false;
+      user.mutedUntil = null;
+      user.mutedReason = '';
+      await user.save();
+    }
 
     req.user = user;
     next();

@@ -2,11 +2,18 @@
 export type UserRole = 'user' | 'author' | 'admin';
 
 export interface User {
+  id?: string;
+  email?: string;
   phoneNumber: string;
   name: string;
   avatar: string; // Base64 or URL
   role: UserRole;
   interests: string[];
+  warnings?: number;
+  banned?: boolean;
+  muted?: boolean;
+  mutedUntil?: string | null;
+  mutedReason?: string;
   library?: {
     podcasts: string[];
     episodes: { podcastId: string; episodeIndex: number }[];

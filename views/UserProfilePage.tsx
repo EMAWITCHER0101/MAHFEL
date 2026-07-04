@@ -71,8 +71,26 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ onClose, onLogout, us
                                 </div>
                                 <p className="text-lg font-black text-gray-800">{user.name}</p>
                                 <p className="text-xs font-bold text-gray-400 mt-1" dir="ltr">{maskedPhoneNumber}</p>
-                                <div className="mt-4 bg-primary/10 text-primary px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-primary/20">
-                                    {user.role === 'admin' ? 'مدیر سیستم' : user.role === 'author' ? 'نویسنده سرای هنر و اندیشه' : 'مخاطب همراه'}
+                                {user.email && <p className="text-[10px] font-bold text-gray-400 mt-1">{user.email}</p>}
+                                <div className="mt-4 flex items-center gap-2 flex-wrap justify-center">
+                                    <div className="bg-primary/10 text-primary px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-primary/20">
+                                        {user.role === 'admin' ? '🛡️ مدیر سیستم' : user.role === 'author' ? '✍️ نویسنده سرای هنر و اندیشه' : '👤 مخاطب همراه'}
+                                    </div>
+                                    {(user.warnings || 0) > 0 && !user.banned && (
+                                        <div className="bg-amber-50 text-amber-600 px-3 py-1 rounded-full text-[10px] font-black border border-amber-200">
+                                            ⚠️ {toPersianDigits(user.warnings || 0)} اخطار
+                                        </div>
+                                    )}
+                                    {user.banned && (
+                                        <div className="bg-red-50 text-red-500 px-3 py-1 rounded-full text-[10px] font-black border border-red-200">
+                                            🚫 مسدود شده
+                                        </div>
+                                    )}
+                                    {user.muted && (
+                                        <div className="bg-orange-50 text-orange-500 px-3 py-1 rounded-full text-[10px] font-black border border-orange-200">
+                                            🔇 در حالت سکوت
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -201,6 +219,19 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ onClose, onLogout, us
                                         className="w-full px-4 py-3 rounded-2xl text-sm font-bold font-mono bg-gray-100 border-2 border-gray-100 text-gray-400 cursor-not-allowed"
                                         dir="ltr" />
                                     <p className="text-[9px] text-gray-300 mt-1 font-bold">شماره تماس قابل تغییر نیست</p>
+                                </div>
+                                {user.email && (
+                                    <div>
+                                        <label className="block text-[11px] font-black text-gray-500 mb-2">ایمیل</label>
+                                        <input type="text" value={user.email} readOnly
+                                            className="w-full px-4 py-3 rounded-2xl text-sm font-bold bg-gray-100 border-2 border-gray-100 text-gray-400 cursor-not-allowed" />
+                                        <p className="text-[9px] text-gray-300 mt-1 font-bold">ایمیل قابل تغییر نیست</p>
+                                    </div>
+                                )}
+                                <div>
+                                    <label className="block text-[11px] font-black text-gray-500 mb-2">نقش</label>
+                                    <input type="text" value={user.role === 'admin' ? 'مدیر سیستم 🛡️' : user.role === 'author' ? 'نویسنده ✍️' : 'مخاطب 👤'} readOnly
+                                        className="w-full px-4 py-3 rounded-2xl text-sm font-bold bg-gray-100 border-2 border-gray-100 text-gray-400 cursor-not-allowed" />
                                 </div>
                             </div>
 

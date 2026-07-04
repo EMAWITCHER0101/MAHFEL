@@ -35,6 +35,8 @@ const apiFetch = async <T>(endpoint: string, options?: RequestInit): Promise<T |
     });
     if (!response.ok) {
       const err = await response.json().catch(() => ({ error: 'خطای سرور' }));
+      if (err.banned) return { error: err.error, banned: true } as any;
+      if (err.warnings) return { error: err.error, warnings: err.warnings } as any;
       throw new Error(err.error || `HTTP ${response.status}`);
     }
     return response.json();
@@ -45,6 +47,20 @@ const apiFetch = async <T>(endpoint: string, options?: RequestInit): Promise<T |
 };
 
 // --- Auth ---
+export const register = async (name: string, email: string, password: string, phoneNumber: string): Promise<any> => {
+  return apiFetch('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({ name, email, password, phoneNumber }),
+  });
+};
+
+export const login = async (email: string, phoneNumber: string, password: string): Promise<any> => {
+  return apiFetch('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email: email || undefined, phoneNumber: phoneNumber || undefined, password }),
+  });
+};
+
 export const sendOtp = async (phoneNumber: string): Promise<any> => {
   return apiFetch('/auth/send-otp', {
     method: 'POST',
@@ -235,6 +251,14 @@ export const createPost = async (post: Partial<Post>): Promise<Post | null> => {
   return { ...data, id: data._id || data.id, comments: (data.comments || []).map((c: any) => ({ ...c, id: c._id || c.id })) };
 };
 
+export const shareToMahfel = async (type: 'video' | 'podcast' | 'book', id: string, text?: string, episodeIndex?: number): Promise<Post | null> => {
+  const payload: any = { text: text || '', media: [] };
+  if (type === 'video') payload.videoId = id;
+  else if (type === 'podcast') { payload.podcastId = id; if (episodeIndex != null) payload.episodeIndex = episodeIndex; }
+  else if (type === 'book') payload.bookId = id;
+  return createPost(payload);
+};
+
 export const deletePost = async (id: string): Promise<boolean> => {
   const res = await apiFetch<any>(`/posts/${id}`, { method: 'DELETE' });
   return !!res;
@@ -419,6 +443,26 @@ export const adminBulkComments = async (ids: string[], action: string): Promise<
     method: 'POST',
     body: JSON.stringify({ ids, action }),
   });
+};
+
+// --- Admin Moderation ---
+export const muteUser = async (userId: string, minutes?: number, reason?: string): Promise<any> => {
+  return apiFetch(`/admin/users/${userId}/mute`, {
+    method: 'POST',
+    body: JSON.stringify({ minutes, reason }),
+  });
+};
+
+export const unmuteUser = async (userId: string): Promise<any> => {
+  return apiFetch(`/admin/users/${userId}/unmute`, { method: 'POST' });
+};
+
+export const unbanUser = async (userId: string): Promise<any> => {
+  return apiFetch(`/admin/users/${userId}/unban`, { method: 'POST' });
+};
+
+export const resetUserWarnings = async (userId: string): Promise<any> => {
+  return apiFetch(`/admin/users/${userId}/reset-warnings`, { method: 'POST' });
 };
 
 // --- Save All (legacy compatibility) ---

@@ -1406,6 +1406,8 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
   const [inputText, setInputText] = useState('');
   const [inputMedia, setInputMedia] = useState<{ type: 'image' | 'audio' | 'video'; url: string } | null>(null);
   const [sending, setSending] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastVisible, setToastVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
@@ -1455,7 +1457,18 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
         const hasAudio = replyPost?.media?.some(m => m.type === 'audio');
         const audioTs = markAudioTimestamp && hasAudio ? Math.floor((document.querySelector('audio') as HTMLAudioElement)?.currentTime || 0) : undefined;
         const updated = await addPostComment(String(replyTarget.postId), text, replyTarget.commentId ? String(replyTarget.commentId) : undefined, media.length > 0 ? media : undefined, undefined, audioTs);
-        if (updated) {
+        if (updated && (updated as any).warnings) {
+          setToastMessage(`⚠️ اخطار ${(updated as any).warnings} از ۳ — پیام شما حذف شد`);
+          setToastVisible(true);
+          setTimeout(() => setToastVisible(false), 4000);
+          setSending(false);
+          return;
+        } else if (updated && (updated as any).banned) {
+          setToastMessage('🚫 شما از سایت اخراج شده‌اید');
+          setToastVisible(true);
+          setSending(false);
+          return;
+        } else if (updated) {
           if (onUpdatePost) onUpdatePost(updated);
           setInputText('');
           setInputMedia(null);
@@ -1474,7 +1487,14 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
       const media = inputMedia ? [{ type: inputMedia.type, url: inputMedia.url }] : [];
       const postData = { text: inputText.trim(), media: media.length > 0 ? media : undefined };
       const newPost = await createPost(postData);
-      if (newPost) {
+      if (newPost && (newPost as any).warnings) {
+        setToastMessage(`⚠️ اخطار ${(newPost as any).warnings} از ۳ — پیام شما حذف شد`);
+        setToastVisible(true);
+        setTimeout(() => setToastVisible(false), 4000);
+      } else if (newPost && (newPost as any).banned) {
+        setToastMessage('🚫 شما از سایت اخراج شده‌اید');
+        setToastVisible(true);
+      } else if (newPost) {
         if (onNewPost) onNewPost(newPost);
         setInputText('');
         setInputMedia(null);
@@ -1591,7 +1611,7 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
   };
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden chat-bg" style={{ position: 'relative' }}>
+    <div className="flex flex-col h-dvh chat-bg" style={{ position: 'relative' }}>
         <div className="border-b px-3 py-3 flex-shrink-0"
           style={{ background: 'color-mix(in srgb, var(--surface) 85%, transparent)', borderColor: 'var(--border)' }}>
           <div className="flex items-center gap-2 mb-2 px-1">
@@ -1778,7 +1798,7 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
             }
             return null;
           })}
-          <div ref={messagesEndRef} className="mb-4" />
+          <div ref={messagesEndRef} className="mb-24 lg:mb-4" />
           </div>
         </main>
 
@@ -1864,11 +1884,13 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
             </div>
           )}
           <div className="flex items-end gap-2">
+            {(userRole === 'author' || userRole === 'admin') && (
             <button onClick={() => fileInputRef.current?.click()}
               className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 active:scale-90 transition-all hover:opacity-70"
               style={{ color: 'var(--text-2)', border: '1.5px solid var(--border)', background: 'var(--surface-2)' }}>
               <i className="fas fa-plus text-sm"></i>
             </button>
+            )}
             {replyTarget && (() => {
               const replyPost = posts.find((p: Post) => String(p.id) === String(replyTarget.postId));
               const hasAudio = replyPost?.media?.some(m => m.type === 'audio');
@@ -1897,6 +1919,13 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
 
         {/* Hidden file input */}
         <input ref={fileInputRef} type="file" accept="image/*,audio/*,video/*" className="hidden" onChange={handleFileChange} />
+
+        {/* Toast */}
+        {toastVisible && toastMessage && (
+          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[3000] px-5 py-3 rounded-2xl text-sm font-bold text-white shadow-2xl animate-slideDown" style={{ background: toastMessage.includes('اخراج') ? '#ef4444' : '#f59e0b' }}>
+            {toastMessage}
+          </div>
+        )}
     </div>
   );
 };

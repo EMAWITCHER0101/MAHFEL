@@ -375,4 +375,75 @@ router.get('/search', async (req, res) => {
   }
 });
 
+router.post('/users/:userId/mute', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { minutes, reason } = req.body;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: 'کاربر یافت نشد' });
+    if (user.role === 'admin') return res.status(400).json({ error: 'نمی‌توان ادمین را سکوت کرد' });
+
+    if (minutes && minutes > 0) {
+      user.mutedUntil = new Date(Date.now() + minutes * 60 * 1000);
+    } else {
+      user.mutedUntil = null;
+    }
+    user.muted = true;
+    user.mutedReason = reason || '';
+    await user.save();
+
+    res.json({ success: true, muted: true, mutedUntil: user.mutedUntil, mutedReason: user.mutedReason });
+  } catch (error) {
+    res.status(500).json({ error: 'خطای سرور' });
+  }
+});
+
+router.post('/users/:userId/unmute', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: 'کاربر یافت نشد' });
+
+    user.muted = false;
+    user.mutedUntil = null;
+    user.mutedReason = '';
+    await user.save();
+
+    res.json({ success: true, muted: false });
+  } catch (error) {
+    res.status(500).json({ error: 'خطای سرور' });
+  }
+});
+
+router.post('/users/:userId/unban', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: 'کاربر یافت نشد' });
+
+    user.banned = false;
+    user.warnings = 0;
+    await user.save();
+
+    res.json({ success: true, banned: false });
+  } catch (error) {
+    res.status(500).json({ error: 'خطای سرور' });
+  }
+});
+
+router.post('/users/:userId/reset-warnings', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: 'کاربر یافت نشد' });
+
+    user.warnings = 0;
+    await user.save();
+
+    res.json({ success: true, warnings: 0 });
+  } catch (error) {
+    res.status(500).json({ error: 'خطای سرور' });
+  }
+});
+
 export default router;
