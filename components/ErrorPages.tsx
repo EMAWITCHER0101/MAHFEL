@@ -100,18 +100,43 @@ export function NetworkErrorPage({ onRetry }: { onRetry?: () => void }) {
 }
 
 export function OfflineDetector({ children }: { children: React.ReactNode }) {
-  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [isOffline, setIsOffline] = useState(false);
+  const [checking, setChecking] = useState(false);
+
+  const pingServer = async (): Promise<boolean> => {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 5000);
+      const res = await fetch('/logo.jpg', { method: 'HEAD', cache: 'no-store', signal: ctrl.signal });
+      clearTimeout(timer);
+      return res.ok;
+    } catch {
+      return false;
+    }
+  };
 
   useEffect(() => {
-    const handleOnline = () => setIsOffline(false);
-    const handleOffline = () => setIsOffline(true);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
+    let mounted = true;
+    let interval: ReturnType<typeof setInterval>;
+
+    const check = async () => {
+      if (checking) return;
+      const ok = await pingServer();
+      if (mounted) setIsOffline(!ok);
     };
+
+    check();
+    interval = setInterval(check, 15000);
+
+    return () => { mounted = false; clearInterval(interval); };
   }, []);
+
+  const handleRetry = async () => {
+    setChecking(true);
+    const ok = await pingServer();
+    setIsOffline(!ok);
+    setChecking(false);
+  };
 
   if (isOffline) {
     return (
@@ -125,6 +150,12 @@ export function OfflineDetector({ children }: { children: React.ReactNode }) {
             <h2 className="text-2xl font-black text-white tracking-tight">قطع ارتباط</h2>
             <p className="text-gray-400 text-base">اتصال اینترنت خود را بررسی کنید</p>
           </div>
+          <button onClick={handleRetry}
+            className="px-8 py-3 rounded-xl font-bold text-white text-sm transition-all active:scale-95 mb-6"
+            style={{ background: 'linear-gradient(135deg, #14b8a6, #06b6d4)' }}>
+            <i className={`fas ${checking ? 'fa-spinner fa-spin' : 'fa-redo'} ml-2`}></i>
+            {checking ? 'در حال بررسی...' : 'تلاش مجدد'}
+          </button>
           <div className="flex items-center justify-center gap-3 text-gray-600 text-xs">
             <span className="w-12 h-px bg-gradient-to-l from-gray-700/50 to-transparent"></span>
             <span>سرای هنر و اندیشه</span>
@@ -160,44 +191,35 @@ export function VPNBanner({ isVPN, onDismiss }: { isVPN: boolean; onDismiss: () 
 }
 
 export function useVPNDetection() {
-  const [isVPN, setIsVPN] = useState(() => {
-    const stored = localStorage.getItem('soha_vpn_country');
-    return stored ? stored !== 'IR' : false;
-  });
+  const [isVPN, setIsVPN] = useState(false);
   const [tempDismissed, setTempDismissed] = useState(false);
-  const lastIpRef = useRef('');
+  const prevVPNRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
 
     const check = async () => {
       try {
-        const ipRes = await fetch('https://api.ipify.org?format=json', { cache: 'no-store' });
-        const ipData = await ipRes.json();
-        const ip = ipData?.ip;
-        if (!ip) return;
-
-        if (ip === lastIpRef.current) {
-          const stored = localStorage.getItem('soha_vpn_country');
-          if (stored === 'IR') return;
-        }
-        lastIpRef.current = ip;
-
-        const res = await fetch(`/api/check-ip?ip=${encodeURIComponent(ip)}`, { cache: 'no-store' });
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 8000);
+        const res = await fetch('/api/check-ip', { cache: 'no-store', signal: ctrl.signal });
+        clearTimeout(timer);
         const data = await res.json();
         if (!mounted) return;
         const code = (data?.countryCode || 'IR').toUpperCase();
-        console.log('[VPN] IP:', ip, '| country:', code);
-        setIsVPN(code !== 'IR');
+        console.log('[VPN] IP:', data?.ip, '| country:', code);
+        const vpnDetected = code !== 'IR';
+        setIsVPN(vpnDetected);
         setTempDismissed(false);
         localStorage.setItem('soha_vpn_country', code);
       } catch (e) {
-        console.warn('[VPN] check failed');
+        console.warn('[VPN] check failed, assuming online');
+        if (mounted) setIsVPN(false);
       }
     };
 
     check();
-    const interval = setInterval(check, 120000);
+    const interval = setInterval(check, 30000);
 
     return () => { mounted = false; clearInterval(interval); };
   }, []);

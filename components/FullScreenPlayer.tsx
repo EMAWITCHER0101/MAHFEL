@@ -551,6 +551,7 @@ const FullScreenPlayer: React.FC<FullScreenPlayerProps> = ({
                 { page: 'library' as Page, icon: 'fas fa-book-open', label: 'کتابخانه' },
                 { page: 'videos' as Page, icon: 'fas fa-video', label: 'ویدیو' },
                 { page: 'nashr' as Page, icon: 'fas fa-book-reader', label: 'نشر' },
+                { page: 'ai' as Page, icon: 'fas fa-robot', label: 'هوش مصنوعی' },
               ].map(item => {
                 const isActive = activeTab === item.page;
                 return (

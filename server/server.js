@@ -22,6 +22,7 @@ import commentRoutes from './routes/comments.js';
 import proxyRoutes from './routes/proxy.js';
 import uploadRoutes from './routes/upload.js';
 import adminRoutes from './routes/admin.js';
+import aiRoutes from './routes/ai.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -33,7 +34,7 @@ app.use(compression({ level: 6, threshold: 1024, filter: (req, res) => {
   if (req.headers['x-no-compression']) return false;
   return compression.filter(req, res);
 }}));
-app.use(cors({ origin: ['http://localhost:3000', 'http://localhost:5173', 'http://87.107.165.104', 'https://87.107.165.104'], credentials: true }));
+app.use(cors({ origin: ['http://localhost:3000', 'http://localhost:5173', 'http://87.107.165.104', 'https://87.107.165.104', 'http://87.248.145.44', 'https://87.248.145.44', 'http://soha-sima.ir', 'https://soha-sima.ir'], credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 
 app.use((req, res, next) => {
@@ -86,6 +87,7 @@ app.use('/api/comments', commentRoutes);
 app.use('/api/proxy', proxyRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/ai', aiRoutes);
 app.use('/uploads', express.static(path.resolve('uploads')));
 
 app.use((err, req, res, next) => {

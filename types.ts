@@ -184,4 +184,4 @@ export interface PublishedBook {
   relatedAudioIds?: number[]; 
 }
 
-export type Page = 'mahfel' | 'sowt' | 'matn' | 'videos' | 'library' | 'nashr';
+export type Page = 'mahfel' | 'sowt' | 'matn' | 'videos' | 'library' | 'nashr' | 'ai';

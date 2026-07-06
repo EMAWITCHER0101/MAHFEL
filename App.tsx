@@ -4,7 +4,7 @@ import { Podcast, Episode, Comment, Page, Post, Book, Author, PublishedBook, Use
 import { getPodcasts, getBooks, getAuthors, getVideos, getComments, getPosts, getPublishedBooks, createPost, deletePost as apiDeletePost, addPostComment, updatePost, deleteComment as apiDeleteComment, addComment, likeComment, updateLibrary, prefetchStream, getMe } from './services/api';
 import { ThemeProvider, useTheme } from './components/ThemeProvider';
 import ErrorBoundary from './components/ErrorBoundary';
-import { OfflineDetector, NetworkErrorPage } from './components/ErrorPages';
+import { OfflineDetector, NetworkErrorPage, VPNBanner, useVPNDetection } from './components/ErrorPages';
 import SearchModal from './components/SearchModal';
 
 import Sidebar from './components/Sidebar';
@@ -28,6 +28,7 @@ const PlaylistPage = React.lazy(() => import('./views/PlaylistPage'));
 const AdminPage = React.lazy(() => import('./views/AdminPage'));
 const LoginPage = React.lazy(() => import('./views/LoginPage'));
 const UserProfilePage = React.lazy(() => import('./views/UserProfilePage'));
+const AiAssistantPage = React.lazy(() => import('./views/AiAssistantPage'));
 const InterestsPage = React.lazy(() => import('./views/InterestsPage'));
 const AuthorPage = React.lazy(() => import('./views/AuthorPage'));
 const BookPage = React.lazy(() => import('./views/BookPage'));
@@ -95,6 +96,15 @@ const AppInner: React.FC = () => {
         try { return JSON.parse(localStorage.getItem('soha_video_library') || '[]'); } catch { return []; }
     });
     const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
+
+    const { isVPN, dismissVPN } = useVPNDetection();
+    const prevVPNRef = useRef(isVPN);
+    useEffect(() => {
+        if (prevVPNRef.current && !isVPN) {
+            setToast({ id: Date.now(), message: 'VPN با موفقیت قطع شد!' });
+        }
+        prevVPNRef.current = isVPN;
+    }, [isVPN]);
 
     const videoCurrentTimeRef = useRef(0);
     const videoPlayingRef = useRef(true);
@@ -889,6 +899,7 @@ const AppInner: React.FC = () => {
             }} onEnterStandalone={() => {}} onShowInstantView={(t, c) => setInstantView({ title: t, content: c })} userLibrary={user?.library?.videos || localVideoLibrary} onToggleLibrary={handleToggleLibrary} onShare={(t: string, s: string) => {}} onOpenSearch={() => setIsSearchOpen(true)} onOpenSidebar={() => setDesktopSidebarCollapsed(v => !v)} onProfileClick={() => setIsProfileOpen(true)} user={user} theme={theme} onToggleTheme={toggleTheme} />;
             case 'nashr': return <NashrPage publishedBooks={publishedBooks} allPodcasts={podcasts} comments={comments} onAddComment={(text, book) => openWriteModalWithAttachment('book', book)} user={user} onUpdateUser={(u) => { setUser(u); localStorage.setItem('user_data', JSON.stringify(u)); }} onDeleteComment={handleDeleteComment} onLikeComment={handleLikeComment} onUpdateComment={handleUpdateComment} onToggleSidebar={() => setDesktopSidebarCollapsed(v => !v)} />;
             case 'library': return <LibraryPage savedVideoIds={user?.library?.videos || localVideoLibrary} allVideos={videos} onPlayVideo={(v) => { setIsVideoMini(false); handlePlayVideo(v); }} onRemoveVideo={(id) => handleToggleLibrary(id)} savedPodcastIds={user?.library?.podcasts || []} savedEpisodes={user?.library?.episodes || []} allPodcasts={podcasts} authors={authors} onSelectPodcast={setSelectedPodcast} onRemovePodcast={(p) => togglePodcastLibrary(p)} onRemoveEpisode={(podcastId, episodeIndex) => toggleEpisodeLibrary(podcastId, episodeIndex)} onPlayPodcast={(podcast, idx) => playEpisode(podcast, idx)} theme={theme} onToggleTheme={toggleTheme} user={user} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} onToggleSidebar={() => setDesktopSidebarCollapsed(v => !v)} />;
+            case 'ai': return <AiAssistantPage podcasts={podcasts} videos={videos} posts={posts} books={publishedBooks} authors={authors} onPlayPodcast={playEpisode} onPlayVideo={(v) => { setIsVideoMini(false); handlePlayVideo(v); }} onShowBook={(b) => { setSelectedPublishedBook(b); }} />;
             default: return null;
         }
     };
@@ -905,6 +916,7 @@ const AppInner: React.FC = () => {
     return (
         <div className={`bg-background flex flex-col relative font-sans text-text-primary ${theme === 'dark' ? 'dark' : ''}`} dir="rtl" style={{ height: '100vh', overflow: 'hidden' }}>
              <IranAccessWarning />
+             <VPNBanner isVPN={isVPN} onDismiss={dismissVPN} />
              <div className="app-container bg-background flex-1 flex min-h-0">
              
              {/* Desktop Sidebar */}
