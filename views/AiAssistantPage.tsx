@@ -673,9 +673,6 @@ const AiAssistantPage: React.FC<AiAssistantPageProps> = ({ podcasts, videos, pos
                 <i className={`fas ${loading ? 'fa-spinner fa-spin' : 'fa-arrow-up'} text-sm`}></i>
               </button>
             </div>
-            <p className="text-center text-[8px] mt-1.5 font-medium" style={{ color: isDark ? '#525252' : '#9ca3af' }}>
-              محفل AI ممکنه اشتباه کنه. اطلاعات مهم رو تایید کنید.
-            </p>
           </div>
         </div>
       </div>

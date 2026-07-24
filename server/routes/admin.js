@@ -249,9 +249,11 @@ router.get('/comments', async (req, res) => {
 
     const podcastIds = [...new Set(comments.filter(c => c.podcastId).map(c => String(c.podcastId)))];
     const videoIds = [...new Set(comments.filter(c => c.videoId).map(c => String(c.videoId)))];
+    const bookIds = [...new Set(comments.filter(c => c.bookId).map(c => String(c.bookId)))];
 
     let podcastsMap = {};
     let videosMap = {};
+    let booksMap = {};
     if (podcastIds.length) {
       const podcasts = await Podcast.find({ _id: { $in: podcastIds } }).lean();
       podcasts.forEach(p => { podcastsMap[String(p._id)] = p; });
@@ -260,11 +262,16 @@ router.get('/comments', async (req, res) => {
       const videos = await Video.find({ _id: { $in: videoIds } }).lean();
       videos.forEach(v => { videosMap[String(v._id)] = v; });
     }
+    if (bookIds.length) {
+      const books = await PublishedBook.find({ _id: { $in: bookIds } }).lean();
+      books.forEach(b => { booksMap[String(b._id)] = b; });
+    }
 
     const enriched = comments.map(c => ({
       ...c,
       podcastData: c.podcastId ? podcastsMap[String(c.podcastId)] || null : null,
       videoData: c.videoId ? videosMap[String(c.videoId)] || null : null,
+      bookData: c.bookId ? booksMap[String(c.bookId)] || null : null,
     }));
 
     res.json({ comments: enriched, total, page: parseInt(page), pages: Math.ceil(total / limit) });

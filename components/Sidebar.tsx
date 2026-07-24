@@ -73,6 +73,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <button
                   key={item.page}
                   onClick={() => onTabChange(item.page)}
+                  data-guide={item.page}
                   className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-bold transition-all ${
                     isActive
                       ? 'bg-primary/10 text-primary'
@@ -92,6 +93,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           <div className="px-2 pb-2.5 space-y-0.5 border-t border-gray-100 dark:border-gray-800 pt-2.5">
             <button
               onClick={onToggleTheme}
+              data-guide="theme"
               className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-bold transition-all ${
                 isDark ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200' : 'text-text-secondary hover:bg-gray-50 hover:text-text-primary'
               }`}

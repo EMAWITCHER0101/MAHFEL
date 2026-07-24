@@ -3,6 +3,9 @@ import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react
 import { Podcast, Episode, Comment, Page, Post, Book, Author, PublishedBook, User, Video } from './types';
 import { getPodcasts, getBooks, getAuthors, getVideos, getComments, getPosts, getPublishedBooks, createPost, deletePost as apiDeletePost, addPostComment, updatePost, deleteComment as apiDeleteComment, addComment, likeComment, updateLibrary, prefetchStream, getMe } from './services/api';
 import { ThemeProvider, useTheme } from './components/ThemeProvider';
+import OnboardingGuide from './components/OnboardingGuide';
+import WelcomeVideo from './components/WelcomeVideo';
+import { ADMIN_STEPS, USER_STEPS, AUTHOR_STEPS } from './data/guideSteps';
 import ErrorBoundary from './components/ErrorBoundary';
 import { OfflineDetector, NetworkErrorPage, VPNBanner, useVPNDetection } from './components/ErrorPages';
 import SearchModal from './components/SearchModal';
@@ -53,6 +56,8 @@ const AppInner: React.FC = () => {
     
     const [user, setUser] = useState<User | null>(null);
     const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+    const [showOnboarding, setShowOnboarding] = useState(false);
+    const [showWelcomeVideo, setShowWelcomeVideo] = useState(false);
     
     const [currentTrack, setCurrentTrack] = useState<{ podcast: Podcast; episode: Episode; episodeIndex: number } | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -159,6 +164,13 @@ const AppInner: React.FC = () => {
                         setUser(userData);
                         setIsAuthenticated(true);
                         setAppState(userData.role === 'admin' ? 'admin' : (userData.interests && userData.interests.length > 0 ? 'ready' : 'interests'));
+                        const welcomeKey = `welcome_seen_${userData.id || userData.name}`;
+                        const onboardingKey = `onboarding_seen_${userData.id || userData.name}`;
+                        if (!localStorage.getItem(welcomeKey)) {
+                            setShowWelcomeVideo(true);
+                        } else if (!localStorage.getItem(onboardingKey)) {
+                            setShowOnboarding(true);
+                        }
                     } else {
                         setAppState('login');
                     }
@@ -310,8 +322,15 @@ const AppInner: React.FC = () => {
         setIsAuthenticated(true);
         if (token) localStorage.setItem('soha_token', token);
         localStorage.setItem('user_data', JSON.stringify(u));
-        if (u.role === 'admin') { setAppState('admin'); return; }
-        setAppState(u.interests && u.interests.length > 0 ? 'ready' : 'interests');
+        if (u.role === 'admin') { setAppState('admin'); }
+        else { setAppState(u.interests && u.interests.length > 0 ? 'ready' : 'interests'); }
+        const welcomeKey = `welcome_seen_${u.id || u.name}`;
+        const onboardingKey = `onboarding_seen_${u.id || u.name}`;
+        if (!localStorage.getItem(welcomeKey)) {
+            setShowWelcomeVideo(true);
+        } else if (!localStorage.getItem(onboardingKey)) {
+            setShowOnboarding(true);
+        }
     };
 
     const handleLogout = () => {
@@ -321,6 +340,24 @@ const AppInner: React.FC = () => {
         localStorage.removeItem('user_data');
         setAppState('login');
         setIsProfileOpen(false);
+    };
+
+    const handleOnboardingComplete = () => {
+        if (user) {
+            localStorage.setItem(`onboarding_seen_${user.id || user.name}`, 'true');
+        }
+        setShowOnboarding(false);
+    };
+
+    const handleWelcomeComplete = () => {
+        if (user) {
+            localStorage.setItem(`welcome_seen_${user.id || user.name}`, 'true');
+        }
+        setShowWelcomeVideo(false);
+        const onboardingKey = `onboarding_seen_${user.id || user?.name}`;
+        if (!localStorage.getItem(onboardingKey)) {
+            setShowOnboarding(true);
+        }
     };
 
     const playEpisode = useCallback((podcast: Podcast, index: number) => {
@@ -470,11 +507,11 @@ const AppInner: React.FC = () => {
             };
             const newPost = await createPost(postData);
             if (newPost && (newPost as any).banned) {
-                alert('🚫 شما از سایت اخراج شده‌اید');
+                setToast({ id: Date.now(), message: 'شما از سایت اخراج شده‌اید' });
                 setSendingPost(false);
                 return;
             } else if (newPost && (newPost as any).warnings) {
-                alert(`⚠️ اخطار ${(newPost as any).warnings} از ۳ — پیام شما حذف شد`);
+                setToast({ id: Date.now(), message: `اخطار ${(newPost as any).warnings} از ۳ — پیام شما حذف شد` });
             } else if (newPost) {
                 setPosts([newPost, ...posts]);
             }
@@ -502,9 +539,9 @@ const AppInner: React.FC = () => {
         const postData = { text: chatInputText.trim() };
         const newPost = await createPost(postData);
         if (newPost && (newPost as any).banned) {
-            alert('🚫 شما از سایت اخراج شده‌اید');
+            setToast({ id: Date.now(), message: 'شما از سایت اخراج شده‌اید' });
         } else if (newPost && (newPost as any).warnings) {
-            alert(`⚠️ اخطار ${(newPost as any).warnings} از ۳ — پیام شما حذف شد`);
+            setToast({ id: Date.now(), message: `اخطار ${(newPost as any).warnings} از ۳ — پیام شما حذف شد` });
         } else if (newPost) {
             setPosts([newPost, ...posts]);
             setChatInputText('');
@@ -721,9 +758,9 @@ const AppInner: React.FC = () => {
                 } else {
                     const updatedPost = await addPostComment(String(_postId), text, replyTo as any, media, quotedText, audioTimestamp, videoTimestamp);
                     if (updatedPost && (updatedPost as any).banned) {
-                        alert('🚫 شما از سایت اخراج شده‌اید');
+                        setToast({ id: Date.now(), message: 'شما از سایت اخراج شده‌اید' });
                     } else if (updatedPost && (updatedPost as any).warnings) {
-                        alert(`⚠️ اخطار ${(updatedPost as any).warnings} از ۳ — پیام شما حذف شد`);
+                        setToast({ id: Date.now(), message: `اخطار ${(updatedPost as any).warnings} از ۳ — پیام شما حذف شد` });
                     } else if (updatedPost) {
                         setPosts(prev => prev.map(p => String(p.id) === String(_postId) ? { ...p, comments: updatedPost.comments } : p));
                         setSelectedPostForComments({ ...freshPost, comments: updatedPost.comments });
@@ -1139,6 +1176,16 @@ onPlayVideo={(v) => { setIsVideoMini(false); handlePlayVideo(v); }}
               )}
              
               {toast && <Toast key={toast.id} message={toast.message} image={toast.image} name={toast.name} onClose={() => setToast(null)} />}
+              {showWelcomeVideo && (
+                  <WelcomeVideo videoSrc="/videopage/welcomepage.mp4" onComplete={handleWelcomeComplete} />
+              )}
+              {showOnboarding && !showWelcomeVideo && user && (
+                  <OnboardingGuide
+                    steps={user.role === 'admin' ? ADMIN_STEPS : user.role === 'author' ? AUTHOR_STEPS : USER_STEPS}
+                    role={user.role}
+                    onComplete={handleOnboardingComplete}
+                  />
+              )}
               </div>
              </div>
         </div>

@@ -62,7 +62,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onOpenAdmin, onOpenProfile, onOpe
           {isAdmin && (
             <button onClick={onOpenAdmin} className="p-2.5 rounded-xl transition-all duration-300 lg:hidden active:scale-90" style={{ color: 'var(--text-2)' }} title="مدیریت سیستم"><i className="fas fa-cog text-[14px]" /></button>
           )}
-          <button className="rounded-xl transition-all duration-300 active:scale-90" onClick={onOpenProfile}>
+          <button className="rounded-xl transition-all duration-300 active:scale-90" onClick={onOpenProfile} data-guide="profile">
             {isAuthenticated && user ? (
               user.avatar ? (
                 <img src={user.avatar} className="w-8 h-8 rounded-xl border-2 object-cover" style={{ borderColor: 'var(--primary)' }} alt="profile" />

@@ -78,8 +78,11 @@ const PlaylistPage: React.FC<PlaylistPageProps> = ({
   const [markAudioTimestamp, setMarkAudioTimestamp] = useState(false);
   const [uploadedMedia, setUploadedMedia] = useState<{ url: string; type: string } | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [pageToast, setPageToast] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const commentsListRef = useRef<HTMLDivElement>(null);
+
+  const showPageToast = (msg: string) => { setPageToast(msg); setTimeout(() => setPageToast(''), 2500); };
 
   const handleFilePick = () => fileInputRef.current?.click();
 
@@ -87,13 +90,13 @@ const PlaylistPage: React.FC<PlaylistPageProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 30 * 1024 * 1024) {
-      alert('حجم فایل حداکثر ۳۰ مگابایت مجاز است');
+      showPageToast('حجم فایل حداکثر ۳۰ مگابایت مجاز است');
       e.target.value = '';
       return;
     }
     const allowed = ['image/jpeg','image/png','image/gif','image/webp','audio/mpeg','audio/mp3','audio/wav','audio/ogg','audio/aac'];
     if (!allowed.includes(file.type)) {
-      alert('فقط تصاویر (jpg, png, gif, webp) و صوت (mp3, wav, ogg, aac) مجاز است');
+      showPageToast('فقط تصاویر و صوت مجاز است');
       e.target.value = '';
       return;
     }
@@ -110,7 +113,7 @@ const PlaylistPage: React.FC<PlaylistPageProps> = ({
       const mediaType = file.type.startsWith('image/') ? 'image' : 'audio';
       setUploadedMedia({ url: data.url, type: mediaType });
     } catch (err: any) {
-      alert(err.message || 'خطا در آپلود فایل');
+      showPageToast(err.message || 'خطا در آپلود فایل');
     } finally {
       setUploading(false);
       e.target.value = '';
@@ -166,6 +169,12 @@ const PlaylistPage: React.FC<PlaylistPageProps> = ({
 
   return (
     <>
+    {pageToast && (
+        <div className="fixed top-5 right-5 z-[5000] bg-gray-900/90 backdrop-blur-md text-white px-4 py-2.5 rounded-2xl shadow-2xl text-xs font-bold animate-toastIn flex items-center gap-2 border border-white/10 max-w-[80vw]">
+        <i className="fas fa-info-circle text-primary text-sm"></i>
+        {pageToast}
+      </div>
+    )}
     <div className={`fixed inset-0 z-[200] overflow-y-auto lg:overflow-hidden lg:flex animate-fadeIn ${isDark ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'}`}>
       {instantViewContent && (
         <InstantView title={instantViewContent.title} content={instantViewContent.content} subtitle={podcast.title} onClose={() => setInstantViewContent(null)} />

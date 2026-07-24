@@ -16,7 +16,7 @@ const publishedBookSchema = new mongoose.Schema({
   type: { type: String, enum: ['book', 'pamphlet', 'note'], default: 'book' },
   date: String,
   relatedAudioIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Podcast' }],
-}, { timestamps: true });
+}, { timestamps: true, suppressReservedKeysWarning: true });
 
 publishedBookSchema.index({ title: 'text', description: 'text' });
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { Post } from '../types';
 
 interface PostInteractionMenuProps {
@@ -17,8 +17,14 @@ const MenuItem: React.FC<{ icon: string; label: string; onClick: () => void; isD
 );
 
 const PostInteractionMenu: React.FC<PostInteractionMenuProps> = ({ post, isVisible, onClose, onDelete, onReply }) => {
+    const [menuToast, setMenuToast] = useState('');
     if (!isVisible || !post) return null;
     
+    const showMenuToast = (msg: string) => {
+        setMenuToast(msg);
+        setTimeout(() => setMenuToast(''), 2500);
+    };
+
     const handleAction = (action: () => void) => {
         action();
         onClose();
@@ -32,20 +38,19 @@ const PostInteractionMenu: React.FC<PostInteractionMenuProps> = ({ post, isVisib
     
     const handleCopy = async () => {
         if (!post.text) {
-            alert('این پست متنی برای کپی کردن ندارد.');
+            showMenuToast('این پست متنی برای کپی کردن ندارد.');
             return;
         }
         try {
-            await navigator.clipboard.writeText(post.text);
-            alert('متن با موفقیت کپی شد.');
+            await navigator.clipboard.writeText(String(post.text));
+            showMenuToast('متن با موفقیت کپی شد.');
         } catch (err) {
             console.error('Failed to copy text: ', err);
-            alert('خطا در کپی کردن متن.');
+            showMenuToast('خطا در کپی کردن متن.');
         }
     };
     
     const handleShare = async () => {
-        // Use a valid, canonical URL for sharing to prevent errors.
         const shareUrl = (window.location.origin && window.location.origin !== 'null') 
             ? window.location.origin 
             : 'https://soha.app';
@@ -62,7 +67,7 @@ const PostInteractionMenu: React.FC<PostInteractionMenuProps> = ({ post, isVisib
             if (navigator.share) {
                 await navigator.share(shareData);
             } else {
-                alert('اشتراک‌گذاری در این مرورگر پشتیبانی نمی‌شود.');
+                showMenuToast('اشتراک‌گذاری در این مرورگر پشتیبانی نمی‌شود.');
             }
         } catch (err) {
             console.error('Error sharing:', err);
@@ -83,6 +88,12 @@ const PostInteractionMenu: React.FC<PostInteractionMenuProps> = ({ post, isVisib
                     <MenuItem icon="fas fa-trash-alt" label="حذف" onClick={() => handleAction(handleDelete)} isDestructive />
                 </div>
             </div>
+            {menuToast && (
+                <div className="fixed top-5 right-5 z-[2000] bg-gray-900/90 backdrop-blur-md text-white px-4 py-2.5 rounded-2xl shadow-2xl text-xs font-bold animate-toastIn flex items-center gap-2 border border-white/10 max-w-[80vw]">
+                    <i className="fas fa-info-circle text-primary text-sm"></i>
+                    {menuToast}
+                </div>
+            )}
         </div>
     );
 };

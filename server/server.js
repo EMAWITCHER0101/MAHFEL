@@ -37,6 +37,13 @@ app.use(compression({ level: 6, threshold: 1024, filter: (req, res) => {
 app.use(cors({ origin: ['http://localhost:3000', 'http://localhost:5173', 'http://87.107.165.104', 'https://87.107.165.104', 'http://87.248.145.44', 'https://87.248.145.44', 'http://soha-sima.ir', 'https://soha-sima.ir'], credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({ error: 'فرمت JSON درخواست نادرست است' });
+  }
+  next(err);
+});
+
 app.use((req, res, next) => {
   if (req.method === 'GET' && req.path.startsWith('/api/')) {
     res.set('Cache-Control', 'public, max-age=30, s-maxage=60');

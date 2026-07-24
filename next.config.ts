@@ -15,7 +15,7 @@ const securityHeaders = [
       "font-src 'self' https://fonts.gstatic.com data:",
       "img-src 'self' data: blob: http: https: *",
       "media-src 'self' http: https: data: blob: dl.soha-sima.ir",
-      "connect-src 'self' http://localhost:5000 https://soha-sima.ir http://soha-sima.ir https://openrouter.ai https://api.openrouter.ai",
+      "connect-src 'self' http://localhost:5000 https://soha-sima.ir http://soha-sima.ir https://api.groq.com https://openrouter.ai https://api.openrouter.ai",
       "frame-src 'self' https://www.aparat.com https://aparat.com https://player.aparat.com",
     ].join('; '),
   },

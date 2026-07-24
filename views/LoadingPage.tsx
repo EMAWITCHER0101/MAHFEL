@@ -10,7 +10,6 @@ const LoadingPage: React.FC = () => {
         background: 'radial-gradient(ellipse at 50% 40%, rgba(20, 184, 166, 0.06) 0%, transparent 60%), linear-gradient(180deg, var(--bg) 0%, var(--surface) 100%)',
       }}
     >
-      {/* Ambient glow */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/3 left-1/3 w-72 h-72 rounded-full opacity-[0.07] animate-float-slow"
           style={{ background: 'var(--primary)', filter: 'blur(120px)' }} />
@@ -18,7 +17,6 @@ const LoadingPage: React.FC = () => {
           style={{ background: '#6366f1', filter: 'blur(100px)', animationDelay: '2s' }} />
       </div>
 
-      {/* Logo */}
       <div className="relative mb-8">
         <div className="relative">
           <div className="absolute inset-0 rounded-full bg-gradient-to-br from-teal-400/20 to-indigo-500/20 blur-2xl animate-pulse-slow" style={{ transform: 'scale(1.3)' }}></div>
@@ -26,12 +24,10 @@ const LoadingPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Brand */}
       <div className="mb-10 animate-fadeInUp" style={{ animationDelay: '0.3s' }}>
         <SohaLogotype className="h-10" />
       </div>
 
-      {/* Dots */}
       <div className="flex items-center gap-3 animate-fadeInUp" style={{ animationDelay: '0.6s' }}>
         {[0, 1, 2, 3].map(i => (
           <div

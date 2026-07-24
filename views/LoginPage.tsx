@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { User, UserRole } from '../types';
 import { getRandomTailwindColor, getInitials } from '../utils/helpers';
 import { register, login, completeProfile } from '../services/api';
@@ -13,6 +13,15 @@ const ADMIN_IDENTITY = {
   name: 'سرای هنر و اندیشه',
   avatar: ''
 };
+
+interface ToastItem {
+  id: number;
+  message: string;
+  type: 'error' | 'success' | 'warning';
+  exiting?: boolean;
+}
+
+let toastIdCounter = 0;
 
 const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -29,10 +38,12 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [adminPassword, setAdminPassword] = useState('');
   const [step, setStep] = useState<'form' | 'profile' | 'admin' | 'author'>('form');
   const [error, setError] = useState('');
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [vpnWarning, setVpnWarning] = useState(false);
+
   const [mutedWarning, setMutedWarning] = useState(false);
   const [mutedUntil, setMutedUntil] = useState<string | null>(null);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const [showCropModal, setShowCropModal] = useState(false);
   const [rawImage, setRawImage] = useState<string | null>(null);
@@ -46,28 +57,54 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
   const avatarColor = useMemo(() => getRandomTailwindColor(name), [name]);
 
+  const showToast = useCallback((message: string, type: 'error' | 'success' | 'warning' = 'error') => {
+    const id = ++toastIdCounter;
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.map(t => t.id === id ? { ...t, exiting: true } : t));
+      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 300);
+    }, 4000);
+  }, []);
+
+  const dismissToast = useCallback((id: number) => {
+    setToasts(prev => prev.map(t => t.id === id ? { ...t, exiting: true } : t));
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 300);
+  }, []);
+
+  const fieldErrors = useMemo(() => {
+    const errs: Record<string, string> = {};
+    if (mode === 'register') {
+      if (!name.trim()) errs.name = 'نام خود را وارد کنید';
+      if (!phoneNumber.trim()) errs.phoneNumber = 'شماره موبایل را وارد کنید';
+      else if (!/^09\d{9}$/.test(phoneNumber)) errs.phoneNumber = 'شماره موبایل باید ۱۱ رقم و با ۰۹ شروع شود';
+      if (!email.trim()) errs.email = 'ایمیل را وارد کنید';
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = 'فرمت ایمیل نامعتبر است';
+      if (!password) errs.password = 'رمز عبور را وارد کنید';
+      else if (password.length < 4) errs.password = 'رمز عبور باید حداقل ۴ کاراکتر باشد';
+      else if (password.length > 50) errs.password = 'رمز عبور حداکثر ۵۰ کاراکتر می‌تواند باشد';
+      if (!confirmPassword) errs.confirmPassword = 'تکرار رمز عبور را وارد کنید';
+      else if (password !== confirmPassword) errs.confirmPassword = 'رمز عبور مطابقت ندارد';
+    }
+    return errs;
+  }, [mode, name, phoneNumber, email, password, confirmPassword]);
+
+  const isFormValid = useMemo(() => Object.keys(fieldErrors).length === 0, [fieldErrors]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!loginField.trim() || !password) {
-      setError('ایمیل/شماره موبایل و رمز عبور را وارد کنید');
-      return;
-    }
+    if (!loginField.trim()) { showToast('ایمیل یا شماره موبایل را وارد کنید'); return; }
+    if (!password) { showToast('رمز عبور را وارد کنید'); return; }
     setError('');
     setIsSubmitting(true);
     try {
       const isEmail = loginField.includes('@');
       const res = await login(isEmail ? loginField : '', isEmail ? '' : loginField, password);
       if (res && res.success) {
-        if (res.banned) { setError('شما از سایت اخراج شده‌اید.'); return; }
-        if (res.isIranianIP === false) {
-          setVpnWarning(true);
-        }
-        if (res.user?.muted) {
-          setMutedWarning(true);
-          setMutedUntil(res.user.mutedUntil);
-        }
+        if (res.banned) { showToast('شما از سایت اخراج شده‌اید', 'error'); setIsSubmitting(false); return; }
+        if (res.user?.muted) { setMutedWarning(true); setMutedUntil(res.user.mutedUntil); }
         if (res.token) localStorage.setItem('soha_token', res.token);
-        onLoginSuccess({
+        showToast('ورود موفقیت‌آمیز!', 'success');
+        setTimeout(() => onLoginSuccess({
           id: res.user.id,
           email: res.user.email,
           phoneNumber: res.user.phoneNumber || '',
@@ -76,35 +113,37 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           role: res.user.role as UserRole,
           interests: res.user.interests || [],
           library: res.user.library,
-        }, res.token);
+        }, res.token), 400);
       } else {
-        setError(res?.error || 'ایمیل/شماره موبایل یا رمز عبور اشتباه است');
+        showToast(res?.error || 'ایمیل/شماره موبایل یا رمز عبور اشتباه است');
       }
     } catch (err: any) {
-      setError(err?.message || 'خطا در ورود');
+      showToast(err?.message || 'خطا در ورود');
     }
     setIsSubmitting(false);
   };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) { setError('نام خود را وارد کنید'); return; }
-    if (!phoneNumber.trim() || !/^09\d{9}$/.test(phoneNumber)) { setError('شماره موبایل نامعتبر است'); return; }
-    if (!email.trim()) { setError('ایمیل را وارد کنید'); return; }
-    if (!password || password.length < 4) { setError('رمز عبور باید حداقل ۴ کاراکتر باشد'); return; }
-    if (password !== confirmPassword) { setError('رمز عبور مطابقت ندارد'); return; }
+    setTouched({ name: true, phoneNumber: true, email: true, password: true, confirmPassword: true });
+    const errors = Object.entries(fieldErrors);
+    if (errors.length > 0) {
+      errors.forEach(([_, msg]) => showToast(msg));
+      return;
+    }
     setError('');
     setIsSubmitting(true);
     try {
       const res = await register(name, email, password, phoneNumber);
       if (res && res.success) {
         if (res.token) localStorage.setItem('soha_token', res.token);
+        showToast('ثبت‌نام موفقیت‌آمیز! پروفایل خود را تکمیل کنید', 'success');
         setStep('profile');
       } else {
-        setError(res?.error || 'خطا در ثبت‌نام');
+        showToast(res?.error || 'خطا در ثبت‌نام');
       }
     } catch (err: any) {
-      setError(err?.message || 'خطا در ثبت‌نام');
+      showToast(err?.message || 'خطا در ثبت‌نام');
     }
     setIsSubmitting(false);
   };
@@ -254,15 +293,22 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     <div className="fixed inset-0 bg-background z-[2000] flex flex-col items-center justify-start sm:justify-center p-4 sm:p-6 animate-fadeIn font-sans overflow-y-auto">
       <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-primary/10 via-primary/5 to-transparent pointer-events-none"></div>
 
-      {vpnWarning && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[3000] bg-amber-500 text-white px-5 py-3 rounded-2xl text-sm font-bold shadow-2xl animate-slideDown max-w-sm text-center" onClick={() => setVpnWarning(false)}>
-          ⚠️ لطفاً VPN خود را خاموش کنید
-        </div>
-      )}
+      <div className="fixed top-5 right-5 z-[4000] flex flex-col gap-2.5 pointer-events-none">
+        {toasts.map(t => (
+          <div key={t.id} onClick={() => dismissToast(t.id)} className={`pointer-events-auto cursor-pointer px-4 py-3 rounded-2xl text-sm font-bold text-white shadow-2xl max-w-[280px] flex items-center gap-2.5 backdrop-blur-sm border border-white/10 ${
+            t.exiting ? 'animate-toastOutRight' : 'animate-toastInRight'
+          } ${
+            t.type === 'success' ? 'bg-green-500/90 shadow-green-500/30' : t.type === 'warning' ? 'bg-amber-500/90 shadow-amber-500/30' : 'bg-red-500/90 shadow-red-500/30'
+          }`} style={{ boxShadow: `0 8px 32px ${t.type === 'success' ? 'rgba(34,197,94,0.35)' : t.type === 'warning' ? 'rgba(245,158,11,0.35)' : 'rgba(239,68,68,0.35)'}` }}>
+            <span className="text-base flex-shrink-0">{t.type === 'success' ? '✅' : t.type === 'warning' ? '⚠️' : '❌'}</span>
+            <span className="leading-relaxed">{t.message}</span>
+          </div>
+        ))}
+      </div>
 
       {mutedWarning && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[3000] bg-orange-500 text-white px-5 py-3 rounded-2xl text-sm font-bold shadow-2xl animate-slideDown max-w-sm text-center" onClick={() => setMutedWarning(false)}>
-          🔇 شما در حالت سکوت هستید {mutedUntil ? `تا ${new Date(mutedUntil).toLocaleString('fa-IR')}` : ''}
+        <div className="fixed top-5 right-5 z-[3000] bg-orange-500 text-white px-5 py-3 rounded-2xl text-sm font-bold shadow-2xl animate-slideDown max-w-[80vw] text-center border border-white/10" onClick={() => setMutedWarning(false)}>
+          شما در حالت سکوت هستید {mutedUntil ? `تا ${new Date(mutedUntil).toLocaleString('fa-IR')}` : ''}
         </div>
       )}
 
@@ -321,23 +367,36 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                     <h1 className="text-xl font-black text-gray-800 font-nastaliq">ایجاد حساب کاربری</h1>
                     <p className="text-xs text-gray-500 mt-1 font-bold">اطلاعات خود را وارد کنید</p>
                   </div>
-                  <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="نام و نام خانوادگی"
-                    className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-3 sm:px-4 py-3 sm:py-4 text-center text-sm font-bold focus:border-primary transition-all outline-none" />
-                  <input type="tel" dir="ltr" value={phoneNumber} onChange={(e) => { const val = e.target.value.replace(/\D/g, '').slice(0, 11); setPhoneNumber(val); }} maxLength={11} placeholder="09123456789"
-                    className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-3 sm:px-4 py-3 sm:py-4 text-center text-sm font-bold focus:border-primary transition-all outline-none" />
-                  <input type="email" dir="ltr" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="example@email.com"
-                    className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-3 sm:px-4 py-3 sm:py-4 text-center text-sm font-bold focus:border-primary transition-all outline-none" />
+                  <div>
+                    <input type="text" value={name} onChange={(e) => setName(e.target.value)} onBlur={() => setTouched(prev => ({ ...prev, name: true }))} placeholder="نام و نام خانوادگی"
+                      className={`w-full bg-gray-50 border-2 rounded-2xl px-3 sm:px-4 py-3 sm:py-4 text-center text-sm font-bold transition-all outline-none ${touched.name && fieldErrors.name ? 'border-red-300 bg-red-50/50' : touched.name && !fieldErrors.name ? 'border-green-300' : 'border-gray-100 focus:border-primary'}`} />
+                    {touched.name && fieldErrors.name && <p className="text-red-500 text-[10px] font-bold mt-1 text-center">{fieldErrors.name}</p>}
+                  </div>
+                  <div>
+                    <input type="tel" dir="ltr" value={phoneNumber} onChange={(e) => { const val = e.target.value.replace(/\D/g, '').slice(0, 11); setPhoneNumber(val); }} onBlur={() => setTouched(prev => ({ ...prev, phoneNumber: true }))} maxLength={11} placeholder="09123456789"
+                      className={`w-full bg-gray-50 border-2 rounded-2xl px-3 sm:px-4 py-3 sm:py-4 text-center text-sm font-bold transition-all outline-none ${touched.phoneNumber && fieldErrors.phoneNumber ? 'border-red-300 bg-red-50/50' : touched.phoneNumber && !fieldErrors.phoneNumber ? 'border-green-300' : 'border-gray-100 focus:border-primary'}`} />
+                    {touched.phoneNumber && fieldErrors.phoneNumber && <p className="text-red-500 text-[10px] font-bold mt-1 text-center">{fieldErrors.phoneNumber}</p>}
+                  </div>
+                  <div>
+                    <input type="email" dir="ltr" value={email} onChange={(e) => setEmail(e.target.value)} onBlur={() => setTouched(prev => ({ ...prev, email: true }))} placeholder="example@email.com"
+                      className={`w-full bg-gray-50 border-2 rounded-2xl px-3 sm:px-4 py-3 sm:py-4 text-center text-sm font-bold transition-all outline-none ${touched.email && fieldErrors.email ? 'border-red-300 bg-red-50/50' : touched.email && !fieldErrors.email ? 'border-green-300' : 'border-gray-100 focus:border-primary'}`} />
+                    {touched.email && fieldErrors.email && <p className="text-red-500 text-[10px] font-bold mt-1 text-center">{fieldErrors.email}</p>}
+                  </div>
                   <div className="relative">
-                    <input type={showPassword ? 'text' : 'password'} dir="ltr" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="رمز عبور"
-                      className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-3 sm:px-4 py-3 sm:py-4 pl-12 text-center text-sm font-bold focus:border-primary transition-all outline-none" />
+                    <input type={showPassword ? 'text' : 'password'} dir="ltr" value={password} onChange={(e) => setPassword(e.target.value)} onBlur={() => setTouched(prev => ({ ...prev, password: true }))} placeholder="رمز عبور"
+                      className={`w-full bg-gray-50 border-2 rounded-2xl px-3 sm:px-4 py-3 sm:py-4 pl-12 text-center text-sm font-bold transition-all outline-none ${touched.password && fieldErrors.password ? 'border-red-300 bg-red-50/50' : touched.password && !fieldErrors.password ? 'border-green-300' : 'border-gray-100 focus:border-primary'}`} />
                     <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary transition-colors">
                       <i className={`fas ${showPassword ? 'fa-eye-slash' : 'fa-eye'} text-sm`}></i>
                     </button>
+                    {touched.password && fieldErrors.password && <p className="text-red-500 text-[10px] font-bold mt-1 text-center">{fieldErrors.password}</p>}
                   </div>
-                  <input type="password" dir="ltr" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="تکرار رمز عبور"
-                    className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-3 sm:px-4 py-3 sm:py-4 text-center text-sm font-bold focus:border-primary transition-all outline-none" />
+                  <div>
+                    <input type="password" dir="ltr" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} onBlur={() => setTouched(prev => ({ ...prev, confirmPassword: true }))} placeholder="تکرار رمز عبور"
+                      className={`w-full bg-gray-50 border-2 rounded-2xl px-3 sm:px-4 py-3 sm:py-4 text-center text-sm font-bold transition-all outline-none ${touched.confirmPassword && fieldErrors.confirmPassword ? 'border-red-300 bg-red-50/50' : touched.confirmPassword && !fieldErrors.confirmPassword ? 'border-green-300' : 'border-gray-100 focus:border-primary'}`} />
+                    {touched.confirmPassword && fieldErrors.confirmPassword && <p className="text-red-500 text-[10px] font-bold mt-1 text-center">{fieldErrors.confirmPassword}</p>}
+                  </div>
                   {error && <p className="text-red-500 text-[11px] font-black text-center bg-red-50 py-2 rounded-xl">{error}</p>}
-                  <button type="submit" disabled={isSubmitting} className="w-full bg-primary text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all disabled:opacity-50">
+                  <button type="submit" disabled={isSubmitting || (Object.keys(touched).length > 0 && !isFormValid)} className="w-full bg-primary text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all disabled:opacity-50">
                     {isSubmitting ? <i className="fas fa-circle-notch fa-spin"></i> : 'ثبت‌نام'}
                   </button>
                 </form>

@@ -1611,7 +1611,7 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
   };
 
   return (
-    <div className="flex flex-col h-dvh chat-bg" style={{ position: 'relative' }}>
+    <div className="flex flex-col h-dvh chat-bg">
         <div className="border-b px-3 py-3 flex-shrink-0"
           style={{ background: 'color-mix(in srgb, var(--surface) 85%, transparent)', borderColor: 'var(--border)' }}>
           <div className="flex items-center gap-2 mb-2 px-1">
@@ -1810,7 +1810,7 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
         )}
 
         {/* Input bar at bottom */}
-        <div className="border-t px-3 py-2.5 flex-shrink-0 flex justify-center" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+        <div className="border-t px-3 py-2.5 flex justify-center flex-shrink-0" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
           <div className="w-full max-w-2xl">
           {/* Reply banner */}
           {replyTarget && (
@@ -1903,7 +1903,7 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
               ) : null;
             })()}
             <div className="flex-1 min-w-0 rounded-xl overflow-hidden transition-all duration-200"
-              style={{ border: `2px solid ${inputText.trim() || inputMedia ? 'var(--primary)' : 'var(--border)'}`, background: 'var(--surface-2)' }}>
+              style={{ border: `1.5px solid var(--border)`, background: 'var(--surface-2)' }}>
               <input value={inputText} onChange={(e) => setInputText(e.target.value)} onKeyDown={handleKeyDown} placeholder={podcastReplyTarget ? `پاسخ به ${podcastReplyTarget.author}...` : "پیام..."} className="w-full bg-transparent outline-none px-3.5 py-2.5 text-[13px] font-medium" style={{ color: 'var(--text)', direction: 'rtl' }} />
             </div>
             <button onClick={handleCreatePost} disabled={(!inputText.trim() && !inputMedia) || sending || !currentUser}
@@ -1922,7 +1922,7 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
 
         {/* Toast */}
         {toastVisible && toastMessage && (
-          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[3000] px-5 py-3 rounded-2xl text-sm font-bold text-white shadow-2xl animate-slideDown" style={{ background: toastMessage.includes('اخراج') ? '#ef4444' : '#f59e0b' }}>
+          <div className="fixed top-5 right-5 z-[3000] px-5 py-3 rounded-2xl text-sm font-bold text-white shadow-2xl animate-toastIn border border-white/10 max-w-[80vw]" style={{ background: toastMessage.includes('اخراج') ? '#ef4444' : '#f59e0b' }}>
             {toastMessage}
           </div>
         )}

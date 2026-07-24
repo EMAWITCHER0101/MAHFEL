@@ -39,7 +39,7 @@ const TabItem: React.FC<{
   isDark: boolean;
 }> = ({ tab, isActive, onClick, isDark }) => {
   return (
-    <div className="flex-1 flex justify-center items-center" onClick={() => onClick(tab.page)}>
+    <div className="flex-1 flex justify-center items-center" onClick={() => onClick(tab.page)} data-guide={tab.page}>
       <div className="relative flex flex-col items-center justify-center gap-1 cursor-pointer group w-16 h-14">
         {/* Active indicator dot */}
         {isActive && (
@@ -140,6 +140,7 @@ const CentralButton: React.FC<{
         onPointerUp={stopPress}
         onPointerLeave={stopPress}
         onClick={(e) => { if (progress < 50) onClick(); }}
+        data-guide="write-post"
         aria-label="محفل"
         className={`w-14 h-14 rounded-full -mt-7 flex items-center justify-center shadow-lg transition-all duration-300 ease-in-out relative z-20 ${
           isPressing && canWrite ? 'scale-110 shadow-2xl' : 'hover:scale-105'

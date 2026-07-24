@@ -47,7 +47,7 @@ const SmartEditButton = ({ text, onEdited }: { text: string, onEdited: (newText:
                 config: { systemInstruction: "شما یک ویراستار حرفه‌ای هستید. متن فارسی ارائه شده را به صورت بسیار جزیی ویرایش کنید تا فقط رسمی و از نظر نگارشی صحیح شود." },
             });
             if (response.text) onEdited(response.text);
-        } catch (error) { alert("خطا در ویراستاری هوشمند."); } finally { setIsProcessing(false); }
+        } catch (error) { showAdminToast("خطا در ویراستاری هوشمند.", "error"); } finally { setIsProcessing(false); }
     };
     return (
         <button onClick={handleSmartEdit} disabled={isProcessing || !text} title="ویراستار هوشمند"
@@ -65,7 +65,7 @@ const WordToHtmlButton = ({ onConverted }: any) => {
             <i className={`fas ${processing ? 'fa-spinner fa-spin' : 'fa-file-word'}`}></i>
             <input type="file" accept=".docx" hidden onChange={async (e:any) => {
                 const f = e.target.files[0]; if(!f) return; setProcessing(true);
-                try { const arrayBuffer = await f.arrayBuffer(); const result = await mammoth.convertToHtml({ arrayBuffer }); onConverted(result.value); } catch { alert("خطا"); } finally { setProcessing(false); }
+                try { const arrayBuffer = await f.arrayBuffer(); const result = await mammoth.convertToHtml({ arrayBuffer }); onConverted(result.value); } catch { showAdminToast("خطا", "error"); } finally { setProcessing(false); }
             }} />
         </label>
     );
@@ -78,9 +78,12 @@ const PersianDateInput = ({ value, onChange }: any) => (
     </div>
 );
 
-const MiniAudioPlayer = ({ comment }: { comment: any }) => {
+const MiniAudioPlayer = ({ comment, timestamp }: { comment: any; timestamp?: number }) => {
+    const ts = timestamp ?? comment?.audioTimestamp ?? comment?.timestamp ?? 0;
+    const tsLabel = ts ? `${toPersianDigits(Math.floor(ts / 60))}:${toPersianDigits(Math.floor(ts % 60)).toString().padStart(2, '0')}` : '';
     const [playing, setPlaying] = useState(false);
     const [progress, setProgress] = useState(0);
+    const [audioError, setAudioError] = useState(false);
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const podcast = comment.podcastData || (typeof comment.podcastId === 'object' ? comment.podcastId : null);
     const episode = podcast?.episodes?.[comment.episodeIndex ?? 0];
@@ -88,8 +91,8 @@ const MiniAudioPlayer = ({ comment }: { comment: any }) => {
     const cover = podcast?.cover || '';
     const title = comment.podcastTitle || podcast?.title || 'مجموعه صوتی';
     const epTitle = comment.episodeTitle || episode?.title || '';
-    const togglePlay = () => {
-        if (!audioUrl) return;
+    const ensureAudio = () => {
+        if (!audioUrl) return null;
         if (!audioRef.current) {
             audioRef.current = new Audio(audioUrl);
             audioRef.current.addEventListener('timeupdate', () => {
@@ -97,8 +100,27 @@ const MiniAudioPlayer = ({ comment }: { comment: any }) => {
             });
             audioRef.current.addEventListener('ended', () => setPlaying(false));
         }
-        if (playing) { audioRef.current.pause(); } else { audioRef.current.play(); }
-        setPlaying(!playing);
+        return audioRef.current;
+    };
+    const safePlay = (a: HTMLAudioElement) => {
+        const p = a.play();
+        if (p && typeof p.catch === 'function') {
+            p.catch(() => setAudioError(true));
+        }
+    };
+    const togglePlay = () => {
+        const a = ensureAudio();
+        if (!a) return;
+        setAudioError(false);
+        if (playing) { a.pause(); setPlaying(false); } else { safePlay(a); setPlaying(true); }
+    };
+    const playFrom = (seconds: number) => {
+        const a = ensureAudio();
+        if (!a) return;
+        setAudioError(false);
+        a.currentTime = seconds;
+        safePlay(a);
+        setPlaying(true);
     };
     return (
         <div className="mt-2 p-3 bg-gradient-to-l from-purple-50 to-purple-100/50 rounded-2xl flex items-center gap-3 border border-purple-200/60">
@@ -119,6 +141,18 @@ const MiniAudioPlayer = ({ comment }: { comment: any }) => {
             <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-black text-purple-800 truncate">{title}</p>
                 {epTitle && <p className="text-[9px] text-purple-500 truncate mt-0.5">{epTitle}</p>}
+                {tsLabel && (
+                    audioUrl ? (
+                        <button onClick={() => playFrom(ts)} className="inline-flex items-center gap-1 mt-1 text-[8px] font-black text-purple-600 bg-purple-100 hover:bg-purple-200 px-1.5 py-0.5 rounded-full transition-colors active:scale-95 cursor-pointer" title="پخش از این زمان">
+                            <i className="fas fa-clock"></i>{tsLabel}
+                        </button>
+                    ) : (
+                        <span className="inline-flex items-center gap-1 mt-1 text-[8px] font-black text-purple-400 bg-purple-50 px-1.5 py-0.5 rounded-full">
+                            <i className="fas fa-clock"></i>{tsLabel}
+                        </span>
+                    )
+                )}
+                {audioError && <p className="text-[7px] text-red-500 mt-1 font-bold">لینک صوت قابل پخش نیست</p>}
                 {audioUrl ? (
                     <div className="w-full bg-purple-200 rounded-full h-1 mt-2">
                         <div className="bg-purple-500 h-1 rounded-full transition-all" style={{ width: `${progress}%` }}></div>
@@ -131,12 +165,36 @@ const MiniAudioPlayer = ({ comment }: { comment: any }) => {
     );
 };
 
-const MiniVideoPlayer = ({ comment }: { comment: any }) => {
+const MiniVideoPlayer = ({ comment, playable = true }: { comment: any; playable?: boolean }) => {
     const [showEmbed, setShowEmbed] = useState(false);
     const video = comment.videoData || (typeof comment.videoId === 'object' ? comment.videoId : null);
     const videoTitle = comment.videoTitle || video?.title || 'ویدیو';
     const thumbnail = video?.thumbnailUrl || '';
     const embedId = video?.embedId || '';
+
+    if (!playable) {
+        return (
+            <div className="mt-2 w-fit max-w-[240px] rounded-2xl bg-gradient-to-l from-blue-50/90 to-indigo-50/70 border border-blue-100 shadow-[0_4px_18px_-8px_rgba(99,102,241,0.45)] p-2.5">
+                <div className="relative flex-shrink-0">
+                    {thumbnail ? (
+                        <img src={thumbnail} className="w-full h-28 rounded-xl object-cover shadow-md ring-2 ring-white/70" />
+                    ) : (
+                        <div className="w-full h-28 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-md ring-2 ring-white/70">
+                            <i className="fas fa-play text-xl mr-[-2px]"></i>
+                        </div>
+                    )}
+                    <span className="absolute bottom-1.5 left-1.5 px-2 py-0.5 rounded-lg bg-black/55 backdrop-blur-sm text-white text-[7px] font-black flex items-center gap-1 shadow">
+                        <i className="fas fa-play text-[6px]"></i> آپارات
+                    </span>
+                </div>
+                <div className="mt-2 px-0.5">
+                    <span className="inline-flex items-center gap-1 text-[8px] font-black text-blue-500 bg-blue-100/80 px-2 py-0.5 rounded-full mb-1"><i className="fas fa-video"></i> ویدیو</span>
+                    <p className="text-[12px] font-extrabold text-gray-800 leading-relaxed break-words">{videoTitle}</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="mt-2 rounded-2xl overflow-hidden border border-blue-200/60">
             {showEmbed && embedId ? (
@@ -148,27 +206,24 @@ const MiniVideoPlayer = ({ comment }: { comment: any }) => {
                 <div className="flex items-center gap-3 p-3 bg-gradient-to-l from-blue-50 to-blue-100/50">
                     <div className="relative flex-shrink-0">
                         {thumbnail ? (
-                            <img src={thumbnail} className="w-16 h-10 rounded-xl object-cover shadow-md" />
+                            <img src={thumbnail} className="w-24 h-14 rounded-xl object-cover shadow-md" />
                         ) : (
-                            <div className="w-16 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white shadow-md">
-                                <i className="fas fa-play text-[10px] mr-[-1px]"></i>
+                            <div className="w-24 h-14 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white shadow-md">
+                                <i className="fas fa-play text-base mr-[-1px]"></i>
                             </div>
                         )}
                         {embedId && (
                             <button onClick={() => setShowEmbed(true)} className="absolute inset-0 flex items-center justify-center">
-                                <div className="w-7 h-7 bg-white/90 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform">
-                                    <i className="fas fa-play text-blue-600 text-[9px] mr-[-1px]"></i>
+                                <div className="w-8 h-8 bg-white/90 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform">
+                                    <i className="fas fa-play text-blue-600 text-[10px] mr-[-1px]"></i>
                                 </div>
                             </button>
                         )}
                     </div>
                     <div className="flex-1 min-w-0">
-                        <p className="text-[10px] font-black text-blue-800 truncate">{videoTitle}</p>
-                        {embedId && <p className="text-[8px] text-blue-400 mt-0.5">برای پخش کلیک کنید</p>}
+                        <p className="text-[9px] font-black text-blue-500 mb-1 flex items-center gap-1"><i className="fas fa-video"></i> ویدیو</p>
+                        <p className="text-[12px] font-black text-blue-900 leading-snug break-words">{videoTitle}</p>
                     </div>
-                    {embedId && <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center flex-shrink-0 shadow-md">
-                        <i className="fas fa-play text-[9px] mr-[-1px]"></i>
-                    </div>}
                 </div>
             )}
         </div>
@@ -245,7 +300,6 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
     const [podcastSearch, setPodcastSearch] = useState('');
     const [podcastSort, setPodcastSort] = useState<'newest' | 'year' | 'master'>('newest');
     const [selectedMasterFilter, setSelectedMasterFilter] = useState<number | 'all'>('all');
-    const [confirmDelete, setConfirmDelete] = useState<{ key: string, id: any, label?: string, onConfirm: () => void } | null>(null);
 
     const [stats, setStats] = useState<any>(null);
     const [users, setUsers] = useState<any[]>([]);
@@ -275,15 +329,22 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
     const [analytics, setAnalytics] = useState<any>(null);
     const [analyticsPeriod, setAnalyticsPeriod] = useState('7d');
     const [activity, setActivity] = useState<any[]>([]);
+    const [adminToast, setAdminToast] = useState<{ message: string; type: 'error' | 'success' | 'warning' } | null>(null);
+    const [confirmToast, setConfirmToast] = useState<{ message: string; onConfirm: () => void; type?: 'danger' | 'warning' } | null>(null);
+
+    const showAdminToast = (message: string, type: 'error' | 'success' | 'warning' = 'success') => {
+        setAdminToast({ message, type });
+        setTimeout(() => setAdminToast(null), 4000);
+    };
+
+    const showConfirmToast = (message: string, onConfirm: () => void, type: 'danger' | 'warning' = 'danger') => {
+        setConfirmToast({ message, onConfirm, type });
+    };
 
     const updateTable = (key: keyof typeof localData, val: any) => setLocalData(prev => ({ ...prev, [key]: val }));
     const handleDelete = (key: string, id: any, label?: string, onConfirm?: () => void) => {
-        setConfirmDelete({ key, id, label, onConfirm: onConfirm || (() => updateTable(key as any, localData[key as keyof typeof localData].filter((x: any) => x.id !== id))) });
-    };
-    const confirmDeleteItem = () => {
-        if (!confirmDelete) return;
-        confirmDelete.onConfirm();
-        setConfirmDelete(null);
+        const confirmAction = onConfirm || (() => updateTable(key as any, localData[key as keyof typeof localData].filter((x: any) => x.id !== id)));
+        showConfirmToast(label || 'آیا از حذف این آیتم اطمینان دارید؟', confirmAction);
     };
 
     const loadStats = useCallback(async () => {
@@ -483,8 +544,22 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                 <div className="bg-primary/5 p-3 rounded-2xl border border-primary/20 flex items-center gap-3">
                     <span className="text-[9px] font-black text-primary">{toPersianDigits(selectedUsers.length)} انتخاب شده</span>
                     <div className="flex-1"></div>
-                    <button onClick={async () => { await adminBulkUsers(selectedUsers, 'role', 'author'); setSelectedUsers([]); loadUsers(1); }} className="px-3 py-1.5 bg-orange-50 text-orange-600 rounded-lg text-[8px] font-black">تبدیل به نویسنده</button>
-                    <button onClick={async () => { await adminBulkUsers(selectedUsers, 'delete'); setSelectedUsers([]); loadUsers(1); }} className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-[8px] font-black">حذف</button>
+                    <button onClick={() => {
+                        showConfirmToast(`تبدیل ${toPersianDigits(selectedUsers.length)} کاربر به نویسنده؟`, async () => {
+                            await adminBulkUsers(selectedUsers, 'role', 'author');
+                            setSelectedUsers([]);
+                            loadUsers(1);
+                            showAdminToast('کاربران به نویسنده تبدیل شدند', 'success');
+                        }, 'warning');
+                    }} className="px-3 py-1.5 bg-orange-50 text-orange-600 rounded-lg text-[8px] font-black">تبدیل به نویسنده</button>
+                    <button onClick={() => {
+                        showConfirmToast(`آیا از حذف ${toPersianDigits(selectedUsers.length)} کاربر اطمینان دارید؟`, async () => {
+                            await adminBulkUsers(selectedUsers, 'delete');
+                            setSelectedUsers([]);
+                            loadUsers(1);
+                            showAdminToast('کاربران حذف شدند', 'success');
+                        });
+                    }} className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-[8px] font-black">حذف</button>
                     <button onClick={() => setSelectedUsers([])} className="text-gray-400 text-[8px]"><i className="fas fa-times"></i></button>
                 </div>
             )}
@@ -528,20 +603,24 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                                 <button onClick={async () => { const r = await resetUserWarnings(u._id); if (r) setUsers(prev => prev.map(x => x._id === u._id ? { ...x, warnings: 0 } : x)); }} className="px-2 py-1.5 bg-amber-50 text-amber-500 rounded-xl text-[9px] font-black hover:bg-amber-100 transition-all" title="پاک کردن اخطارها">⚠️ {toPersianDigits(u.warnings)}</button>
                             ) : null}
                             {u.muted ? (
-                                <button onClick={async () => { const r = await unmuteUser(u._id); if (r) setUsers(prev => prev.map(x => x._id === u._id ? { ...x, muted: false, mutedUntil: null } : x)); }} className="px-2 py-1.5 bg-blue-50 text-blue-500 rounded-xl text-[9px] font-black hover:bg-blue-100 transition-all" title="رفع سکوت">🔊 رفع سکوت</button>
+                                <button onClick={async () => { const r = await unmuteUser(u._id); if (r) { setUsers(prev => prev.map(x => x._id === u._id ? { ...x, muted: false, mutedUntil: null } : x)); showAdminToast(`${u.name} رفع سکوت شد`, 'success'); } }} className="px-2 py-1.5 bg-blue-50 text-blue-500 rounded-xl text-[9px] font-black hover:bg-blue-100 transition-all" title="رفع سکوت">🔊 رفع سکوت</button>
                             ) : (
-                                <button onClick={async () => {
-                                    const val = prompt('مدت سکوت به دقیقه (بدون مقدار = سکوت دائم):');
-                                    if (val === null) return;
-                                    const mins = parseInt(val) || 0;
-                                    const r = await muteUser(u._id, mins > 0 ? mins : undefined, 'سکوت توسط ادمین');
-                                    if (r) setUsers(prev => prev.map(x => x._id === u._id ? { ...x, muted: true, mutedUntil: r.mutedUntil } : x));
+                                <button onClick={() => {
+                                    showConfirmToast(`سکوت ${u.name} به مدت ۱۰ دقیقه؟`, async () => {
+                                        const r = await muteUser(u._id, 10, 'سکوت توسط ادمین');
+                                        if (r) { setUsers(prev => prev.map(x => x._id === u._id ? { ...x, muted: true, mutedUntil: r.mutedUntil } : x)); showAdminToast(`${u.name} سکوت شد`, 'success'); }
+                                    }, 'warning');
                                 }} className="px-2 py-1.5 bg-orange-50 text-orange-500 rounded-xl text-[9px] font-black hover:bg-orange-100 transition-all" title="سکوت کاربر">🔇 سکوت</button>
                             )}
-                            <button onClick={async () => {
-                                if (!confirm('آیا از حذف این کاربر اطمینان دارید؟')) return;
-                                const r = await deleteUser(u._id);
-                                if (r) setUsers(prev => prev.filter(x => x._id !== u._id));
+                            <button onClick={() => {
+                                showConfirmToast(`آیا از حذف ${u.name} اطمینان دارید؟`, async () => {
+                                    const r = await deleteUser(u._id);
+                                    if (r) {
+                                        setUsers(prev => prev.filter(x => x._id !== u._id));
+                                        setSelectedUsers(prev => prev.filter(id => id !== u._id));
+                                        showAdminToast(`${u.name} حذف شد`, 'success');
+                                    }
+                                });
                             }} className="w-8 h-8 rounded-xl bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100"><i className="fas fa-trash text-[10px]"></i></button>
                         </div>
                     </div>
@@ -651,10 +730,11 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                                     const r = await adminUpdatePost(p._id, { isPinned: !p.isPinned });
                                     if (r) setAdminPosts(prev => prev.map(x => x._id === p._id ? { ...x, isPinned: !x.isPinned } : x));
                                 }} className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center opacity-0 group-hover:opacity-100 ${p.isPinned ? 'bg-yellow-50 text-yellow-500' : 'bg-gray-50 text-gray-400 hover:bg-yellow-50 hover:text-yellow-500'}`}><i className="fas fa-thumbtack text-[8px]"></i></button>
-                                <button onClick={async () => {
-                                    if (!confirm('آیا از حذف این پست اطمینان دارید؟')) return;
-                                    const r = await adminDeletePost(p._id);
-                                    if (r) setAdminPosts(prev => prev.filter(x => x._id !== p._id));
+                                <button onClick={() => {
+                                    showConfirmToast('آیا از حذف این پست اطمینان دارید؟', async () => {
+                                        const r = await adminDeletePost(p._id);
+                                        if (r) { setAdminPosts(prev => prev.filter(x => x._id !== p._id)); showAdminToast('پست حذف شد', 'success'); }
+                                    });
                                 }} className="w-7 h-7 rounded-lg bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100"><i className="fas fa-trash text-[8px]"></i></button>
                             </div>
                         </div>
@@ -703,7 +783,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
 
             <div className="space-y-2">
                 {adminComments.map((c: any) => (
-                    <div key={c._id} className={`bg-white p-4 rounded-2xl border shadow-sm group transition-all ${c.isFeatured ? 'border-yellow-300 bg-yellow-50/30' : 'hover:border-primary'} ${selectedComments.includes(c._id) ? 'border-teal-400 bg-teal-50/30' : ''}`}>
+                    <div key={c._id} className={`relative bg-white p-3 sm:p-4 lg:p-5 rounded-3xl border shadow-sm group transition-all hover:shadow-md hover:-translate-y-0.5 ${c.isFeatured ? 'border-yellow-300 bg-gradient-to-b from-yellow-50/60 to-white' : 'border-gray-100 hover:border-primary/40'} ${selectedComments.includes(c._id) ? 'border-teal-400 bg-teal-50/40 ring-2 ring-teal-100' : ''}`}>
                         <div className="flex items-start gap-3">
                             <input
                                 type="checkbox"
@@ -714,7 +794,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                                 }}
                                 className="w-4 h-4 rounded border-gray-300 text-teal-500 focus:ring-teal-500 mt-1"
                             />
-                            <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-black text-[11px] flex-shrink-0 shadow-sm">{c.author?.charAt(0) || '?'}</div>
+                            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-primary/15 to-primary/5 flex items-center justify-center text-primary font-black text-[11px] sm:text-[13px] flex-shrink-0 shadow-sm ring-2 ring-white">{c.author?.charAt(0) || '?'}</div>
                             <div className="flex-1 min-w-0">
                                 <div className="flex justify-between items-center mb-1">
                                     <div className="flex items-center gap-2">
@@ -734,35 +814,43 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                                         <button onClick={() => setEditingCommentId(null)} className="px-3 py-1 bg-gray-100 text-gray-500 rounded-lg text-[9px] font-black">لغو</button>
                                     </div>
                                 ) : (
-                                    <p className="text-[10px] text-gray-500 leading-relaxed">{c.text}</p>
+                                    <p className="text-[11px] sm:text-[12px] text-gray-600 leading-loose">{c.text}</p>
                                 )}
                                 {c.type === 'podcast' && (
-                                    <MiniAudioPlayer comment={{ ...c, podcastData: c.podcastData || c.podcastId }} />
+                                    <MiniAudioPlayer comment={{ ...c, podcastData: c.podcastData || c.podcastId }} timestamp={c.audioTimestamp || c.timestamp} />
                                 )}
                                 {c.type === 'video' && (
-                                    <MiniVideoPlayer comment={{ ...c, videoData: c.videoData || c.videoId }} />
+                                    <MiniVideoPlayer comment={{ ...c, videoData: c.videoData || c.videoId }} playable={false} />
                                 )}
                                 {c.type === 'book' && c.bookId && (
-                                    <div className="mt-2 p-2 bg-pink-50 rounded-xl flex items-center gap-2">
-                                        <i className="fas fa-book text-pink-400 text-[9px]"></i>
-                                        <span className="text-[8px] font-black text-pink-600">نظر درباره کتاب</span>
+                                    <div className="mt-2 flex items-center gap-3 p-2 bg-pink-50 rounded-xl">
+                                        {c.bookData?.cover ? (
+                                            <img src={c.bookData.cover} className="w-10 h-14 rounded-lg object-cover shadow-sm flex-shrink-0" />
+                                        ) : (
+                                            <div className="w-10 h-14 rounded-lg bg-pink-100 flex items-center justify-center text-pink-400 shadow-sm flex-shrink-0"><i className="fas fa-book text-[12px]"></i></div>
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-[9px] font-black text-pink-500 mb-1 flex items-center gap-1"><i className="fas fa-book"></i> کتاب</p>
+                                            <p className="text-[11px] font-black text-pink-800 leading-snug truncate">{c.bookData?.title || 'کتاب'}</p>
+                                        </div>
                                     </div>
                                 )}
-                                {(c.timestamp || c.audioTimestamp || c.videoTimestamp) && (
+                                {c.type !== 'podcast' && (c.timestamp || c.videoTimestamp) && (
                                     <span className="text-[8px] text-primary mt-1 inline-block"><i className="fas fa-clock"></i> {toPersianDigits(Math.floor((c.timestamp || c.audioTimestamp || c.videoTimestamp || 0) / 60))}:{toPersianDigits(Math.floor((c.timestamp || c.audioTimestamp || c.videoTimestamp || 0) % 60)).toString().padStart(2, '0')}</span>
                                 )}
                             </div>
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                                <button onClick={() => { setEditingCommentId(c._id); setEditingCommentText(c.text); }} className="w-7 h-7 rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100"><i className="fas fa-pen text-[8px]"></i></button>
+                            <div className="flex items-center gap-1 flex-shrink-0 sm:bg-gray-50 sm:px-1.5 sm:py-1 sm:rounded-2xl sm:border sm:border-gray-100 sm:gap-0.5">
+                                <button onClick={() => { setEditingCommentId(c._id); setEditingCommentText(c.text); }} className="w-7 h-7 rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 transition-all flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100"><i className="fas fa-pen text-[8px]"></i></button>
                                 <button onClick={async () => {
                                     const r = await adminUpdateComment(c._id, { isFeatured: !c.isFeatured });
                                     if (r) setAdminComments(prev => prev.map(x => x._id === c._id ? { ...x, isFeatured: !x.isFeatured } : x));
-                                }} className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center opacity-0 group-hover:opacity-100 ${c.isFeatured ? 'bg-yellow-50 text-yellow-500' : 'bg-gray-50 text-gray-400 hover:bg-yellow-50 hover:text-yellow-500'}`}><i className="fas fa-star text-[8px]"></i></button>
-                                <button onClick={async () => {
-                                    if (!confirm('آیا از حذف این نظر اطمینان دارید؟')) return;
-                                    const r = await adminDeleteComment(c._id);
-                                    if (r) setAdminComments(prev => prev.filter(x => x._id !== c._id));
-                                }} className="w-7 h-7 rounded-lg bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100"><i className="fas fa-trash text-[8px]"></i></button>
+                                }} className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 ${c.isFeatured ? 'bg-yellow-50 text-yellow-500' : 'bg-gray-50 text-gray-400 hover:bg-yellow-50 hover:text-yellow-500'}`}><i className="fas fa-star text-[8px]"></i></button>
+                                <button onClick={() => {
+                                    showConfirmToast('آیا از حذف این نظر اطمینان دارید؟', async () => {
+                                        const r = await adminDeleteComment(c._id);
+                                        if (r) { setAdminComments(prev => prev.filter(x => x._id !== c._id)); showAdminToast('نظر حذف شد', 'success'); }
+                                    });
+                                }} className="w-7 h-7 rounded-lg bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition-all flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100"><i className="fas fa-trash text-[8px]"></i></button>
                             </div>
                         </div>
                     </div>
@@ -832,7 +920,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                         <div key={p.id} className="bg-white p-3 rounded-2xl border shadow-sm flex items-center justify-between group hover:border-primary transition-all">
                             <div className="flex items-center gap-3"><img src={p.cover || 'https://via.placeholder.com/80'} className="w-11 h-11 rounded-xl object-cover shadow-sm"/><div><p className="font-black text-[11px] text-gray-700">{p.title || 'بی‌عنوان'}</p><p className="text-[9px] text-gray-400 font-bold">{toPersianDigits(p.year)} • {toPersianDigits(p.episodes.length)} جلسه</p></div></div>
                             <div className="flex items-center gap-2">
-                                <button onClick={async () => { const { shareToMahfel } = await import('../services/api'); const ok = await shareToMahfel('podcast', p.id); if (ok) alert('در محفل شیر شد!'); }} className="text-green-500 font-black text-[9px] bg-green-50 px-4 py-2 rounded-xl hover:bg-green-100 transition-colors whitespace-nowrap"><i className="fas fa-share-alt ml-1"></i>محفل</button>
+                                <button onClick={async () => { const { shareToMahfel } = await import('../services/api'); const ok = await shareToMahfel('podcast', p.id); if (ok) showAdminToast('در محفل شیر شد!', 'success'); }} className="text-green-500 font-black text-[9px] bg-green-50 px-4 py-2 rounded-xl hover:bg-green-100 transition-colors whitespace-nowrap"><i className="fas fa-share-alt ml-1"></i>محفل</button>
                                 <button onClick={() => setEditingItem({ type: 'Podcast', id: p.id })} className="bg-blue-50 text-blue-600 px-5 py-2 rounded-xl text-[10px] font-black transition-colors hover:bg-blue-100">ویرایش</button>
                                 <button onClick={() => handleDelete('podcasts', p.id)} className="w-8 h-8 rounded-xl bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100"><i className="fas fa-trash text-[10px]"></i></button>
                             </div>
@@ -927,7 +1015,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                     <div key={b.id} className="bg-white p-3 rounded-2xl border shadow-sm flex items-center justify-between group hover:border-blue-300 transition-all">
                         <div className="flex items-center gap-3"><img src={b.cover || 'https://via.placeholder.com/100'} className="w-10 h-14 rounded-lg object-cover shadow-sm" /><p className="font-black text-[11px] text-gray-800">{b.title || 'بی‌عنوان'}</p></div>
                         <div className="flex items-center gap-2">
-                            <button onClick={async () => { const { shareToMahfel } = await import('../services/api'); const ok = await shareToMahfel('book', b.id); if (ok) alert('در محفل شیر شد!'); }} className="text-green-500 font-black text-[9px] bg-green-50 px-4 py-2 rounded-xl hover:bg-green-100 transition-colors whitespace-nowrap"><i className="fas fa-share-alt ml-1"></i>محفل</button>
+                            <button onClick={async () => { const { shareToMahfel } = await import('../services/api'); const ok = await shareToMahfel('book', b.id); if (ok) showAdminToast('در محفل شیر شد!', 'success'); }} className="text-green-500 font-black text-[9px] bg-green-50 px-4 py-2 rounded-xl hover:bg-green-100 transition-colors whitespace-nowrap"><i className="fas fa-share-alt ml-1"></i>محفل</button>
                             <button onClick={() => setEditingItem({ type: 'PublishedBook', id: b.id })} className="bg-blue-50 text-blue-600 px-5 py-2 rounded-xl text-[10px] font-black hover:bg-blue-100 transition-colors">ویرایش</button>
                             <button onClick={() => handleDelete('publishedBooks', b.id)} className="w-8 h-8 rounded-xl bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100"><i className="fas fa-trash text-[10px]"></i></button>
                         </div>
@@ -960,8 +1048,8 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                     <div className="flex-1 bg-secondary/5 p-4 rounded-[2.5rem] border border-secondary/10 flex gap-2 shadow-inner">
                         <TextInput placeholder="لینک آپارات..." value={aparatUrl} onChange={(e: any) => setAparatUrl(e.target.value)} />
                         <button onClick={async () => {
-                            const id = extractAparatId(aparatUrl); if (!id) return alert("لینک نامعتبر");
-                            try { const { details } = await fetchAparatVideoDetails(id); const nv: Video = { id: details.uid, embedId: details.uid, title: details.title, description: details.description, thumbnailUrl: details.big_poster, viewCount: details.visit_cnt, uploadDate: details.sdate, duration: details.duration, categories: ["ویدیو"] }; updateTable('videos', [nv, ...localData.videos]); setAparatUrl(''); setEditingItem({ type: 'Video', id: nv.id }); } catch { alert("خطا"); }
+                            const id = extractAparatId(aparatUrl); if (!id) return showAdminToast("لینک نامعتبر", "error");
+                            try { const { details } = await fetchAparatVideoDetails(id); const nv: Video = { id: details.uid, embedId: details.uid, title: details.title, description: details.description, thumbnailUrl: details.big_poster, viewCount: details.visit_cnt, uploadDate: details.sdate, duration: details.duration, categories: ["ویدیو"] }; updateTable('videos', [nv, ...localData.videos]); setAparatUrl(''); setEditingItem({ type: 'Video', id: nv.id }); } catch { showAdminToast("خطا در دریافت ویدیو", "error"); }
                         }} className="bg-secondary text-white px-6 rounded-xl font-black text-xs shadow-lg active:scale-95 transition-all">دریافت</button>
                     </div>
                     <button onClick={() => { const id = String(Date.now()); const nv: Video = { id, title: '', description: '', thumbnailUrl: '', embedId: '', viewCount: 0, uploadDate: '', duration: 0, categories: ["ویدیو"] }; updateTable('videos', [nv, ...localData.videos]); setEditingItem({ type: 'Video', id }); }} className="bg-gray-100 text-gray-600 px-4 rounded-2xl font-black text-[10px] transition-all hover:bg-gray-200 active:scale-95 shadow-sm flex items-center gap-1"><i className="fas fa-plus"></i> جدید</button>
@@ -970,7 +1058,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                     <div key={v.id} className="bg-white p-2 rounded-2xl border shadow-sm flex items-center justify-between group hover:border-secondary transition-all">
                         <div className="flex items-center gap-3"><img src={v.thumbnailUrl || 'https://via.placeholder.com/120x68?text=Video'} className="w-16 h-10 rounded-lg object-cover shadow-sm"/><p className="text-[10px] font-black text-gray-700 truncate max-w-[150px]">{v.title}</p></div>
                         <div className="flex items-center gap-2">
-                            <button onClick={async () => { const { shareToMahfel } = await import('../services/api'); const ok = await shareToMahfel('video', v.id); if (ok) alert('در محفل شیر شد!'); }} className="text-green-500 font-black text-[9px] bg-green-50 px-4 py-2 rounded-xl hover:bg-green-100 transition-colors whitespace-nowrap"><i className="fas fa-share-alt ml-1"></i>محفل</button>
+                            <button onClick={async () => { const { shareToMahfel } = await import('../services/api'); const ok = await shareToMahfel('video', v.id); if (ok) showAdminToast('در محفل شیر شد!', 'success'); }} className="text-green-500 font-black text-[9px] bg-green-50 px-4 py-2 rounded-xl hover:bg-green-100 transition-colors whitespace-nowrap"><i className="fas fa-share-alt ml-1"></i>محفل</button>
                             <button onClick={() => setEditingItem({ type: 'Video', id: v.id })} className="text-blue-500 font-black text-[9px] bg-blue-50 px-5 py-2 rounded-xl hover:bg-blue-100 transition-colors">ویرایش</button>
                             <button onClick={() => handleDelete('videos', v.id)} className="w-8 h-8 rounded-xl bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100"><i className="fas fa-trash text-[10px]"></i></button>
                         </div>
@@ -1088,6 +1176,15 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
 
     return (
         <div className="fixed inset-0 bg-gray-950/98 z-[4500] backdrop-blur-3xl flex items-center justify-center p-0 sm:p-4 animate-fadeIn">
+
+            {adminToast && (
+                <div className={`fixed top-6 right-6 z-[5000] px-5 py-3.5 rounded-2xl text-sm font-bold text-white shadow-2xl max-w-[90%] sm:max-w-sm text-center animate-toastIn flex items-center gap-2.5 backdrop-blur-sm ${
+                    adminToast.type === 'success' ? 'bg-green-500/90' : adminToast.type === 'warning' ? 'bg-amber-500/90' : 'bg-red-500/90'
+                }`} style={{ boxShadow: `0 8px 32px ${adminToast.type === 'success' ? 'rgba(34,197,94,0.35)' : adminToast.type === 'warning' ? 'rgba(245,158,11,0.35)' : 'rgba(239,68,68,0.35)'}` }} onClick={() => setAdminToast(null)}>
+                    <span className="text-base flex-shrink-0">{adminToast.type === 'success' ? '✅' : adminToast.type === 'warning' ? '⚠️' : '❌'}</span>
+                    <span className="leading-relaxed">{adminToast.message}</span>
+                </div>
+            )}
             <div className="bg-[#fcfdfe] w-full max-w-4xl h-full sm:h-[90vh] rounded-none sm:rounded-[3.5rem] shadow-2xl flex flex-col overflow-hidden border border-white/5">
                 <header className={`bg-white px-6 sm:px-10 transition-all duration-300 border-b flex justify-between items-center flex-shrink-0 overflow-hidden ${isEditing ? 'h-0 opacity-0 py-0' : 'py-5 sm:py-6 opacity-100'}`}>
                     <div className="flex items-center gap-4">
@@ -1110,13 +1207,14 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                             <i className={`fas ${isSearching ? 'fa-spinner fa-spin' : 'fa-search'} absolute left-3 top-2.5 text-gray-300 text-[10px]`}></i>
                         </div>
                         <button onClick={() => adminExportData('users')} className="w-9 h-9 rounded-xl bg-green-50 text-green-500 hover:bg-green-100 transition-all flex items-center justify-center" title="خروجی کاربران"><i className="fas fa-download text-[10px]"></i></button>
-                        <button onClick={onClose} className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 hover:text-red-500 font-black text-xl transition-all">&times;</button>
+                        <button onClick={onClose} data-guide="admin-close" className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 hover:text-red-500 font-black text-xl transition-all">&times;</button>
                     </div>
                 </header>
 
                 <div className={`flex gap-1 bg-gray-50 border-b overflow-x-auto no-scrollbar flex-shrink-0 transition-all duration-300 ${isEditing ? 'h-0 opacity-0 p-0' : 'p-2 sm:p-3 opacity-100'}`}>
                     {tabs.map(tab => (
                         <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                            data-guide={`admin-${tab.id}`}
                             className={`flex flex-col items-center justify-center p-2 rounded-xl sm:rounded-[1.25rem] transition-all border-2 flex-shrink-0 min-w-[60px] sm:w-20 ${activeTab === tab.id ? 'bg-white shadow-lg scale-105 active:scale-95' : 'bg-transparent border-transparent text-gray-300 grayscale opacity-60'}`}
                             style={{ borderColor: activeTab === tab.id ? tab.color : 'transparent', color: activeTab === tab.id ? tab.color : '' }}>
                             <i className={`fas ${tab.icon} text-sm mb-1`}></i>
@@ -1186,15 +1284,18 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                 </footer>
             </div>
             {pickerConfig && <AudioPickerModal podcasts={localData.podcasts} onSelect={pickerConfig.onSelect} onClose={()=>setPickerConfig(null)} />}
-            {confirmDelete && (
-                <div className="fixed inset-0 bg-black/40 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
-                    <div className="bg-white max-w-xs w-full rounded-[2rem] shadow-2xl p-6 text-center animate-slideInUp">
-                        <div className="w-14 h-14 bg-red-50 rounded-full flex items-center justify-center text-red-500 mx-auto mb-4"><i className="fas fa-exclamation-triangle text-xl"></i></div>
-                        <h3 className="font-black text-gray-800 text-sm mb-2">تایید حذف</h3>
-                        <p className="text-[10px] text-gray-500 font-bold mb-6">{confirmDelete.label || 'آیا از حذف این آیتم اطمینان دارید؟ این عمل قابل بازگشت نیست.'}</p>
-                        <div className="flex gap-3">
-                            <button onClick={() => setConfirmDelete(null)} className="flex-1 py-3 bg-gray-50 text-gray-400 rounded-2xl text-[10px] font-black hover:bg-gray-100 transition-all active:scale-95">انصراف</button>
-                            <button onClick={confirmDeleteItem} className="flex-[2] py-3 bg-red-500 text-white rounded-2xl text-[10px] font-black shadow-lg active:scale-95 transition-all hover:bg-red-600">حذف کن</button>
+            {confirmToast && (
+                <div className="fixed bottom-6 right-6 z-[9999] animate-slideInUp">
+                    <div className={`max-w-xs rounded-2xl shadow-2xl p-4 ${confirmToast.type === 'danger' ? 'bg-red-500' : 'bg-amber-500'} text-white`}>
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                                <i className={`fas ${confirmToast.type === 'danger' ? 'fa-exclamation-triangle' : 'fa-question'} text-sm`}></i>
+                            </div>
+                            <p className="text-[11px] font-bold leading-relaxed">{confirmToast.message}</p>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={() => setConfirmToast(null)} className="flex-1 py-2 bg-white/20 rounded-xl text-[10px] font-black hover:bg-white/30 transition-all active:scale-95">انصراف</button>
+                            <button onClick={() => { confirmToast.onConfirm(); setConfirmToast(null); }} className="flex-1 py-2 bg-white rounded-xl text-[10px] font-black transition-all active:scale-95" style={{ color: confirmToast.type === 'danger' ? '#dc2626' : '#d97706' }}>تایید</button>
                         </div>
                     </div>
                 </div>

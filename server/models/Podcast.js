@@ -12,7 +12,7 @@ const episodeSchema = new mongoose.Schema({
   relatedFileUrl: String,
   viewCount: { type: Number, default: 0 },
   fullText: { type: String, default: '' },
-});
+}, { suppressReservedKeysWarning: true });
 
 const podcastSchema = new mongoose.Schema({
   title: { type: String, required: true, index: true },

@@ -34,7 +34,7 @@ const DebugNotification: React.FC<DebugNotificationProps> = ({ title, options, o
 
   return (
     <div
-      className={`fixed top-5 left-5 z-[9999] bg-gray-800/90 backdrop-blur-sm text-white p-3 rounded-xl shadow-2xl transition-all duration-300 ease-in-out flex items-start gap-3 w-80 max-w-[90vw] border border-white/20 ${
+      className={`fixed top-5 right-5 z-[9999] bg-gray-800/90 backdrop-blur-sm text-white p-3 rounded-xl shadow-2xl transition-all duration-300 ease-in-out flex items-start gap-3 w-80 max-w-[90vw] border border-white/20 ${
         isVisible ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'
       }`}
       role="status"

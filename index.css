@@ -212,6 +212,36 @@ body {
 }
 .animate-slideInRight { animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 
+@keyframes slideDown {
+  from { transform: translateY(-100%) translateX(-50%); opacity: 0; }
+  to { transform: translateY(0) translateX(-50%); opacity: 1; }
+}
+.animate-slideDown { animation: slideDown 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+@keyframes toastInRight {
+  from { opacity: 0; transform: scale(0.85) translateX(20px); }
+  to { opacity: 1; transform: scale(1) translateX(0); }
+}
+.animate-toastInRight { animation: toastInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+@keyframes toastOutRight {
+  from { opacity: 1; transform: scale(1) translateX(0); }
+  to { opacity: 0; transform: scale(0.85) translateX(20px); }
+}
+.animate-toastOutRight { animation: toastOutRight 0.2s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+@keyframes toastIn {
+  from { opacity: 0; transform: scale(0.85) translateX(20px); }
+  to { opacity: 1; transform: scale(1) translateX(0); }
+}
+.animate-toastIn { animation: toastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+@keyframes toastOut {
+  from { opacity: 1; transform: scale(1) translateX(0); }
+  to { opacity: 0; transform: scale(0.85) translateX(20px); }
+}
+.animate-toastOut { animation: toastOut 0.2s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
 @keyframes slideUp {
   from { transform: translateY(100%); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
