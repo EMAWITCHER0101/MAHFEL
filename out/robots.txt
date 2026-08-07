@@ -1,0 +1,7 @@
+User-Agent: *
+Allow: /
+Disallow: /api/
+Disallow: /uploads/
+Disallow: /_next/
+
+Sitemap: https://soha-sima.ir/sitemap.xml

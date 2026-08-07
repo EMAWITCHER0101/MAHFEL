@@ -34,16 +34,16 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onOpenAdmin, onOpenProfile, onOpe
         boxShadow: isDark ? '0 4px 30px rgba(0,0,0,0.3)' : '0 4px 30px rgba(0,0,0,0.08)',
       }}
     >
-      <div className="flex justify-between items-center px-2 sm:px-4">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-            <div className="transition-transform duration-300 hover:scale-105">
-              <SohaIcon size={36} />
-            </div>
-            <SohaLogotype className="hidden sm:block" isDark={isDark} />
+      <div className="grid grid-cols-[auto_1fr_auto] items-center px-2 sm:px-4">
+        <div className="flex items-center">
+          <div className="transition-transform duration-300 hover:scale-105 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+            <SohaIcon size={32} />
           </div>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center justify-center sm:justify-start cursor-pointer min-w-0" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+          <SohaLogotype isDark={isDark} />
+        </div>
+        <div className="flex items-center justify-end gap-1.5">
           {liveStream.isLive && (
             <a href={liveStream.url} target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-2 text-[10px] font-black px-3 py-2 rounded-xl transition-all duration-300 active:scale-95 hidden sm:flex"

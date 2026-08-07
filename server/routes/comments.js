@@ -21,7 +21,8 @@ router.get('/', async (req, res) => {
     const userIds = [...new Set(comments.map(c => c.userId).filter(Boolean))];
     const users = await User.find({ $or: [{ name: { $in: authorNames } }, { _id: { $in: userIds } }] }).select('name avatar');
     const avatarMap = {};
-    users.forEach(u => { if (u.avatar) { avatarMap[u.name] = u.avatar; avatarMap[u._id.toString()] = u.avatar; } });
+    const nameById = {};
+    users.forEach(u => { if (u.avatar) { avatarMap[u.name] = u.avatar; avatarMap[u._id.toString()] = u.avatar; } nameById[u._id.toString()] = u.name; });
 
     const commentMap = {};
     const rootComments = [];
@@ -30,6 +31,8 @@ router.get('/', async (req, res) => {
       const obj = c.toObject();
       obj.id = obj._id;
       obj.replies = [];
+      const byId = obj.userId ? nameById[obj.userId.toString()] : null;
+      if (byId) obj.author = byId;
       const fromName = avatarMap[obj.author];
       const fromId = obj.userId ? avatarMap[obj.userId.toString()] : null;
       if (fromId || fromName) {
@@ -70,11 +73,14 @@ router.get('/flat', async (req, res) => {
     const userIds = [...new Set(comments.map(c => c.userId).filter(Boolean))];
     const users = await User.find({ $or: [{ name: { $in: authorNames } }, { _id: { $in: userIds } }] }).select('name avatar');
     const avatarMap = {};
-    users.forEach(u => { if (u.avatar) { avatarMap[u.name] = u.avatar; avatarMap[u._id.toString()] = u.avatar; } });
+    const nameById = {};
+    users.forEach(u => { if (u.avatar) { avatarMap[u.name] = u.avatar; avatarMap[u._id.toString()] = u.avatar; } nameById[u._id.toString()] = u.name; });
 
     res.json(comments.map(c => {
       const obj = c.toObject();
       obj.id = c._id;
+      const byId = obj.userId ? nameById[obj.userId.toString()] : null;
+      if (byId) obj.author = byId;
       const fromName = avatarMap[obj.author];
       const fromId = obj.userId ? avatarMap[obj.userId.toString()] : null;
       if (fromId || fromName) {
@@ -113,6 +119,7 @@ router.post('/', requireAuth, async (req, res) => {
     const obj = comment.toObject();
     obj.id = obj._id;
     obj.replies = [];
+
 
     res.status(201).json(obj);
   } catch (error) {

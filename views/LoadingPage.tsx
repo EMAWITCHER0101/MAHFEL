@@ -25,7 +25,7 @@ const LoadingPage: React.FC = () => {
       </div>
 
       <div className="mb-10 animate-fadeInUp" style={{ animationDelay: '0.3s' }}>
-        <SohaLogotype className="h-10" />
+        <SohaLogotype fontSize="3.2rem" className="animate-blink" />
       </div>
 
       <div className="flex items-center gap-3 animate-fadeInUp" style={{ animationDelay: '0.6s' }}>
@@ -56,6 +56,11 @@ const LoadingPage: React.FC = () => {
           0%, 100% { opacity: 0.3; transform: scale(1); }
           50% { opacity: 0.6; transform: scale(1.1); }
         }
+        @keyframes blink {
+          0%, 44%, 100% { opacity: 1; }
+          50% { opacity: 0.15; }
+        }
+        .animate-blink { animation: blink 0.55s ease-in-out infinite; }
         .animate-float-slow { animation: float-slow 8s ease-in-out infinite; }
         .animate-pulse-slow { animation: pulse-slow 3s ease-in-out infinite; }
       `}</style>

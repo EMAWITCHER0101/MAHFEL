@@ -542,7 +542,7 @@ const FullScreenPlayer: React.FC<FullScreenPlayerProps> = ({
         <div className={`w-72 flex-shrink-0 h-full overflow-y-auto no-scrollbar ${isDark ? 'border-r border-white/[0.06] bg-gray-900' : 'border-r-2 border-gray-200 bg-white/95'}`}>
           <div className="flex flex-col h-full">
             <div className={`flex items-center justify-between px-5 pt-8 pb-6 ${isDark ? 'border-b border-white/[0.06]' : 'border-b border-gray-200'}`}>
-              <span className="text-lg font-black bg-gradient-to-l from-emerald-400 to-emerald-600 bg-clip-text text-transparent">سرای هنر و اندیشه</span>
+              <span className="text-lg font-black font-nastaliq bg-gradient-to-l from-emerald-400 to-emerald-600 bg-clip-text text-transparent">سرای هنر و اندیشه</span>
             </div>
             <nav className="flex-1 px-3 py-4 space-y-1">
               {[
@@ -696,7 +696,7 @@ const FullScreenPlayer: React.FC<FullScreenPlayerProps> = ({
                 )}
                 <p onDoubleClick={() => { if (isOwn) { setEditCommentId(cid); setEditCommentText(String(comment.text)); } }}
                   onTouchEnd={(e) => { if (!isOwn) return; const now = Date.now(); if ((window as any).__lastCommentTouch && now - (window as any).__lastCommentTouch < 300) { (window as any).__lastCommentTouch = 0; setEditCommentId(cid); setEditCommentText(String(comment.text)); e.preventDefault(); } else { (window as any).__lastCommentTouch = now; } }}
-                  className={d('text-[10px] leading-normal text-white/50 font-medium whitespace-pre-wrap break-words', 'text-sm leading-relaxed text-gray-400 font-medium whitespace-pre-wrap break-words')}>{String(comment.text)}</p>
+                  className={d('text-[10px] leading-normal ' + (isDark ? 'text-white/50' : 'text-gray-700') + ' font-medium whitespace-pre-wrap break-words', 'text-sm leading-relaxed text-gray-400 font-medium whitespace-pre-wrap break-words')}>{String(comment.text)}</p>
               </div>
             )}
             <div className={d('flex items-center gap-2 mt-1', 'flex items-center gap-3 mt-2')}>

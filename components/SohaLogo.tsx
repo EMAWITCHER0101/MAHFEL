@@ -9,13 +9,13 @@ export const SohaLogo: React.FC<{ size?: number; className?: string }> = ({ size
   </div>
 );
 
-export const SohaLogotype: React.FC<{ className?: string; isDark?: boolean }> = ({ className = '', isDark = false }) => (
+export const SohaLogotype: React.FC<{ className?: string; isDark?: boolean; fontSize?: string }> = ({ className = '', isDark = false, fontSize }) => (
   <div
-    className={`whitespace-nowrap ${className}`}
+    className={`whitespace-nowrap text-[1.6rem] sm:text-[2.6rem] ${className}`}
     style={{
-      fontFamily: 'IranNastaliq, serif',
+      fontFamily: 'var(--font-nastaliq), IranNastaliq, serif',
       color: '#14b8a6',
-      fontSize: '2rem',
+      ...(fontSize ? { fontSize } : {}),
       lineHeight: 1.6,
       letterSpacing: '0.5px',
       textShadow: '0 2px 8px rgba(20, 184, 166, 0.2)',
@@ -36,21 +36,13 @@ export const SohaIcon: React.FC<{ size?: number; className?: string }> = ({ size
 
 export const SohaFullLogotype: React.FC<{ className?: string; isDark?: boolean }> = ({ className = '', isDark = false }) => (
   <div
-    className={`whitespace-nowrap ${className}`}
+    className={`soha-logo-sheen whitespace-nowrap text-[1.5rem] ${className}`}
     style={{
-      fontFamily: 'Vazirmatn, sans-serif',
-      fontWeight: 900,
-      fontSize: '1.8rem',
-      lineHeight: 1.4,
-      letterSpacing: '-0.5px',
-      background: 'linear-gradient(135deg, #14b8a6 0%, #0d9488 50%, #0f766e 100%)',
-      WebkitBackgroundClip: 'text',
-      WebkitTextFillColor: 'transparent',
-      backgroundClip: 'text',
-      textShadow: 'none',
-      filter: 'drop-shadow(0 2px 4px rgba(20, 184, 166, 0.3))',
+      fontFamily: 'var(--font-nastaliq), IranNastaliq, serif',
+      lineHeight: 1.6,
+      letterSpacing: '0.3px',
     }}
   >
-    سها سیما
+    سرای هنر و اندیشه
   </div>
 );

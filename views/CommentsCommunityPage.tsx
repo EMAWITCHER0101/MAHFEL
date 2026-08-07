@@ -1730,7 +1730,7 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
                 style={{ background: 'linear-gradient(135deg, color-mix(in srgb, var(--primary) 10%, transparent), color-mix(in srgb, #0d9488 8%, transparent))', border: '1px solid color-mix(in srgb, var(--primary) 15%, transparent)' }}>
                 <i className="fas fa-feather-alt text-3xl" style={{ color: 'color-mix(in srgb, var(--primary) 50%, transparent)' }}></i>
               </div>
-              <p className="text-sm font-nastaliq mb-2" style={{ color: 'var(--text-2)', fontFamily: 'IranNastaliq, serif' }}>هنوز گفتگویی آغاز نشده</p>
+              <p className="text-sm font-nastaliq mb-2" style={{ color: 'var(--text-2)', fontFamily: 'var(--font-nastaliq), IranNastaliq, serif' }}>هنوز گفتگویی آغاز نشده</p>
               <p className="text-[10px] font-bold opacity-60">اولین یادداشت را شما بنویسید</p>
             </div>
           )}

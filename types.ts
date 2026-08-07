@@ -94,6 +94,7 @@ export interface Comment {
     type: 'podcast' | 'video' | 'book';
     author: string;
     authorAvatarUrl?: string;
+    userId?: string;
     text: string;
     date: string;
     isoDate: string;
@@ -123,6 +124,7 @@ export interface PostComment {
     _id?: string;
     author: string;
     authorAvatarUrl: string;
+    userId?: string;
     text: string;
     date: string;
     isoDate: string;
@@ -144,6 +146,7 @@ export interface Post {
     id: number;
     author: string;
     authorAvatarUrl: string;
+    userId?: string;
     date: string;
     isoDate: string;
     text?: string;

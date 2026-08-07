@@ -348,7 +348,7 @@ const CustomVideoPlayer = forwardRef<CustomVideoPlayerHandle, CustomVideoPlayerP
 
   return (
     <div ref={containerRef} className="relative w-full h-full bg-black select-none" onClick={handleVideoClick} onDoubleClick={handleDoubleClick}>
-      <video ref={videoRef} src={videoUrl} poster={poster} className="w-full h-full object-contain" preload="metadata" playsInline />
+      <video ref={videoRef} src={videoUrl} poster={poster} className="w-full h-full object-contain" preload="metadata" playsInline autoPictureInPicture />
 
       {/* Double-click indicator */}
       {doubleClickIndicator && (

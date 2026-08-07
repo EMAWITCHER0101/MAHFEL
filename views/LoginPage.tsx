@@ -77,8 +77,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       if (!name.trim()) errs.name = 'نام خود را وارد کنید';
       if (!phoneNumber.trim()) errs.phoneNumber = 'شماره موبایل را وارد کنید';
       else if (!/^09\d{9}$/.test(phoneNumber)) errs.phoneNumber = 'شماره موبایل باید ۱۱ رقم و با ۰۹ شروع شود';
-      if (!email.trim()) errs.email = 'ایمیل را وارد کنید';
-      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = 'فرمت ایمیل نامعتبر است';
+      if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = 'فرمت ایمیل نامعتبر است';
       if (!password) errs.password = 'رمز عبور را وارد کنید';
       else if (password.length < 4) errs.password = 'رمز عبور باید حداقل ۴ کاراکتر باشد';
       else if (password.length > 50) errs.password = 'رمز عبور حداکثر ۵۰ کاراکتر می‌تواند باشد';
@@ -378,7 +377,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                     {touched.phoneNumber && fieldErrors.phoneNumber && <p className="text-red-500 text-[10px] font-bold mt-1 text-center">{fieldErrors.phoneNumber}</p>}
                   </div>
                   <div>
-                    <input type="email" dir="ltr" value={email} onChange={(e) => setEmail(e.target.value)} onBlur={() => setTouched(prev => ({ ...prev, email: true }))} placeholder="example@email.com"
+                    <input type="email" dir="ltr" value={email} onChange={(e) => setEmail(e.target.value)} onBlur={() => setTouched(prev => ({ ...prev, email: true }))} placeholder="example@email.com (اختیاری)"
                       className={`w-full bg-gray-50 border-2 rounded-2xl px-3 sm:px-4 py-3 sm:py-4 text-center text-sm font-bold transition-all outline-none ${touched.email && fieldErrors.email ? 'border-red-300 bg-red-50/50' : touched.email && !fieldErrors.email ? 'border-green-300' : 'border-gray-100 focus:border-primary'}`} />
                     {touched.email && fieldErrors.email && <p className="text-red-500 text-[10px] font-bold mt-1 text-center">{fieldErrors.email}</p>}
                   </div>

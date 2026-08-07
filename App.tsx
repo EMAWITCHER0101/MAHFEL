@@ -1,12 +1,13 @@
 ﻿
 import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { Podcast, Episode, Comment, Page, Post, Book, Author, PublishedBook, User, Video } from './types';
-import { getPodcasts, getBooks, getAuthors, getVideos, getComments, getPosts, getPublishedBooks, createPost, deletePost as apiDeletePost, addPostComment, updatePost, deleteComment as apiDeleteComment, addComment, likeComment, updateLibrary, prefetchStream, getMe } from './services/api';
+import { getPodcasts, getBooks, getAuthors, getVideos, getComments, getPosts, getPublishedBooks, createPost, deletePost as apiDeletePost, addPostComment, updatePost, deleteComment as apiDeleteComment, addComment, likeComment, updateLibrary, prefetchStream, getMe, deletePostComment, updatePostComment, getNotifications } from './services/api';
 import { ThemeProvider, useTheme } from './components/ThemeProvider';
 import OnboardingGuide from './components/OnboardingGuide';
 import WelcomeVideo from './components/WelcomeVideo';
 import { ADMIN_STEPS, USER_STEPS, AUTHOR_STEPS } from './data/guideSteps';
 import ErrorBoundary from './components/ErrorBoundary';
+import { initBackgroundPlayback, isApp, sendNativeNotification } from './services/backgroundPlayback';
 import { OfflineDetector, NetworkErrorPage, VPNBanner, useVPNDetection } from './components/ErrorPages';
 import SearchModal from './components/SearchModal';
 
@@ -14,6 +15,7 @@ import Sidebar from './components/Sidebar';
 import BottomTabs from './components/BottomTabs';
 import MahfelSidebar from './components/MahfelSidebar';
 import Toast from './components/Toast';
+import NotificationBanner from './components/NotificationBanner';
 import LoadingPage from './views/LoadingPage';
 import NashrPage, { NoteDetailView, BookDetailView } from './views/NashrPage';
 import MinimizedPlayer from './components/MinimizedPlayer';
@@ -78,6 +80,7 @@ const AppInner: React.FC = () => {
     const [postMedia, setPostMedia] = useState<{ type: 'image' | 'video' | 'audio'; url: string }[]>([]);
     
     const [toast, setToast] = useState<{ id: number; message: string; image?: string; name?: string } | null>(null);
+    const [notif, setNotif] = useState<{ id: string; title: string; body: string } | null>(null);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -189,6 +192,32 @@ const AppInner: React.FC = () => {
             }
         };
         loadInitialData();
+        initBackgroundPlayback();
+        const checkNotifications = async () => {
+            try {
+                const list = await getNotifications();
+                if (!list || list.length === 0) return;
+                const lastSeen = localStorage.getItem('mahfel_last_notif_id') || '';
+                const latest = list[0];
+                const latestId = String((latest as any)._id || '');
+                if (!latestId || latestId === lastSeen) return;
+                localStorage.setItem('mahfel_last_notif_id', latestId);
+                setNotif({ id: latestId, title: latest.title || 'محفل', body: latest.body || '' });
+                sendNativeNotification(latest.title || 'محفل', latest.body || '');
+                if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                    try {
+                        new Notification(latest.title || 'محفل', { body: latest.body || '' });
+                    } catch { /* ignore */ }
+                }
+            } catch { /* ignore */ }
+        };
+        checkNotifications();
+        const notifTimer = setInterval(checkNotifications, 30000);
+        window.addEventListener('focus', checkNotifications);
+        return () => {
+            clearInterval(notifTimer);
+            window.removeEventListener('focus', checkNotifications);
+        };
     }, []);
 
     useEffect(() => {
@@ -603,6 +632,28 @@ const AppInner: React.FC = () => {
         }
     };
 
+    const handleDeletePostComment = async (postId: string, commentId: string) => {
+        const removeFromLocal = (list: any[]): any[] =>
+            list.filter(c => String((c as any)._id || c.id) !== String(commentId))
+                .map(c => ({ ...c, replies: (c as any).replies ? removeFromLocal((c as any).replies) : [] }));
+        setPosts(prev => prev.map(p => String(p.id) === String(postId) ? { ...p, comments: removeFromLocal(p.comments || []) } : p));
+        setSelectedPostForComments(prev => prev && String(prev.id) === String(postId) ? { ...prev, comments: removeFromLocal(prev.comments || []) } : prev);
+        const ok = await deletePostComment(postId, commentId);
+        if (ok) {
+            setToast({ id: Date.now(), message: 'نظر حذف شد' });
+        }
+    };
+
+    const handleUpdatePostComment = async (postId: string, commentId: string, newText: string) => {
+        const updatedPost = await updatePostComment(postId, commentId, { text: newText });
+        if (updatedPost) {
+            const comments = (updatedPost.comments || []).map((c: any) => ({ ...c, id: c._id || c.id }));
+            setPosts(prev => prev.map(p => String(p.id) === String(postId) ? { ...p, comments } : p));
+            setSelectedPostForComments(prev => prev && String(prev.id) === String(postId) ? { ...prev, comments } : prev);
+            setToast({ id: Date.now(), message: 'نظر ویرایش شد' });
+        }
+    };
+
     const handleLikeComment = async (commentId: string) => {
         const likedComments = new Set<string>(JSON.parse(localStorage.getItem('soha_liked_comments') || '[]'));
         const isLiked = likedComments.has(commentId);
@@ -622,12 +673,12 @@ const AppInner: React.FC = () => {
 
     const insertCommentIntoTree = (prev: Comment[], newComment: Comment): Comment[] => {
         const nc = { ...newComment, id: (newComment as any)._id || newComment.id, replies: [] as Comment[] };
-        if (!nc.parentId) return [...prev, nc];
+        if (!nc.parentId) return [nc, ...prev];
         const addReply = (list: Comment[]): Comment[] =>
             list.map(c => {
                 const cid = String((c as any)._id || c.id);
                 if (cid === String(nc.parentId)) {
-                    return { ...c, replies: [...(c.replies || []), nc] };
+                    return { ...c, replies: [nc, ...(c.replies || [])] };
                 }
                 if (c.replies && c.replies.length > 0) {
                     return { ...c, replies: addReply(c.replies) };
@@ -769,7 +820,7 @@ const AppInner: React.FC = () => {
             }} onUpdatePost={(p) => {
                 setPosts(prev => prev.map(post => String(post.id) === String(p.id) ? p : post));
                 setSelectedPostForComments(p);
-            }} onDeleteComment={handleDeleteComment} onLikeComment={handleLikeComment} onUpdateComment={handleUpdateComment} publishedBooks={publishedBooks} onShowBook={(book) => {}} onPlayEpisode={(p: Podcast, idx: number) => {
+            }} onDeleteComment={async (cid: string) => { if (podcastId) { await handleDeleteComment(cid); } else { await handleDeletePostComment(String((freshPost as any)._id || (freshPost as any).id || ''), cid); } }} onLikeComment={handleLikeComment} onUpdateComment={async (cid: string, t: string) => { if (podcastId) { await handleUpdateComment(cid, t); } else { await handleUpdatePostComment(String((freshPost as any)._id || (freshPost as any).id || ''), cid, t); } }} publishedBooks={publishedBooks} onShowBook={(book) => {}} onPlayEpisode={(p: Podcast, idx: number) => {
               if (currentTrack && String(currentTrack.podcast.id) === String(p.id) && currentTrack.episodeIndex === idx && audioRef.current) {
                 audioRef.current.play().catch(()=>{});
                 setIsPlaying(true);
@@ -1137,7 +1188,7 @@ onPlayVideo={(v) => { setIsVideoMini(false); handlePlayVideo(v); }}
                 />
               )}
              {instantView && <InstantView title={instantView.title} content={instantView.content} onClose={() => setInstantView(null)} />}
-             {isProfileOpen && user && <UserProfilePage onClose={() => setIsProfileOpen(false)} onLogout={handleLogout} user={user} allPodcasts={podcasts} allVideos={videos} onPlayPodcast={playEpisode} onPlayVideo={(v) => { handlePlayVideo(v); setIsProfileOpen(false); }} onEditPost={(post: Post) => { setEditingPost(post); setEditPostText(post.text || ''); setIsProfileOpen(false); }} onDeletePost={handleDeletePost} onUpdateUser={(u) => { setUser(u); localStorage.setItem('user_data', JSON.stringify(u)); }} />}
+             {isProfileOpen && user && <UserProfilePage onClose={() => setIsProfileOpen(false)} onLogout={handleLogout} user={user} allPodcasts={podcasts} allVideos={videos} onPlayPodcast={playEpisode} onPlayVideo={(v) => { handlePlayVideo(v); setIsProfileOpen(false); }} onEditPost={(post: Post) => { setEditingPost(post); setEditPostText(post.text || ''); setIsProfileOpen(false); }} onDeletePost={handleDeletePost} onUpdateUser={(u) => { const oldName = user.name; const matches = (item: any) => { const byId = item.userId && String(item.userId) === String(u.id); const byName = !item.userId && item.author && item.author === oldName; return byId || byName; }; const remap = (item: any) => { const own = matches(item); const updated = own ? { ...item, author: u.name, authorAvatarUrl: u.avatar } : item; const replies = item.replies ? { ...updated, replies: (item.replies || []).map(remap) } : updated; return replies; }; setComments(prev => prev.map(remap)); setPosts(prev => prev.map(p => { const own = matches(p); const updated = own ? { ...p, author: u.name, authorAvatarUrl: u.avatar } : p; return { ...updated, comments: (p.comments || []).map(remap) }; })); setUser(u); localStorage.setItem('user_data', JSON.stringify(u)); }} onOpenAdmin={() => { setIsProfileOpen(false); setAppState('admin'); }} />}
              
              <SearchModal 
                 isOpen={isSearchOpen} 
@@ -1153,7 +1204,7 @@ onPlayVideo={(v) => { setIsVideoMini(false); handlePlayVideo(v); }}
                 onAuthorSelect={setSelectedAuthor}
              />
              
-                {appState === 'ready' && !isWriting && !selectedPodcast && !isPlayerExpanded && activeTab === 'mahfel' && (
+                {appState === 'ready' && !isWriting && !selectedPodcast && !isPlayerExpanded && !(activeVideo && !isVideoMini) && activeTab === 'mahfel' && (
                    <div className="hidden lg:block">
                    <BottomTabs activeTab={activeTab} onTabChange={(tab) => {
                        if (tab === 'mahfel' && activeTab === 'mahfel') {
@@ -1165,7 +1216,7 @@ onPlayVideo={(v) => { setIsVideoMini(false); handlePlayVideo(v); }}
                    }} onLongPressCentral={() => setIsWriting(true)} newMahfelMessages={0} userRole={user?.role} hidden={tabsHidden || !!selectedPodcast || isPlayerExpanded} onToggle={setTabsHidden} chatInput={showChatInput && activeTab === 'mahfel'} chatInputText={chatInputText} onChatInputChange={setChatInputText} onChatSend={handleChatSend} onChatClose={() => setShowChatInput(false)} chatSending={chatSending} theme={theme} />
                    </div>
               )}
-              {appState === 'ready' && !isWriting && !selectedPodcast && !isPlayerExpanded && activeTab !== 'mahfel' && (
+               {appState === 'ready' && !isWriting && !selectedPodcast && !isPlayerExpanded && !(activeVideo && !isVideoMini) && activeTab !== 'mahfel' && (
                    <BottomTabs activeTab={activeTab} onTabChange={(tab) => {
                        setActiveTab(tab);
                        setShowChatInput(false);
@@ -1176,6 +1227,7 @@ onPlayVideo={(v) => { setIsVideoMini(false); handlePlayVideo(v); }}
               )}
              
               {toast && <Toast key={toast.id} message={toast.message} image={toast.image} name={toast.name} onClose={() => setToast(null)} />}
+              {notif && <NotificationBanner key={notif.id} title={notif.title} body={notif.body} onClose={() => setNotif(null)} />}
               {showWelcomeVideo && (
                   <WelcomeVideo videoSrc="/videopage/welcomepage.mp4" onComplete={handleWelcomeComplete} />
               )}

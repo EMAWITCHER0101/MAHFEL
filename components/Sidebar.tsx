@@ -59,8 +59,10 @@ const Sidebar: React.FC<SidebarProps> = ({
 
           {/* Logo */}
           <div className="px-3 py-4 border-b border-gray-100 dark:border-gray-800">
-            <div className="flex items-center gap-3 cursor-pointer" onClick={() => onTabChange('mahfel')}>
-              <SohaIcon size={36} />
+            <div className="relative flex items-center justify-center cursor-pointer" onClick={() => onTabChange('mahfel')}>
+              <div className="absolute right-3">
+                <SohaIcon size={22} />
+              </div>
               <SohaFullLogotype isDark={isDark} />
             </div>
           </div>

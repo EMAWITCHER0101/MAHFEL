@@ -8,6 +8,7 @@ const mediaItemSchema = new mongoose.Schema({
 const postCommentSchema = new mongoose.Schema({
   author: { type: String, required: true },
   authorAvatarUrl: { type: String, default: '' },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   text: { type: String, required: true },
   date: { type: String, default: '' },
   isoDate: { type: String, default: () => new Date().toISOString() },
@@ -23,6 +24,7 @@ const postCommentSchema = new mongoose.Schema({
 const postSchema = new mongoose.Schema({
   author: { type: String, required: true },
   authorAvatarUrl: { type: String, default: '' },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   date: { type: String, default: '' },
   isoDate: { type: String, default: () => new Date().toISOString() },
   text: { type: String, default: '' },

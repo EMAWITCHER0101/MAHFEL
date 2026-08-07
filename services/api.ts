@@ -1,16 +1,9 @@
 
 import type { Podcast, Comment, Video, Post, Book, Author, PublishedBook, User } from '../types';
 
-const isCapacitor = () => {
-  try { return !!(window as any).Capacitor; } catch { return false; }
-};
-
 const getApiBase = (): string => {
-  if (isCapacitor()) {
-    const saved = localStorage.getItem('mahfel_server_url');
-    if (saved) return saved;
-    return 'http://10.0.2.2:5000';
-  }
+  const saved = localStorage.getItem('mahfel_server_url');
+  if (saved) return saved;
   return '/api';
 };
 
@@ -463,6 +456,22 @@ export const unbanUser = async (userId: string): Promise<any> => {
 
 export const resetUserWarnings = async (userId: string): Promise<any> => {
   return apiFetch(`/admin/users/${userId}/reset-warnings`, { method: 'POST' });
+};
+
+// --- Notifications ---
+export const getNotifications = async (): Promise<any[] | null> => {
+  return apiFetch<any[]>('/notifications');
+};
+
+export const adminSendNotification = async (title: string, body: string, target: string = 'all'): Promise<any> => {
+  return apiFetch('/notifications', {
+    method: 'POST',
+    body: JSON.stringify({ title, body, target }),
+  });
+};
+
+export const adminDeleteNotification = async (id: string): Promise<any> => {
+  return apiFetch(`/notifications/${id}`, { method: 'DELETE' });
 };
 
 // --- Save All (legacy compatibility) ---

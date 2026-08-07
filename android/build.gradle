@@ -3,6 +3,7 @@
 buildscript {
     
     repositories {
+        maven { url = uri("https://maven.aliyun.com/repository/google") }
         google()
         mavenCentral()
     }
@@ -19,8 +20,16 @@ apply from: "variables.gradle"
 
 allprojects {
     repositories {
+        maven { url = uri("https://maven.aliyun.com/repository/google") }
         google()
         mavenCentral()
+    }
+    configurations.all {
+        resolutionStrategy {
+            force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
+            force 'org.jetbrains.kotlin:kotlin-stdlib-common:1.8.22'
+            force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.20'
+        }
     }
 }
 

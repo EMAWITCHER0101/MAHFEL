@@ -1,6 +1,7 @@
 
 import React from 'react';
 import type { Page } from '../types';
+import { SohaFullLogotype } from './SohaLogo';
 
 interface MahfelSidebarProps {
   activeTab: Page;
@@ -49,10 +50,10 @@ const MahfelSidebar: React.FC<MahfelSidebarProps> = ({
       `}>
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="flex items-center justify-between px-3 py-4 border-b" style={{ borderColor: 'var(--border)' }}>
-            <span className="text-base font-black" style={{ color: 'var(--primary)' }}>سرای هنر و اندیشه</span>
+          <div className="relative flex items-center justify-center px-3 py-4 border-b" style={{ borderColor: 'var(--border)' }}>
+            <SohaFullLogotype isDark={isDark} />
             <button onClick={() => onOpenChange(false)}
-              className="w-7 h-7 rounded-lg flex items-center justify-center active:scale-90 transition-all"
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg flex items-center justify-center active:scale-90 transition-all"
               style={{ color: 'var(--text-3)' }}>
               <i className="fas fa-times text-xs"></i>
             </button>

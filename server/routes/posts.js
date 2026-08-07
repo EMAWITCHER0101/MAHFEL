@@ -19,13 +19,25 @@ router.get('/', async (req, res) => {
     posts.forEach(p => (p.comments || []).forEach(c => { if (c.author) allAuthors.add(c.author); }));
     const users = await User.find({ name: { $in: [...allAuthors] } }).select('name avatar');
     const avatarMap = {};
-    users.forEach(u => { if (u.avatar) avatarMap[u.name] = u.avatar; });
+    const nameById = {};
+    users.forEach(u => { if (u.avatar) avatarMap[u.name] = u.avatar; nameById[u._id.toString()] = u.name; });
+    const userIds = new Set();
+    posts.forEach(p => { if (p.userId) userIds.add(p.userId.toString()); });
+    posts.forEach(p => (p.comments || []).forEach(c => { if (c.userId) userIds.add(c.userId.toString()); }));
+    if (userIds.size) {
+      const usersById = await User.find({ _id: { $in: [...userIds] } }).select('name avatar');
+      usersById.forEach(u => { if (u.avatar) avatarMap[u._id.toString()] = u.avatar; nameById[u._id.toString()] = u.name; });
+    }
 
     const result = posts.map(p => {
       const obj = p.toObject();
+      if (obj.userId && nameById[obj.userId.toString()]) obj.author = nameById[obj.userId.toString()];
+      if (obj.userId && avatarMap[obj.userId.toString()]) obj.authorAvatarUrl = avatarMap[obj.userId.toString()];
       if (!obj.authorAvatarUrl && avatarMap[obj.author]) obj.authorAvatarUrl = avatarMap[obj.author];
       if (obj.comments) {
         obj.comments = obj.comments.map(c => {
+          if (c.userId && nameById[c.userId.toString()]) c.author = nameById[c.userId.toString()];
+          if (c.userId && avatarMap[c.userId.toString()]) c.authorAvatarUrl = avatarMap[c.userId.toString()];
           if (!c.authorAvatarUrl && avatarMap[c.author]) c.authorAvatarUrl = avatarMap[c.author];
           return c;
         });
@@ -83,6 +95,7 @@ router.post('/', requireAuth, async (req, res) => {
       ...body,
       author: req.user.name,
       authorAvatarUrl: avatarUrl,
+      userId: req.user._id,
       isoDate: new Date().toISOString(),
       date: 'همین الان',
     });
@@ -262,6 +275,7 @@ router.post('/:id/comments', requireAuth, async (req, res) => {
     const comment = {
       author: req.user.name,
       authorAvatarUrl: avatarUrl,
+      userId: req.user._id,
       text: req.body.text,
       date: 'همین الان',
       isoDate: new Date().toISOString(),

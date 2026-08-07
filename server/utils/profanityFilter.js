@@ -1,7 +1,7 @@
 const persianProfanity = [
-  // === جنسی و رکیک ===
+  // === فحش جنسی و رکیک ===
   'کیر', 'کیری', 'کیرخور', 'کیرکلفت', 'کیرکش',
-  'کس', 'کسی', 'کسکش', 'کسکشی', 'کسخل', 'کسه',
+  'کسکش', 'کسکشی', 'کسخل',
   'کص', 'کصی', 'کصکش', 'کصکشی', 'کصخل', 'کصه',
   'کوس', 'کوسی', 'کوسکش', 'کوسکشی', 'کوسخور', 'کوسده',
   'کون', 'کونی', 'کونده', 'کونخور', 'کون‌خور', 'کون‌ده',
@@ -17,10 +17,8 @@ const persianProfanity = [
   'زن قحبه', 'زنازاده', 'زن زاده',
   'سکس', 'porn', 'xxx', 'nude', 'naked', 'nsfw',
   'پورنو', 'تشنیع', 'رکیک', 'مستهجن',
-  'مالوندن', 'مالیدن', 'داغ کردن',
   'لاشی', 'مفتی', 'مرف',
-  'بکن', 'دراز بکش', 'سفید کن',
-  'هیت', 'هیت‌', 'gey', 'lez',
+  'gey', 'lez',
   'حیوان‌باز', 'بچه‌باز', 'pedophile',
   'فتیش', 'fetish',
 
@@ -32,26 +30,8 @@ const persianProfanity = [
   'پدرسگ', 'پدر سگ', 'مادرسگ', 'مادر سگ',
   'تبارکثیف', 'نسل پست', 'خانواده خراب',
 
-  // === عامیانه ===
-  'عوضی', 'الاغ', 'احمق', 'نادان',
-  'اوباش', 'نابکار', 'تبهکار', 'جنایتکار',
-  'کثیف', 'کثافت', 'پست', 'پلید',
-  'رذل', 'پست‌فطرت', 'پست فطرت', 'مرتد', 'منافق',
-  'خائن', 'خیانتکار', 'نامرد', 'ناانسان',
-  'دزد', 'سارق', 'غارتگر', 'چپاولگر',
-  'کلاهبردار', 'فاسد', 'مفسد', 'اراذل',
-  'خودبین', 'خودپسند', 'مغرور', 'طمع‌کار',
-  'بخیل', 'خسیس', 'تنبل', 'لوس',
-  'بی‌کاره', 'بیکاره',
-
-  // === هوشی ===
-  'ایدیوت', 'moron', 'stupid', 'idiot',
-  'retard', 'retarded', 'کندذهن', 'کم‌هوش',
-  'بی‌مغز', 'بی مغز', 'بی‌عقل', 'بی عقل',
-  'بی‌فکر', 'بی فکر', 'نفهم', 'خنگ', 'خنگول',
-  'ساده‌لوح', 'ساده لوح', 'احمق',
-  'ابله', 'خپله', 'دلقک', 'گیج',
-  'دیوانه', 'دیو',
+  // === نسبت دادن به حیوانات ===
+  'خری', 'گاوی', 'الاغی', 'سگی', 'خریت',
 
   // === انگلیسی ===
   'fuck', 'fucking', 'fucked', 'fucker', 'motherfucker',
@@ -65,7 +45,6 @@ const persianProfanity = [
   'fucktard', 'shithead', 'piss',
   'nigga', 'nigger', 'faggot', 'fag',
   'dyke', 'tranny', 'homo',
-  'terrorist', 'nazi', 'hitler',
   'suck', 'blowjob', 'handjob',
 
   // === ترکی ===
@@ -83,8 +62,7 @@ const persianProfanity = [
   'nigger', 'nigga', 'spic', 'chink',
   'wetback', 'cracker', 'redneck',
 
-  // === دینی ===
-  'terrorist', 'ISIS', 'taliban',
+  // === تهدید ===
   'میکشمت', 'کشتار',
 
   // === ترکیبات ===
@@ -116,14 +94,12 @@ export function containsProfanity(text) {
     const normalizedBad = normalize(bad);
     if (!normalizedBad) continue;
     
-    if (normalizedText.includes(normalizedBad)) {
-      return { hasProfanity: true, matchedWord: bad };
-    }
-    
-    for (const word of words) {
-      if (word.includes(normalizedBad) || normalizedBad.includes(word)) {
+    if (normalizedBad.length <= 3) {
+      if (words.includes(normalizedBad)) {
         return { hasProfanity: true, matchedWord: bad };
       }
+    } else if (normalizedText.includes(normalizedBad)) {
+      return { hasProfanity: true, matchedWord: bad };
     }
   }
 

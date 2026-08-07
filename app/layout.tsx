@@ -13,8 +13,7 @@ const vazir = localFont({
 
 const iranNastaliq = localFont({
   src: [
-    { path: '../fonts/IranNastaliq.woff2' },
-    { path: '../fonts/IranNastaliq.ttf' },
+    { path: '../fonts/DimaShekasteh.woff2' },
   ],
   variable: '--font-nastaliq',
   display: 'swap',

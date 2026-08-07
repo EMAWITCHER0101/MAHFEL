@@ -1,32 +1,54 @@
 import { Router } from 'express';
 import User from '../models/User.js';
+import Comment from '../models/Comment.js';
+import Post from '../models/Post.js';
 import { auth, requireAuth, generateToken } from '../middleware/auth.js';
 import { isIranianIP, getClientIP } from '../utils/ipCheck.js';
 
 const router = Router();
 
+async function propagateProfileToContent(userId, oldName, newName, newAvatar) {
+  const sets = { author: newName, authorAvatarUrl: newAvatar };
+  await Comment.updateMany({ userId }, { $set: sets });
+  await Comment.updateMany({ author: oldName, userId: { $exists: false } }, { $set: sets });
+  await Post.updateMany({ userId }, { $set: sets });
+  await Post.updateMany({ author: oldName, userId: { $exists: false } }, { $set: sets });
+  await Post.updateMany(
+    { 'comments.userId': userId },
+    { $set: { 'comments.$[c].author': newName, 'comments.$[c].authorAvatarUrl': newAvatar } },
+    { arrayFilters: [{ 'c.userId': userId }] }
+  );
+  await Post.updateMany(
+    { 'comments.author': oldName, 'comments.userId': { $exists: false } },
+    { $set: { 'comments.$[c].author': newName, 'comments.$[c].authorAvatarUrl': newAvatar } },
+    { arrayFilters: [{ 'c.author': oldName, 'c.userId': { $exists: false } }] }
+  );
+}
+
 router.post('/register', async (req, res) => {
   try {
     const { name, email, password, phoneNumber } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ error: 'نام الزامی است' });
-    if (!email || !email.trim()) return res.status(400).json({ error: 'ایمیل الزامی است' });
-    if (!password || password.length < 4) return res.status(400).json({ error: 'رمز عبور باید حداقل ۴ کاراکتر باشد' });
-    if (!phoneNumber || !/^09\d{9}$/.test(phoneNumber)) return res.status(400).json({ error: 'شماره موبایل نامعتبر است' });
+    if (!password || String(password).length < 4) return res.status(400).json({ error: 'رمز عبور باید حداقل ۴ کاراکتر باشد' });
+    if (!phoneNumber || !/^09\d{9}$/.test(String(phoneNumber).trim())) return res.status(400).json({ error: 'شماره موبایل نامعتبر است' });
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) return res.status(400).json({ error: 'ایمیل نامعتبر است' });
+    const cleanEmail = email ? String(email).trim().toLowerCase() : '';
+    if (cleanEmail) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(cleanEmail)) return res.status(400).json({ error: 'ایمیل نامعتبر است' });
+      const existingEmail = await User.findOne({ email: cleanEmail });
+      if (existingEmail) return res.status(409).json({ error: 'ایمیل قبلاً ثبت شده است' });
+    }
 
-    const existingEmail = await User.findOne({ email: email.toLowerCase() });
-    if (existingEmail) return res.status(409).json({ error: 'ایمیل قبلاً ثبت شده است' });
-
-    const existingPhone = await User.findOne({ phoneNumber });
+    const cleanPhone = String(phoneNumber).trim();
+    const existingPhone = await User.findOne({ phoneNumber: cleanPhone });
     if (existingPhone) return res.status(409).json({ error: 'شماره موبایل قبلاً ثبت شده است' });
 
     const user = new User({
       name: name.trim(),
-      email: email.toLowerCase().trim(),
+      email: cleanEmail || undefined,
       password,
-      phoneNumber,
+      phoneNumber: cleanPhone,
       avatar: generateDefaultAvatar(name),
       role: 'user',
       interests: [],
@@ -262,9 +284,14 @@ router.put('/library', requireAuth, async (req, res) => {
 router.put('/profile', requireAuth, async (req, res) => {
   try {
     const { name, avatar } = req.body;
+    const oldName = req.user.name;
     if (name !== undefined) req.user.name = name;
     if (avatar !== undefined) req.user.avatar = avatar;
     await req.user.save();
+    const userId = req.user._id;
+    const newName = req.user.name;
+    const newAvatar = req.user.avatar || '';
+    await propagateProfileToContent(userId, oldName, newName, newAvatar);
     res.json({
       success: true,
       user: {

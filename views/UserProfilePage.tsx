@@ -15,9 +15,10 @@ interface UserProfilePageProps {
   onEditPost?: (post: Post) => void;
   onDeletePost?: (postId: number) => void;
   onUpdateUser?: (user: User) => void;
+  onOpenAdmin?: () => void;
 }
 
-const UserProfilePage: React.FC<UserProfilePageProps> = ({ onClose, onLogout, user, allPodcasts, allVideos, onPlayPodcast, onPlayVideo, onEditPost, onDeletePost, onUpdateUser }) => {
+const UserProfilePage: React.FC<UserProfilePageProps> = ({ onClose, onLogout, user, allPodcasts, allVideos, onPlayPodcast, onPlayVideo, onEditPost, onDeletePost, onUpdateUser, onOpenAdmin }) => {
     const [view, setView] = useState<'main' | 'library' | 'myPosts' | 'editProfile'>('main');
     const [myPosts, setMyPosts] = useState<Post[]>([]);
     const [editName, setEditName] = useState(user.name);
@@ -130,6 +131,19 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ onClose, onLogout, us
                                     </div>
                                     <i className="fas fa-chevron-left text-gray-200"></i>
                                 </button>
+
+                                {user.role === 'admin' && (
+                                    <button onClick={onOpenAdmin} className="w-full text-right p-4 rounded-3xl hover:bg-gray-50 transition-colors flex items-center gap-4 bg-white border border-gray-100 shadow-sm group">
+                                        <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                                            <i className="fas fa-chart-pie text-sm"></i>
+                                        </div>
+                                        <div className="flex-1">
+                                            <span className="font-black text-gray-700 text-sm">داشبورد مدیریت</span>
+                                            <p className="text-[10px] text-gray-400 font-bold mt-0.5">مدیریت سایت، کاربران و محتوا</p>
+                                        </div>
+                                        <i className="fas fa-chevron-left text-gray-200"></i>
+                                    </button>
+                                )}
                             </div>
                         </>
                     ) : view === 'myPosts' ? (

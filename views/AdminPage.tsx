@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import type { Podcast, Episode, Video, PublishedBook, Author, Book } from '../types';
 import { toPersianDigits } from '../utils/helpers';
-import { uploadFile, getAdminStats, getAdminUsers, updateUserRole, deleteUser, getAdminPosts, adminDeletePost, adminUpdatePost, getAdminComments, adminDeleteComment, adminUpdateComment, getPodcasts, getBooks, getAuthors, getVideos, getComments, getPosts, getPublishedBooks, getAdminAnalytics, getAdminActivity, adminExportData, adminSearchGlobal, adminBulkUsers, adminBulkPosts, adminBulkComments, muteUser, unmuteUser, unbanUser, resetUserWarnings } from '../services/api';
+import { uploadFile, getAdminStats, getAdminUsers, updateUserRole, deleteUser, getAdminPosts, adminDeletePost, adminUpdatePost, getAdminComments, adminDeleteComment, adminUpdateComment, getPodcasts, getBooks, getAuthors, getVideos, getComments, getPosts, getPublishedBooks, getAdminAnalytics, getAdminActivity, adminExportData, adminSearchGlobal, adminBulkUsers, adminBulkPosts, adminBulkComments, muteUser, unmuteUser, unbanUser, resetUserWarnings, getNotifications, adminSendNotification, adminDeleteNotification } from '../services/api';
 import { fetchAparatVideoDetails, extractAparatId } from '../utils/aparatApi';
 import { GoogleGenAI } from "@google/genai";
 
@@ -277,7 +277,7 @@ const StatCard = ({ icon, label, value, color }: { icon: string; label: string; 
     </div>
 );
 
-type AdminTab = 'dashboard' | 'users' | 'posts' | 'comments' | 'sowt' | 'videos' | 'library' | 'nashr' | 'analytics';
+type AdminTab = 'dashboard' | 'users' | 'posts' | 'comments' | 'sowt' | 'videos' | 'library' | 'nashr' | 'analytics' | 'notifications';
 
 const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBooks, currentAuthors, currentBooks, currentComments, currentPosts, onSave }: any) => {
     const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
@@ -300,6 +300,17 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
     const [podcastSearch, setPodcastSearch] = useState('');
     const [podcastSort, setPodcastSort] = useState<'newest' | 'year' | 'master'>('newest');
     const [selectedMasterFilter, setSelectedMasterFilter] = useState<number | 'all'>('all');
+
+    const [notifList, setNotifList] = useState<any[]>([]);
+    const [notifTitle, setNotifTitle] = useState('');
+    const [notifBody, setNotifBody] = useState('');
+    const [notifTarget, setNotifTarget] = useState('all');
+    const [notifSending, setNotifSending] = useState(false);
+
+    const loadNotifications = useCallback(async () => {
+        const list = await getNotifications();
+        if (list) setNotifList(list);
+    }, []);
 
     const [stats, setStats] = useState<any>(null);
     const [users, setUsers] = useState<any[]>([]);
@@ -392,6 +403,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
         if (activeTab === 'comments') loadComments(1);
         if (activeTab === 'analytics') loadAnalytics();
         if (activeTab === 'analytics') loadActivity();
+        if (activeTab === 'notifications') loadNotifications();
     }, [activeTab, loadStats, loadUsers, loadPosts, loadComments, loadAnalytics, loadActivity]);
 
     const sortedPodcasts = useMemo(() => {
@@ -559,7 +571,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                             loadUsers(1);
                             showAdminToast('کاربران حذف شدند', 'success');
                         });
-                    }} className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-[8px] font-black">حذف</button>
+                    }} className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-[8px] font-black">حذف</button>
                     <button onClick={() => setSelectedUsers([])} className="text-gray-400 text-[8px]"><i className="fas fa-times"></i></button>
                 </div>
             )}
@@ -621,7 +633,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                                         showAdminToast(`${u.name} حذف شد`, 'success');
                                     }
                                 });
-                            }} className="w-8 h-8 rounded-xl bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100"><i className="fas fa-trash text-[10px]"></i></button>
+                            }} className="w-8 h-8 rounded-xl bg-red-500 text-white hover:bg-red-600 shadow-md transition-all flex items-center justify-center"><i className="fas fa-trash text-[10px]"></i></button>
                         </div>
                     </div>
                 ))}
@@ -651,7 +663,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                     <span className="text-[9px] font-black text-orange-600">{toPersianDigits(selectedPosts.length)} انتخاب شده</span>
                     <div className="flex-1"></div>
                     <button onClick={async () => { await adminBulkPosts(selectedPosts, 'pin'); setSelectedPosts([]); loadPosts(1); }} className="px-3 py-1.5 bg-yellow-50 text-yellow-600 rounded-lg text-[8px] font-black">سنجاق کردن</button>
-                    <button onClick={async () => { await adminBulkPosts(selectedPosts, 'delete'); setSelectedPosts([]); loadPosts(1); }} className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-[8px] font-black">حذف</button>
+                    <button onClick={async () => { await adminBulkPosts(selectedPosts, 'delete'); setSelectedPosts([]); loadPosts(1); }} className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-[8px] font-black">حذف</button>
                     <button onClick={() => setSelectedPosts([])} className="text-gray-400 text-[8px]"><i className="fas fa-times"></i></button>
                 </div>
             )}
@@ -735,7 +747,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                                         const r = await adminDeletePost(p._id);
                                         if (r) { setAdminPosts(prev => prev.filter(x => x._id !== p._id)); showAdminToast('پست حذف شد', 'success'); }
                                     });
-                                }} className="w-7 h-7 rounded-lg bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100"><i className="fas fa-trash text-[8px]"></i></button>
+                                }} className="w-7 h-7 rounded-lg bg-red-500 text-white hover:bg-red-600 shadow-md transition-all flex items-center justify-center"><i className="fas fa-trash text-[8px]"></i></button>
                             </div>
                         </div>
                     </div>
@@ -774,7 +786,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                     <span className="text-[9px] font-black text-teal-600">{toPersianDigits(selectedComments.length)} انتخاب شده</span>
                     <div className="flex-1"></div>
                     <button onClick={async () => { await adminBulkComments(selectedComments, 'feature'); setSelectedComments([]); loadComments(1); }} className="px-3 py-1.5 bg-yellow-50 text-yellow-600 rounded-lg text-[8px] font-black">ویژه کردن</button>
-                    <button onClick={async () => { await adminBulkComments(selectedComments, 'delete'); setSelectedComments([]); loadComments(1); }} className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-[8px] font-black">حذف</button>
+                    <button onClick={async () => { await adminBulkComments(selectedComments, 'delete'); setSelectedComments([]); loadComments(1); }} className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-[8px] font-black">حذف</button>
                     <button onClick={() => setSelectedComments([])} className="text-gray-400 text-[8px]"><i className="fas fa-times"></i></button>
                 </div>
             )}
@@ -850,7 +862,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                                         const r = await adminDeleteComment(c._id);
                                         if (r) { setAdminComments(prev => prev.filter(x => x._id !== c._id)); showAdminToast('نظر حذف شد', 'success'); }
                                     });
-                                }} className="w-7 h-7 rounded-lg bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition-all flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100"><i className="fas fa-trash text-[8px]"></i></button>
+                                }} className="w-7 h-7 rounded-lg bg-red-500 text-white hover:bg-red-600 shadow-md transition-all flex items-center justify-center opacity-100 sm:opacity-100 sm:group-hover:opacity-100"><i className="fas fa-trash text-[8px]"></i></button>
                             </div>
                         </div>
                     </div>
@@ -897,7 +909,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                                     <FormField label="تاریخ انتشار"><PersianDateInput value={ep.date} onChange={(e:any)=>{ const n=[...p.episodes]; n[idx].date=e.target.value; setField('episodes', n); }}/></FormField>
                                 </div>
                                 <FormField label="متن جلسه (مطالعه)"><div className="flex gap-2 items-start"><TextArea placeholder="متن مطالعه..." value={ep.fullText || ''} onChange={(e:any)=>{ const n=[...p.episodes]; n[idx].fullText=e.target.value; setField('episodes', n); }} /><div className="flex flex-col gap-2"><WordToHtmlButton onConverted={(html:string)=>{ const n=[...p.episodes]; n[idx].fullText=html; setField('episodes', n); }} /><SmartEditButton text={ep.fullText || ''} onEdited={(newText) => { const n=[...p.episodes]; n[idx].fullText=newText; setField('episodes', n); }} /></div></div></FormField>
-                                <button onClick={()=>{const n=[...p.episodes]; n.splice(idx,1); setField('episodes', n);}} className="text-red-400 text-[9px] font-black w-full text-center py-2 opacity-0 group-hover:opacity-100 transition-opacity">حذف این جلسه</button>
+                                <button onClick={()=>{const n=[...p.episodes]; n.splice(idx,1); setField('episodes', n);}} className="bg-red-500 text-white text-[9px] font-black w-full text-center py-2 rounded-lg transition-opacity">حذف این جلسه</button>
                             </div>
                         ))}
                         <button onClick={()=>{ const n=[...p.episodes, {title: `جلسه ${p.episodes.length+1}`, duration:'0', audioUrl:'', date:'۱۴۰۳/۰۱/۰۱', isNew:true, viewCount:0}]; setField('episodes', n); }} className="w-full py-4 border-2 border-dashed border-primary/20 text-primary rounded-[2rem] font-black text-xs bg-primary/5 active:scale-95 transition-all shadow-sm">+ افزودن جلسه جدید</button>
@@ -922,7 +934,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                             <div className="flex items-center gap-2">
                                 <button onClick={async () => { const { shareToMahfel } = await import('../services/api'); const ok = await shareToMahfel('podcast', p.id); if (ok) showAdminToast('در محفل شیر شد!', 'success'); }} className="text-green-500 font-black text-[9px] bg-green-50 px-4 py-2 rounded-xl hover:bg-green-100 transition-colors whitespace-nowrap"><i className="fas fa-share-alt ml-1"></i>محفل</button>
                                 <button onClick={() => setEditingItem({ type: 'Podcast', id: p.id })} className="bg-blue-50 text-blue-600 px-5 py-2 rounded-xl text-[10px] font-black transition-colors hover:bg-blue-100">ویرایش</button>
-                                <button onClick={() => handleDelete('podcasts', p.id)} className="w-8 h-8 rounded-xl bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100"><i className="fas fa-trash text-[10px]"></i></button>
+                                <button onClick={() => handleDelete('podcasts', p.id)} className="w-8 h-8 rounded-xl bg-red-500 text-white hover:bg-red-600 shadow-md transition-all flex items-center justify-center"><i className="fas fa-trash text-[10px]"></i></button>
                             </div>
                         </div>
                     ))}
@@ -976,11 +988,11 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                     ))}
                 </div>
 
-                {librarySubTab === 'podcasts' && (<section className="animate-fadeIn"><div className="flex justify-between items-center mb-4"><h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">مجموعه‌های صوتی ذخیره شده</h3><span className="text-[9px] font-black text-primary bg-primary/5 px-3 py-1 rounded-full">{toPersianDigits(localData.podcasts.length)} مجموعه</span></div><div className="space-y-2">{localData.podcasts.map((p: any) => (<div key={p.id} className="bg-white p-3 rounded-2xl border shadow-sm flex items-center gap-3 group hover:border-primary transition-all"><img src={p.cover || 'https://via.placeholder.com/80'} className="w-12 h-12 rounded-xl object-cover shadow-sm flex-shrink-0" /><div className="flex-1 min-w-0"><p className="text-[11px] font-black text-gray-800 truncate">{p.title || 'بی‌عنوان'}</p><p className="text-[9px] text-gray-400 font-bold mt-0.5">{toPersianDigits(p.episodes?.length || 0)} جلسه • {p.year ? toPersianDigits(p.year) : ''}</p><div className="flex flex-wrap gap-1 mt-1">{p.episodes?.slice(0, 3).map((ep: any, i: number) => (<span key={i} className="text-[7px] bg-gray-50 text-gray-500 px-1.5 py-0.5 rounded-full">{ep.title}</span>))}{(p.episodes?.length || 0) > 3 && <span className="text-[7px] bg-gray-50 text-gray-400 px-1.5 py-0.5 rounded-full">+{toPersianDigits(p.episodes.length - 3)}</span>}</div></div><div className="flex items-center gap-1 flex-shrink-0"><button onClick={() => setEditingItem({ type: 'Podcast', id: p.id })} className="w-8 h-8 rounded-xl bg-blue-50 text-blue-500 hover:bg-blue-100 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100"><i className="fas fa-pen text-[9px]"></i></button><button onClick={() => handleDelete('podcasts', p.id)} className="w-8 h-8 rounded-xl bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100"><i className="fas fa-trash text-[9px]"></i></button></div></div>))}</div></section>)}
+                {librarySubTab === 'podcasts' && (<section className="animate-fadeIn"><div className="flex justify-between items-center mb-4"><h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">مجموعه‌های صوتی ذخیره شده</h3><span className="text-[9px] font-black text-primary bg-primary/5 px-3 py-1 rounded-full">{toPersianDigits(localData.podcasts.length)} مجموعه</span></div><div className="space-y-2">{localData.podcasts.map((p: any) => (<div key={p.id} className="bg-white p-3 rounded-2xl border shadow-sm flex items-center gap-3 group hover:border-primary transition-all"><img src={p.cover || 'https://via.placeholder.com/80'} className="w-12 h-12 rounded-xl object-cover shadow-sm flex-shrink-0" /><div className="flex-1 min-w-0"><p className="text-[11px] font-black text-gray-800 truncate">{p.title || 'بی‌عنوان'}</p><p className="text-[9px] text-gray-400 font-bold mt-0.5">{toPersianDigits(p.episodes?.length || 0)} جلسه • {p.year ? toPersianDigits(p.year) : ''}</p><div className="flex flex-wrap gap-1 mt-1">{p.episodes?.slice(0, 3).map((ep: any, i: number) => (<span key={i} className="text-[7px] bg-gray-50 text-gray-500 px-1.5 py-0.5 rounded-full">{ep.title}</span>))}{(p.episodes?.length || 0) > 3 && <span className="text-[7px] bg-gray-50 text-gray-400 px-1.5 py-0.5 rounded-full">+{toPersianDigits(p.episodes.length - 3)}</span>}</div></div><div className="flex items-center gap-1 flex-shrink-0"><button onClick={() => setEditingItem({ type: 'Podcast', id: p.id })} className="w-8 h-8 rounded-xl bg-blue-50 text-blue-500 hover:bg-blue-100 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100"><i className="fas fa-pen text-[9px]"></i></button><button onClick={() => handleDelete('podcasts', p.id)} className="w-8 h-8 rounded-xl bg-red-500 text-white hover:bg-red-600 shadow-md transition-all flex items-center justify-center"><i className="fas fa-trash text-[9px]"></i></button></div></div>))}</div></section>)}
 
                 
 
-                {librarySubTab === 'books' && (<section className="animate-fadeIn"><div className="flex justify-between items-center mb-4"><h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">لیست کتاب‌ها</h3><button onClick={()=>{ const id = Date.now(); const n: Book = { id, title: '', authorId: localData.authors.find((a:any)=>a.role==='master')?.id || 1, cover: '', relatedEpisodes: [], categories: ["فلسفه"] }; updateTable('books', [n, ...localData.books]); setEditingItem({ type: 'Book', id }); }} className="text-[9px] font-black text-orange-600 bg-orange-50 px-4 py-1.5 rounded-full">+ کتاب جدید</button></div><div className="space-y-2">{localData.books.map((bk: any) => (<div key={bk.id} className="bg-white p-3 rounded-2xl border flex justify-between items-center shadow-sm hover:border-orange-200 transition-all group"><div className="flex items-center gap-4"><img src={bk.cover || 'https://via.placeholder.com/80'} className="w-9 h-12 rounded-lg object-cover shadow-sm" /><p className="text-[10px] font-black text-gray-800">{bk.title}</p></div><div className="flex items-center gap-2"><button onClick={() => setEditingItem({ type: 'Book', id: bk.id })} className="bg-orange-50 text-orange-600 px-5 py-2 rounded-xl text-[10px] font-black hover:bg-orange-100 transition-colors">ویرایش</button><button onClick={() => handleDelete('books', bk.id)} className="w-8 h-8 rounded-xl bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100"><i className="fas fa-trash text-[10px]"></i></button></div></div>))}</div></section>)}
+                {librarySubTab === 'books' && (<section className="animate-fadeIn"><div className="flex justify-between items-center mb-4"><h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">لیست کتاب‌ها</h3><button onClick={()=>{ const id = Date.now(); const n: Book = { id, title: '', authorId: localData.authors.find((a:any)=>a.role==='master')?.id || 1, cover: '', relatedEpisodes: [], categories: ["فلسفه"] }; updateTable('books', [n, ...localData.books]); setEditingItem({ type: 'Book', id }); }} className="text-[9px] font-black text-orange-600 bg-orange-50 px-4 py-1.5 rounded-full">+ کتاب جدید</button></div><div className="space-y-2">{localData.books.map((bk: any) => (<div key={bk.id} className="bg-white p-3 rounded-2xl border flex justify-between items-center shadow-sm hover:border-orange-200 transition-all group"><div className="flex items-center gap-4"><img src={bk.cover || 'https://via.placeholder.com/80'} className="w-9 h-12 rounded-lg object-cover shadow-sm" /><p className="text-[10px] font-black text-gray-800">{bk.title}</p></div><div className="flex items-center gap-2"><button onClick={() => setEditingItem({ type: 'Book', id: bk.id })} className="bg-orange-50 text-orange-600 px-5 py-2 rounded-xl text-[10px] font-black hover:bg-orange-100 transition-colors">ویرایش</button><button onClick={() => handleDelete('books', bk.id)} className="w-8 h-8 rounded-xl bg-red-500 text-white hover:bg-red-600 shadow-md transition-all flex items-center justify-center"><i className="fas fa-trash text-[10px]"></i></button></div></div>))}</div></section>)}
             </div>
         );
     };
@@ -1017,7 +1029,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                         <div className="flex items-center gap-2">
                             <button onClick={async () => { const { shareToMahfel } = await import('../services/api'); const ok = await shareToMahfel('book', b.id); if (ok) showAdminToast('در محفل شیر شد!', 'success'); }} className="text-green-500 font-black text-[9px] bg-green-50 px-4 py-2 rounded-xl hover:bg-green-100 transition-colors whitespace-nowrap"><i className="fas fa-share-alt ml-1"></i>محفل</button>
                             <button onClick={() => setEditingItem({ type: 'PublishedBook', id: b.id })} className="bg-blue-50 text-blue-600 px-5 py-2 rounded-xl text-[10px] font-black hover:bg-blue-100 transition-colors">ویرایش</button>
-                            <button onClick={() => handleDelete('publishedBooks', b.id)} className="w-8 h-8 rounded-xl bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100"><i className="fas fa-trash text-[10px]"></i></button>
+                            <button onClick={() => handleDelete('publishedBooks', b.id)} className="w-8 h-8 rounded-xl bg-red-500 text-white hover:bg-red-600 shadow-md transition-all flex items-center justify-center"><i className="fas fa-trash text-[10px]"></i></button>
                         </div>
                     </div>
                 ))}
@@ -1060,7 +1072,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                         <div className="flex items-center gap-2">
                             <button onClick={async () => { const { shareToMahfel } = await import('../services/api'); const ok = await shareToMahfel('video', v.id); if (ok) showAdminToast('در محفل شیر شد!', 'success'); }} className="text-green-500 font-black text-[9px] bg-green-50 px-4 py-2 rounded-xl hover:bg-green-100 transition-colors whitespace-nowrap"><i className="fas fa-share-alt ml-1"></i>محفل</button>
                             <button onClick={() => setEditingItem({ type: 'Video', id: v.id })} className="text-blue-500 font-black text-[9px] bg-blue-50 px-5 py-2 rounded-xl hover:bg-blue-100 transition-colors">ویرایش</button>
-                            <button onClick={() => handleDelete('videos', v.id)} className="w-8 h-8 rounded-xl bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100"><i className="fas fa-trash text-[10px]"></i></button>
+                            <button onClick={() => handleDelete('videos', v.id)} className="w-8 h-8 rounded-xl bg-red-500 text-white hover:bg-red-600 shadow-md transition-all flex items-center justify-center"><i className="fas fa-trash text-[10px]"></i></button>
                         </div>
                     </div>
                 ))}
@@ -1162,6 +1174,84 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
     );
 
     const isEditing = editingItem !== null;
+    const renderNotificationsPanel = () => (
+        <div className="p-4 sm:p-6 flex flex-col gap-4">
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border shadow-sm">
+                <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <i className="fas fa-paper-plane text-primary"></i> ارسال نوتیفیکیشن
+                </h3>
+                <div className="space-y-3">
+                    <FormField label="عنوان">
+                        <TextInput placeholder="مثلاً: اپیزود جدید منتشر شد" value={notifTitle} onChange={(e: any) => setNotifTitle(e.target.value)} />
+                    </FormField>
+                    <FormField label="متن پیام">
+                        <TextArea placeholder="متن نوتیفیکیشن…" rows={3} value={notifBody} onChange={(e: any) => setNotifBody(e.target.value)} />
+                    </FormField>
+                    <FormField label="مخاطب">
+                        <select value={notifTarget} onChange={(e) => setNotifTarget(e.target.value)}
+                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-xs text-gray-700 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all shadow-sm">
+                            <option value="all">همه کاربران</option>
+                            <option value="users">کاربران عادی</option>
+                            <option value="authors">نویسندگان</option>
+                        </select>
+                    </FormField>
+                    <button
+                        disabled={notifSending || !notifTitle.trim() || !notifBody.trim()}
+                        onClick={async () => {
+                            setNotifSending(true);
+                            const res = await adminSendNotification(notifTitle, notifBody, notifTarget);
+                            setNotifSending(false);
+                            if (res && (res as any)._id) {
+                                setAdminToast({ type: 'success', message: 'نوتیفیکیشن با موفقیت ارسال شد ✅' });
+                                setNotifTitle('');
+                                setNotifBody('');
+                                loadNotifications();
+                            } else {
+                                setAdminToast({ type: 'error', message: 'خطا در ارسال نوتیفیکیشن' });
+                            }
+                        }}
+                        className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-white text-xs font-black transition-all active:scale-95 shadow-lg ${notifSending || !notifTitle.trim() || !notifBody.trim() ? 'bg-gray-300 cursor-not-allowed' : 'bg-primary hover:opacity-90'}`}>
+                        {notifSending ? <><i className="fas fa-spinner fa-spin"></i> در حال ارسال…</> : <><i className="fas fa-bell"></i> ارسال برای همه</>}
+                    </button>
+                </div>
+            </div>
+
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border shadow-sm flex-1 overflow-auto">
+                <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <i className="fas fa-history text-primary"></i> نوتیفیکیشن‌های ارسال‌شده
+                </h3>
+                {notifList.length === 0 ? (
+                    <p className="text-center text-xs text-gray-400 py-8">هنوز نوتیفیکیشنی ارسال نشده است</p>
+                ) : (
+                    <div className="space-y-2">
+                        {notifList.map((n: any) => (
+                            <div key={String(n._id)} className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                <div className="w-8 h-8 flex-shrink-0 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+                                    <i className="fas fa-bell text-xs"></i>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <p className="text-xs font-black text-gray-700 truncate">{n.title}</p>
+                                        <span className="text-[9px] text-gray-400 flex-shrink-0">{n.createdAt ? new Date(n.createdAt).toLocaleDateString('fa-IR') : ''}</span>
+                                    </div>
+                                    <p className="text-[10px] text-gray-500 mt-0.5 leading-relaxed whitespace-pre-line">{n.body}</p>
+                                </div>
+                                <button
+                                    onClick={async () => {
+                                        await adminDeleteNotification(String(n._id));
+                                        loadNotifications();
+                                    }}
+                                    className="flex-shrink-0 w-7 h-7 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 flex items-center justify-center transition-all"
+                                    title="حذف">
+                                    <i className="fas fa-trash-alt text-[10px]"></i>
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
     const tabs: { id: AdminTab; label: string; icon: string; color: string }[] = [
         { id: 'dashboard', label: 'داشبورد', icon: 'fa-chart-pie', color: '#6366f1' },
         { id: 'users', label: 'کاربران', icon: 'fa-users', color: '#10b981' },
@@ -1172,6 +1262,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
         { id: 'library', label: 'کتابخانه', icon: 'fa-book-open', color: '#f97316' },
         { id: 'nashr', label: 'نشر', icon: 'fa-shopping-cart', color: '#2563eb' },
         { id: 'videos', label: 'ویدیو', icon: 'fa-video', color: '#2e86c1' },
+        { id: 'notifications', label: 'نوتیفیکیشن', icon: 'fa-bell', color: '#f59e0b' },
     ];
 
     return (
@@ -1275,6 +1366,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                         {activeTab === 'videos' && renderVideoPanel()}
                         {activeTab === 'library' && renderLibraryPanel()}
                         {activeTab === 'nashr' && renderNashrPanel()}
+                        {activeTab === 'notifications' && renderNotificationsPanel()}
                     </div>
                 </div>
 

@@ -158,7 +158,7 @@ export function OfflineDetector({ children }: { children: React.ReactNode }) {
           </button>
           <div className="flex items-center justify-center gap-3 text-gray-600 text-xs">
             <span className="w-12 h-px bg-gradient-to-l from-gray-700/50 to-transparent"></span>
-            <span>سرای هنر و اندیشه</span>
+            <span className="font-nastaliq">سرای هنر و اندیشه</span>
             <span className="w-12 h-px bg-gradient-to-r from-gray-700/50 to-transparent"></span>
           </div>
           <style>{`@keyframes pulse-slow { 0%,100% { opacity:0.3; transform:scale(1.3); } 50% { opacity:0.6; transform:scale(1.5); } } .animate-pulse-slow { animation: pulse-slow 3s ease-in-out infinite; }`}</style>

@@ -23,6 +23,7 @@ import proxyRoutes from './routes/proxy.js';
 import uploadRoutes from './routes/upload.js';
 import adminRoutes from './routes/admin.js';
 import aiRoutes from './routes/ai.js';
+import notificationRoutes from './routes/notifications.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -53,7 +54,7 @@ app.use((req, res, next) => {
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 500,
+  max: 5000,
   message: 'درخواست‌های زیادی ارسال شده. لطفاً بعداً تلاش کنید.',
 });
 app.use('/api/', limiter);
@@ -95,6 +96,7 @@ app.use('/api/proxy', proxyRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/notifications', notificationRoutes);
 app.use('/uploads', express.static(path.resolve('uploads')));
 
 app.use((err, req, res, next) => {
