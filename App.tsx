@@ -1,13 +1,14 @@
 ﻿
 import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { Podcast, Episode, Comment, Page, Post, Book, Author, PublishedBook, User, Video } from './types';
-import { getPodcasts, getBooks, getAuthors, getVideos, getComments, getPosts, getPublishedBooks, createPost, deletePost as apiDeletePost, addPostComment, updatePost, deleteComment as apiDeleteComment, addComment, likeComment, updateLibrary, prefetchStream, getMe, deletePostComment, updatePostComment, getNotifications } from './services/api';
+import { getPodcasts, getBooks, getAuthors, getVideos, getComments, getPosts, getPublishedBooks, createPost, deletePost as apiDeletePost, addPostComment, updatePost, deleteComment as apiDeleteComment, addComment, likeComment, updateLibrary, prefetchStream, getMe, deletePostComment, updatePostComment, getNotifications, recordPodcastPlay, getMyNotes, createPublishedBook, updatePublishedBook, deletePublishedBook, shareToMahfel, getAuthorNotes } from './services/api';
 import { ThemeProvider, useTheme } from './components/ThemeProvider';
 import OnboardingGuide from './components/OnboardingGuide';
 import WelcomeVideo from './components/WelcomeVideo';
 import { ADMIN_STEPS, USER_STEPS, AUTHOR_STEPS } from './data/guideSteps';
 import ErrorBoundary from './components/ErrorBoundary';
-import { initBackgroundPlayback, isApp, sendNativeNotification } from './services/backgroundPlayback';
+import { initBackgroundPlayback, isApp, sendNativeNotification, playInBackgroundAudio, stopBackgroundAudio } from './services/backgroundPlayback';
+import { getPushEnabled, syncWebPushSubscription } from './services/webPush';
 import { OfflineDetector, NetworkErrorPage, VPNBanner, useVPNDetection } from './components/ErrorPages';
 import SearchModal from './components/SearchModal';
 
@@ -26,6 +27,7 @@ import InstantView from './components/InstantView';
 const SowtPage = React.lazy(() => import('./views/SowtPage'));
 const MatnPage = React.lazy(() => import('./views/MatnPage'));
 const VideoListPage = React.lazy(() => import('./views/VideoListPage'));
+const VideoVaultPage = React.lazy(() => import('./views/VideoVaultPage'));
 const VideoPlayerPage = React.lazy(() => import('./views/VideoPlayerPage'));
 const LibraryPage = React.lazy(() => import('./views/LibraryPage'));
 const MahfelPage = React.lazy(() => import('./views/CommentsCommunityPage'));
@@ -50,6 +52,7 @@ const AppInner: React.FC = () => {
     const [posts, setPosts] = useState<Post[]>([]);
     const [books, setBooks] = useState<Book[]>([]);
     const [publishedBooks, setPublishedBooks] = useState<PublishedBook[]>([]);
+    const [myNotes, setMyNotes] = useState<PublishedBook[]>([]);
     const [isLoadingData, setIsLoadingData] = useState(true);
     const [networkError, setNetworkError] = useState(false);
     const [activeTab, setActiveTab] = useState<Page>('mahfel');
@@ -82,6 +85,8 @@ const AppInner: React.FC = () => {
     const [toast, setToast] = useState<{ id: number; message: string; image?: string; name?: string } | null>(null);
     const [notif, setNotif] = useState<{ id: string; title: string; body: string } | null>(null);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
+    const [viewProfileAuthor, setViewProfileAuthor] = useState<{ name: string; avatar?: string; authorId?: string } | null>(null);
+    const [authorPublicNotes, setAuthorPublicNotes] = useState<PublishedBook[]>([]);
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [tabsHidden, setTabsHidden] = useState(false);
@@ -193,6 +198,21 @@ const AppInner: React.FC = () => {
         };
         loadInitialData();
         initBackgroundPlayback();
+        const welcomeVideo = typeof window !== 'undefined' && window.innerWidth < 768
+            ? '/videopage/WELCOMEMOBILE.mp4'
+            : '/videopage/welcomepage.mp4';
+        if (typeof document !== 'undefined') {
+            const existing = document.querySelector(`link[data-welcome-video]`);
+            if (!existing) {
+                const link = document.createElement('link');
+                link.rel = 'preload';
+                link.as = 'video';
+                link.type = 'video/mp4';
+                link.href = welcomeVideo;
+                link.setAttribute('data-welcome-video', 'true');
+                document.head.appendChild(link);
+            }
+        }
         const checkNotifications = async () => {
             try {
                 const list = await getNotifications();
@@ -206,7 +226,7 @@ const AppInner: React.FC = () => {
                 sendNativeNotification(latest.title || 'محفل', latest.body || '');
                 if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
                     try {
-                        new Notification(latest.title || 'محفل', { body: latest.body || '' });
+                        new Notification(latest.title || 'محفل', { body: latest.body || '', icon: '/logo.png' });
                     } catch { /* ignore */ }
                 }
             } catch { /* ignore */ }
@@ -214,6 +234,7 @@ const AppInner: React.FC = () => {
         checkNotifications();
         const notifTimer = setInterval(checkNotifications, 30000);
         window.addEventListener('focus', checkNotifications);
+
         return () => {
             clearInterval(notifTimer);
             window.removeEventListener('focus', checkNotifications);
@@ -329,6 +350,21 @@ const AppInner: React.FC = () => {
         audioRef.current.volume = volume;
     }, [repeatMode, isShuffle, volume]);
 
+    // Web Push: ثبت سرویس‌ورکر و همگام‌سازی اشتراک قبلی
+    useEffect(() => {
+        if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                if (getPushEnabled()) {
+                    const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+                    if (!cancelled && reg.active) await syncWebPushSubscription();
+                }
+            } catch { /* ignore */ }
+        })();
+        return () => { cancelled = true; };
+    }, []);
+
     // Close sidebar when image/video lightbox opens
     const prevCollapsedRef = useRef(desktopSidebarCollapsed);
     useEffect(() => {
@@ -424,6 +460,7 @@ const AppInner: React.FC = () => {
                 setIsPlaying(true);
             }).catch(() => {});
         } catch(e) {}
+        recordPodcastPlay(String(podcast.id || (podcast as any)._id), index);
     }, []);
 
     const togglePlay = () => {
@@ -497,6 +534,7 @@ const AppInner: React.FC = () => {
     }, [sleepTimer]);
 
     const handleClosePlayer = useCallback(() => {
+        stopBackgroundAudio();
         if (audioRef.current) { audioRef.current.pause(); }
         setIsPlaying(false);
         setAudioProgress(0);
@@ -504,6 +542,26 @@ const AppInner: React.FC = () => {
         setCurrentTrack(null);
         setIsPlayerExpanded(false);
     }, []);
+
+    const handlePlayInBackground = useCallback(() => {
+        if (!currentTrack || !audioRef.current) return;
+        const { podcast, episode } = currentTrack;
+        const author = authors.find(a => a.id === podcast.speakerId);
+        const artwork = String(episode.cover || podcast.cover || '');
+        playInBackgroundAudio({
+            title: String(episode.title || ''),
+            artist: author?.name || String(podcast.title || ''),
+            album: String(podcast.title || 'محفل'),
+            artwork: artwork || undefined,
+            duration: audioDuration,
+            onPlay: () => { audioRef.current?.play().catch(() => {}); },
+            onPause: () => { audioRef.current?.pause(); },
+            onSeek: (t) => { if (audioRef.current) audioRef.current.currentTime = t; },
+            onNext: () => playNext(),
+            onPrev: () => playPrev(),
+        });
+        setToast({ id: Date.now(), message: 'پخش در پس‌زمینه فعال شد' });
+    }, [currentTrack, authors, audioDuration, playNext, playPrev]);
 
     const handlePlayVideo = useCallback((v: Video | null) => {
         if (audioRef.current) { audioRef.current.pause(); }
@@ -561,6 +619,81 @@ const AppInner: React.FC = () => {
         setPostMedia([]);
         setActiveTab('mahfel');
     };
+
+    const loadMyNotes = useCallback(async () => {
+        if (!user || (user.role !== 'author' && user.role !== 'admin')) { setMyNotes([]); return; }
+        const notes = await getMyNotes();
+        setMyNotes(notes || []);
+    }, [user]);
+
+    useEffect(() => {
+        loadMyNotes();
+    }, [loadMyNotes]);
+
+    const handleSaveNote = useCallback(async (data: { title: string; content: string; isDraft: boolean }): Promise<PublishedBook | null> => {
+        if (!user) return null;
+        const note = await createPublishedBook({
+            type: 'note',
+            title: data.title,
+            description: data.content.replace(/<[^>]*>/g, '').slice(0, 140),
+            contentHtml: data.content,
+            isDraft: data.isDraft,
+            date: new Date().toLocaleDateString('fa-IR', { year: 'numeric', month: 'long', day: 'numeric' }),
+        });
+        if (!note) return null;
+        setMyNotes(prev => [note, ...prev.filter(n => String(n.id) !== String(note.id))]);
+        if (!note.isDraft) setPublishedBooks(prev => [note, ...prev]);
+        setToast({ id: Date.now(), message: note.isDraft ? 'یادداشت در بایگانی شخصی شما ذخیره شد' : 'یادداشت شما در صفحه نشر منتشر شد' });
+        return note;
+    }, [user]);
+
+    const handleUpdateNote = useCallback(async (id: string, data: { title: string; content: string; isDraft?: boolean }): Promise<PublishedBook | null> => {
+        const updated = await updatePublishedBook(id, {
+            title: data.title,
+            description: data.content.replace(/<[^>]*>/g, '').slice(0, 140),
+            contentHtml: data.content,
+            isDraft: data.isDraft !== undefined ? data.isDraft : undefined,
+        });
+        if (!updated) return null;
+        setMyNotes(prev => prev.map(n => String(n.id) === String(id) ? { ...n, ...updated } : n));
+        if (!updated.isDraft) {
+            setPublishedBooks(prev => [updated, ...prev.filter(n => String(n.id) !== String(id))]);
+        } else {
+            setPublishedBooks(prev => prev.filter(n => String(n.id) !== String(id)));
+        }
+        return updated;
+    }, []);
+
+    const handleDeleteNote = useCallback(async (id: string): Promise<boolean> => {
+        const ok = await deletePublishedBook(id);
+        if (ok) {
+            setMyNotes(prev => prev.filter(n => String(n.id) !== String(id)));
+            setPublishedBooks(prev => prev.filter(n => String(n.id) !== String(id)));
+        }
+        return ok;
+    }, []);
+
+    const handleRepostNoteToMahfel = useCallback(async (note: PublishedBook) => {
+        if (!user) return;
+        const plainText = (note.description || '').replace(/<[^>]*>/g, '').slice(0, 100);
+        const newPost = await shareToMahfel('book', String(note.id), plainText);
+        if (!newPost) return;
+        setPosts(prev => [newPost, ...prev]);
+        setActiveTab('mahfel');
+        setToast({ id: Date.now(), message: 'یادداشت در محفل بازنشر شد' });
+    }, [user]);
+
+    const handleOpenAuthorProfile = useCallback(async (author: { name: string; avatar?: string; authorId?: string }) => {
+        setViewProfileAuthor(author);
+        setAuthorPublicNotes([]);
+        setIsProfileOpen(true);
+        if (author.authorId) {
+            const notes = await getAuthorNotes(author.authorId);
+            setAuthorPublicNotes(notes || []);
+        } else {
+            setAuthorPublicNotes(publishedBooks.filter(b => b.type === 'note' && b.authorName === author.name));
+        }
+    }, [publishedBooks]);
 
     const handleChatSend = async () => {
         if (!chatInputText.trim() || chatSending || !user) return;
@@ -978,14 +1111,8 @@ const AppInner: React.FC = () => {
             />;
             case 'sowt': return <SowtPage podcasts={podcasts} authors={authors} liveStream={{ isLive: false, title: '', url: '' }} onPodcastSelect={setSelectedPodcast} onPlay={playEpisode} userInterests={user?.interests || []} isHeaderVisible={true} onAuthorSelect={setSelectedAuthor} userLibrary={user?.library?.podcasts || []} onToggleLibrary={(id: number) => {}} onShare={(t: string, s: string) => {}} onToggleSidebar={() => setDesktopSidebarCollapsed(v => !v)} theme={theme} onToggleTheme={toggleTheme} onOpenProfile={() => setIsProfileOpen(true)} user={user} />;
             case 'matn': return <MatnPage authors={authors} books={books} onBookSelect={setSelectedBook} onAuthorSelect={setSelectedAuthor} />;
-            case 'videos': return <VideoListPage videos={videos} initialVideoToPlay={null} onVideoPlayed={() => {}} isHeaderVisible={true} onVideoSelect={(v) => { setIsVideoMini(false); handlePlayVideo(v); }} activeVideo={null} isPlayerInline={false} allVideos={videos} comments={comments} onAddComment={async (text: string, v: any, videoTimestamp?: number, parentId?: string, _audioTimestamp?: number) => {
-                const newComment = await addComment({ type: 'video', videoId: v.id || (v as any)._id, author: user?.name || 'کاربر', text, videoTimestamp, parentId, authorAvatarUrl: user?.avatar });
-                if (newComment) {
-                    setComments(prev => insertCommentIntoTree(prev, newComment));
-                    refreshComments();
-                }
-            }} onEnterStandalone={() => {}} onShowInstantView={(t, c) => setInstantView({ title: t, content: c })} userLibrary={user?.library?.videos || localVideoLibrary} onToggleLibrary={handleToggleLibrary} onShare={(t: string, s: string) => {}} onOpenSearch={() => setIsSearchOpen(true)} onOpenSidebar={() => setDesktopSidebarCollapsed(v => !v)} onProfileClick={() => setIsProfileOpen(true)} user={user} theme={theme} onToggleTheme={toggleTheme} />;
-            case 'nashr': return <NashrPage publishedBooks={publishedBooks} allPodcasts={podcasts} comments={comments} onAddComment={(text, book) => openWriteModalWithAttachment('book', book)} user={user} onUpdateUser={(u) => { setUser(u); localStorage.setItem('user_data', JSON.stringify(u)); }} onDeleteComment={handleDeleteComment} onLikeComment={handleLikeComment} onUpdateComment={handleUpdateComment} onToggleSidebar={() => setDesktopSidebarCollapsed(v => !v)} />;
+            case 'videos': return <VideoVaultPage videos={videos} onVideoSelect={(v) => { setIsVideoMini(false); handlePlayVideo(v); }} user={user} theme={theme} onToggleTheme={toggleTheme} onProfileClick={() => setIsProfileOpen(true)} onOpenSidebar={() => setDesktopSidebarCollapsed(v => !v)} />;
+            case 'nashr': return <NashrPage publishedBooks={publishedBooks} allPodcasts={podcasts} comments={comments} onAddComment={(text, book) => openWriteModalWithAttachment('book', book)} user={user} onUpdateUser={(u) => { setUser(u); localStorage.setItem('user_data', JSON.stringify(u)); }} onDeleteComment={handleDeleteComment} onLikeComment={handleLikeComment} onUpdateComment={handleUpdateComment} onToggleSidebar={() => setDesktopSidebarCollapsed(v => !v)} myNotes={myNotes} onSaveNote={handleSaveNote} onUpdateNote={handleUpdateNote} onDeleteNote={handleDeleteNote} onRepostToMahfel={handleRepostNoteToMahfel} onOpenAuthorProfile={handleOpenAuthorProfile} />;
             case 'library': return <LibraryPage savedVideoIds={user?.library?.videos || localVideoLibrary} allVideos={videos} onPlayVideo={(v) => { setIsVideoMini(false); handlePlayVideo(v); }} onRemoveVideo={(id) => handleToggleLibrary(id)} savedPodcastIds={user?.library?.podcasts || []} savedEpisodes={user?.library?.episodes || []} allPodcasts={podcasts} authors={authors} onSelectPodcast={setSelectedPodcast} onRemovePodcast={(p) => togglePodcastLibrary(p)} onRemoveEpisode={(podcastId, episodeIndex) => toggleEpisodeLibrary(podcastId, episodeIndex)} onPlayPodcast={(podcast, idx) => playEpisode(podcast, idx)} theme={theme} onToggleTheme={toggleTheme} user={user} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} onToggleSidebar={() => setDesktopSidebarCollapsed(v => !v)} />;
             case 'ai': return <AiAssistantPage podcasts={podcasts} videos={videos} posts={posts} books={publishedBooks} authors={authors} onPlayPodcast={playEpisode} onPlayVideo={(v) => { setIsVideoMini(false); handlePlayVideo(v); }} onShowBook={(b) => { setSelectedPublishedBook(b); }} />;
             default: return null;
@@ -1142,6 +1269,7 @@ const AppInner: React.FC = () => {
                                 volume={volume} onVolumeChange={setVolume} repeatMode={repeatMode} onRepeatModeChange={setRepeatMode}
                                 isShuffle={isShuffle} onShuffleToggle={() => setIsShuffle(s => !s)}
                                 sleepTimer={sleepTimer} onSleepTimer={setSleepTimer} onPlayEpisode={playEpisode}
+                                onPlayInBackground={handlePlayInBackground}
                                 activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); setSelectedPodcast(null); }}
                                 theme={theme} onToggleTheme={toggleTheme} onOpenProfile={() => setIsProfileOpen(true)}
                                 podcasts={podcasts}
@@ -1149,7 +1277,7 @@ const AppInner: React.FC = () => {
                             />
                         </Suspense>
                     )}
-                    {!isPlayerExpanded && (!selectedPodcast || playlistTab !== 'comments') && !(activeTab === 'mahfel' && window.innerWidth >= 1024) && <MinimizedPlayer track={currentTrack} isPlaying={isPlaying} progress={audioProgress} onPlayPause={togglePlay} onNext={playNext} onPrev={playPrev} onExpand={() => setIsPlayerExpanded(true)} onClose={handleClosePlayer} onSelectPodcast={setSelectedPodcast} isVisible={!isPlayerExpanded} onToggleLibrary={() => togglePodcastLibrary(currentTrack.podcast)} isInLibrary={(user?.library?.podcasts || []).includes(String(currentTrack.podcast.id || (currentTrack.podcast as any)._id))} bottomOffset={selectedPodcast ? 24 : (activeTab === 'mahfel' ? 70 : 68)} theme={theme} />}
+                    {!isPlayerExpanded && (!selectedPodcast || playlistTab !== 'comments') && !(activeTab === 'mahfel' && window.innerWidth >= 1024) && <MinimizedPlayer track={currentTrack} isPlaying={isPlaying} progress={audioProgress} onPlayPause={togglePlay} onNext={playNext} onPrev={playPrev} onExpand={() => setIsPlayerExpanded(true)} onClose={handleClosePlayer} onSelectPodcast={setSelectedPodcast} isVisible={!isPlayerExpanded} onToggleLibrary={() => togglePodcastLibrary(currentTrack.podcast)} isInLibrary={(user?.library?.podcasts || []).includes(String(currentTrack.podcast.id || (currentTrack.podcast as any)._id))} onPlayInBackground={handlePlayInBackground} bottomOffset={selectedPodcast ? 24 : (activeTab === 'mahfel' ? 70 : 68)} theme={theme} />}
                 </>
              )}
 
@@ -1188,7 +1316,7 @@ onPlayVideo={(v) => { setIsVideoMini(false); handlePlayVideo(v); }}
                 />
               )}
              {instantView && <InstantView title={instantView.title} content={instantView.content} onClose={() => setInstantView(null)} />}
-             {isProfileOpen && user && <UserProfilePage onClose={() => setIsProfileOpen(false)} onLogout={handleLogout} user={user} allPodcasts={podcasts} allVideos={videos} onPlayPodcast={playEpisode} onPlayVideo={(v) => { handlePlayVideo(v); setIsProfileOpen(false); }} onEditPost={(post: Post) => { setEditingPost(post); setEditPostText(post.text || ''); setIsProfileOpen(false); }} onDeletePost={handleDeletePost} onUpdateUser={(u) => { const oldName = user.name; const matches = (item: any) => { const byId = item.userId && String(item.userId) === String(u.id); const byName = !item.userId && item.author && item.author === oldName; return byId || byName; }; const remap = (item: any) => { const own = matches(item); const updated = own ? { ...item, author: u.name, authorAvatarUrl: u.avatar } : item; const replies = item.replies ? { ...updated, replies: (item.replies || []).map(remap) } : updated; return replies; }; setComments(prev => prev.map(remap)); setPosts(prev => prev.map(p => { const own = matches(p); const updated = own ? { ...p, author: u.name, authorAvatarUrl: u.avatar } : p; return { ...updated, comments: (p.comments || []).map(remap) }; })); setUser(u); localStorage.setItem('user_data', JSON.stringify(u)); }} onOpenAdmin={() => { setIsProfileOpen(false); setAppState('admin'); }} />}
+             {isProfileOpen && user && <UserProfilePage onClose={() => { setIsProfileOpen(false); setViewProfileAuthor(null); }} onLogout={handleLogout} user={user} allPodcasts={podcasts} allVideos={videos} onPlayPodcast={playEpisode} onPlayVideo={(v) => { handlePlayVideo(v); setIsProfileOpen(false); }} onEditPost={(post: Post) => { setEditingPost(post); setEditPostText(post.text || ''); setIsProfileOpen(false); }} onDeletePost={handleDeletePost} onUpdateUser={(u) => { const oldName = user.name; const matches = (item: any) => { const byId = item.userId && String(item.userId) === String(u.id); const byName = !item.userId && item.author && item.author === oldName; return byId || byName; }; const remap = (item: any) => { const own = matches(item); const updated = own ? { ...item, author: u.name, authorAvatarUrl: u.avatar } : item; const replies = item.replies ? { ...updated, replies: (item.replies || []).map(remap) } : updated; return replies; }; setComments(prev => prev.map(remap)); setPosts(prev => prev.map(p => { const own = matches(p); const updated = own ? { ...p, author: u.name, authorAvatarUrl: u.avatar } : p; return { ...updated, comments: (p.comments || []).map(remap) }; })); setUser(u); localStorage.setItem('user_data', JSON.stringify(u)); }} onOpenAdmin={() => { setIsProfileOpen(false); setAppState('admin'); }} myNotes={myNotes} onSaveNote={handleSaveNote} onUpdateNote={handleUpdateNote} onDeleteNote={handleDeleteNote} onRepostToMahfel={handleRepostNoteToMahfel} viewAuthor={viewProfileAuthor} authorNotes={authorPublicNotes} />}
              
              <SearchModal 
                 isOpen={isSearchOpen} 
@@ -1229,7 +1357,7 @@ onPlayVideo={(v) => { setIsVideoMini(false); handlePlayVideo(v); }}
               {toast && <Toast key={toast.id} message={toast.message} image={toast.image} name={toast.name} onClose={() => setToast(null)} />}
               {notif && <NotificationBanner key={notif.id} title={notif.title} body={notif.body} onClose={() => setNotif(null)} />}
               {showWelcomeVideo && (
-                  <WelcomeVideo videoSrc="/videopage/welcomepage.mp4" onComplete={handleWelcomeComplete} />
+                  <WelcomeVideo onComplete={handleWelcomeComplete} />
               )}
               {showOnboarding && !showWelcomeVideo && user && (
                   <OnboardingGuide

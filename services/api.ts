@@ -1,7 +1,7 @@
 
 import type { Podcast, Comment, Video, Post, Book, Author, PublishedBook, User } from '../types';
 
-const getApiBase = (): string => {
+export const getApiBase = (): string => {
   const saved = localStorage.getItem('mahfel_server_url');
   if (saved) return saved;
   return '/api';
@@ -125,6 +125,38 @@ export const getPodcast = async (id: string): Promise<Podcast | null> => {
   };
 };
 
+const sessionPlayed = new Set<string>();
+const sessionViewed = new Set<string>();
+
+export const recordPodcastPlay = async (podcastId: string, episodeIndex: number = 0): Promise<void> => {
+  if (!podcastId) return;
+  if (sessionPlayed.has(podcastId)) return;
+  sessionPlayed.add(podcastId);
+  try {
+    await fetch(`${getApiBase()}/podcasts/${podcastId}/view`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ episodeIndex }),
+    });
+  } catch (e) { /* non-blocking analytics */ }
+};
+
+export const recordVideoView = async (videoId: string): Promise<void> => {
+  if (!videoId) return;
+  if (sessionViewed.has(videoId)) return;
+  sessionViewed.add(videoId);
+  try {
+    await fetch(`${getApiBase()}/videos/${videoId}/view`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (e) { /* non-blocking analytics */ }
+};
+
+export const getAICorpus = async (): Promise<any> => {
+  return apiFetch('/ai/corpus');
+};
+
 // --- Books ---
 export const getBooks = async (): Promise<Book[]> => {
   const data = await apiFetch<any[]>('/books');
@@ -148,6 +180,49 @@ export const getVideos = async (): Promise<Video[]> => {
   const data = await apiFetch<any[]>('/videos');
   if (!data) return [];
   return data.map((v: any) => ({ ...v, id: v._id || v.id }));
+};
+
+export type VideoPlaylist = { id: string; name: string; slug: string; description: string; cover: string; count: number; order: number; visible?: boolean };
+
+export const getVideoPlaylists = async (): Promise<VideoPlaylist[]> => {
+  const data = await apiFetch<any[]>('/playlists');
+  if (!data) return [];
+  return data.map((p: any) => ({ id: p._id || p.id, name: p.name, slug: p.slug, description: p.description, cover: p.cover, count: p.count, order: p.order }));
+};
+
+export const getVideoPlaylist = async (slug: string): Promise<VideoPlaylist & { videos: Video[] } | null> => {
+  const data = await apiFetch<any>(`/playlists/${encodeURIComponent(slug)}`);
+  if (!data) return null;
+  return {
+    id: data._id || data.id, name: data.name, slug: data.slug, description: data.description,
+    cover: data.cover, count: data.count, order: data.order,
+    videos: (data.videos || []).map((v: any) => ({ ...v, id: v._id || v.id })),
+  };
+};
+
+export const getAdminVideoPlaylists = async (): Promise<VideoPlaylist[]> => {
+  const data = await apiFetch<any[]>('/playlists/admin/all');
+  if (!data) return [];
+  return data.map((p: any) => ({ id: p._id || p.id, name: p.name, slug: p.slug, description: p.description, cover: p.cover, count: p.count, order: p.order, visible: p.visible }));
+};
+
+export const createVideoPlaylist = async (input: { name: string; slug?: string; description?: string; cover?: string; videoIds?: string[]; order?: number; visible?: boolean }): Promise<any | null> => {
+  return apiFetch('/playlists', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+};
+
+export const updateVideoPlaylist = async (id: string, input: { name?: string; slug?: string; description?: string; cover?: string; videoIds?: string[]; order?: number; visible?: boolean; autoFill?: boolean }): Promise<any | null> => {
+  return apiFetch(`/playlists/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+};
+
+export const deleteVideoPlaylist = async (id: string): Promise<boolean> => {
+  const data = await apiFetch<any>(`/playlists/${id}`, { method: 'DELETE' });
+  return !!data;
 };
 
 const streamCache = new Map<string, any>();
@@ -312,6 +387,84 @@ export const getPublishedBooks = async (): Promise<PublishedBook[]> => {
   }));
 };
 
+const mapPublishedBook = (b: any): PublishedBook => ({
+  ...b,
+  id: b._id || b.id,
+  relatedAudioIds: (b.relatedAudioIds || []).map((id: any) => typeof id === 'object' ? id._id || id.id : id),
+});
+
+// Author's own notes (drafts + published) — visible only to that author
+export const getMyNotes = async (): Promise<PublishedBook[]> => {
+  const data = await apiFetch<any[]>('/published-books/mine');
+  if (!data) return [];
+  return data.map(mapPublishedBook);
+};
+
+export const createPublishedBook = async (data: Partial<PublishedBook> & { isDraft?: boolean }): Promise<PublishedBook | null> => {
+  const res = await apiFetch<any>('/published-books', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  if (!res) return null;
+  return mapPublishedBook(res);
+};
+
+export const updatePublishedBook = async (id: string, data: Partial<PublishedBook> & { isDraft?: boolean }): Promise<PublishedBook | null> => {
+  const res = await apiFetch<any>(`/published-books/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+  if (!res) return null;
+  return mapPublishedBook(res);
+};
+
+export const deletePublishedBook = async (id: string): Promise<boolean> => {
+  const res = await apiFetch<any>(`/published-books/${id}`, { method: 'DELETE' });
+  return !!res;
+};
+
+// Public: get another author's published notes (public profile)
+export const getAuthorNotes = async (authorId: string | undefined): Promise<PublishedBook[]> => {
+  if (!authorId) return [];
+  const data = await apiFetch<any[]>(`/published-books/author/${authorId}`);
+  if (!data) return [];
+  return data.map(mapPublishedBook);
+};
+
+// Admin: list all notes (incl. drafts)
+export const adminGetNotes = async (params?: { search?: string; status?: string; authorName?: string; page?: number }): Promise<any> => {
+  const qs = new URLSearchParams();
+  if (params?.search) qs.set('search', params.search);
+  if (params?.status) qs.set('status', params.status);
+  if (params?.authorName) qs.set('authorName', params.authorName);
+  if (params?.page) qs.set('page', String(params.page));
+  return apiFetch(`/admin/notes?${qs.toString()}`);
+};
+
+// Admin: create/update/delete any note
+export const adminCreateNote = async (data: any): Promise<PublishedBook | null> => {
+  const res = await apiFetch<any>('/admin/notes', { method: 'POST', body: JSON.stringify(data) });
+  if (!res) return null;
+  return mapPublishedBook(res);
+};
+
+export const adminUpdateNote = async (id: string, data: any): Promise<PublishedBook | null> => {
+  const res = await apiFetch<any>(`/admin/notes/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  if (!res) return null;
+  return mapPublishedBook(res);
+};
+
+export const adminDeleteNote = async (id: string): Promise<boolean> => {
+  const res = await apiFetch<any>(`/admin/notes/${id}`, { method: 'DELETE' });
+  return !!res;
+};
+
+// Admin: authors management (role author/admin + note counts)
+export const adminGetAuthors = async (): Promise<any[]> => {
+  const res = await apiFetch<any[]>('/admin/authors');
+  return res || [];
+};
+
 // --- File Upload (mock for now) ---
 export const uploadFile = async (file: File, onProgress?: (pct: number) => void): Promise<string> => {
   return new Promise((resolve) => {
@@ -387,6 +540,18 @@ export const getAdminAnalytics = async (params?: { period?: string }): Promise<a
   const qs = new URLSearchParams();
   if (params?.period) qs.set('period', params.period);
   return apiFetch(`/admin/analytics?${qs.toString()}`);
+};
+
+export const getAdminAnalyticsSegments = async (params?: { period?: string }): Promise<any> => {
+  const qs = new URLSearchParams();
+  if (params?.period) qs.set('period', params.period);
+  return apiFetch(`/admin/analytics/segments?${qs.toString()}`);
+};
+
+export const getAdminInsights = async (params?: { period?: string }): Promise<any> => {
+  const qs = new URLSearchParams();
+  if (params?.period) qs.set('period', params.period);
+  return apiFetch(`/admin/insights?${qs.toString()}`);
 };
 
 export const getAdminActivity = async (params?: { limit?: number }): Promise<any> => {
@@ -472,6 +637,38 @@ export const adminSendNotification = async (title: string, body: string, target:
 
 export const adminDeleteNotification = async (id: string): Promise<any> => {
   return apiFetch(`/notifications/${id}`, { method: 'DELETE' });
+};
+
+// --- Web Push ---
+export const getPushPublicKey = async (): Promise<string | null> => {
+  try {
+    const res = await fetch('/api/push/vapid-public-key', { method: 'GET' });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.publicKey || null;
+  } catch { return null; }
+};
+
+export const subscribeToPush = async (subscription: PushSubscription): Promise<boolean> => {
+  try {
+    const res = await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscription: subscription.toJSON() }),
+    });
+    return res.ok;
+  } catch { return false; }
+};
+
+export const unsubscribeFromPush = async (subscription: PushSubscription): Promise<boolean> => {
+  try {
+    const res = await fetch('/api/push/unsubscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint: subscription.endpoint }),
+    });
+    return res.ok;
+  } catch { return false; }
 };
 
 // --- Save All (legacy compatibility) ---

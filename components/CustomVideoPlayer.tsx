@@ -1,6 +1,7 @@
 
 import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { getVideoStream } from '../services/api';
+import { enterBackgroundVideo } from '../services/backgroundPlayback';
 import { toPersianDigits } from '../utils/helpers';
 
 interface Quality {
@@ -27,6 +28,7 @@ export interface CustomVideoPlayerHandle {
   togglePlay: () => void;
   getCurrentTime: () => number;
   isPaused: () => boolean;
+  enterBackground: () => Promise<boolean>;
 }
 
 const CustomVideoPlayer = forwardRef<CustomVideoPlayerHandle, CustomVideoPlayerProps>(({
@@ -57,6 +59,9 @@ const CustomVideoPlayer = forwardRef<CustomVideoPlayerHandle, CustomVideoPlayerP
     },
     isPaused: () => {
       return videoRef.current?.paused ?? true;
+    },
+    enterBackground: () => {
+      return enterBackgroundVideo(videoRef.current);
     }
   }));
 

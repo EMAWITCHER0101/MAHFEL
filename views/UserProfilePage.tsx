@@ -1,8 +1,43 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, Podcast, Video, Post } from '../types';
+import { User, Podcast, Video, Post, PublishedBook } from '../types';
 import { toPersianDigits } from '../utils/helpers';
 import { getPosts, updateProfile } from '../services/api';
+import { getPushEnabled, isPushSecureContext, toggleWebPush, syncWebPushSubscription } from '../services/webPush';
+
+const PushToggleButton = () => {
+    const [enabled, setEnabled] = useState(false);
+    const [busy, setBusy] = useState(false);
+
+    useEffect(() => { setEnabled(getPushEnabled()); }, []);
+
+    const handleClick = async () => {
+        if (busy) return;
+        setBusy(true);
+        try {
+            const next = await toggleWebPush();
+            setEnabled(next);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <button onClick={handleClick} disabled={busy}
+            className="w-full text-right p-4 rounded-3xl hover:bg-gray-50 transition-colors flex items-center gap-4 bg-white border border-gray-100 shadow-sm group">
+            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform ${enabled ? 'bg-emerald-500/10 text-emerald-600' : 'bg-primary/10 text-primary'}`}>
+                <i className={`fas ${enabled ? 'fa-bell' : 'fa-bell-slash'} text-sm`}></i>
+            </div>
+            <div className="flex-1">
+                <span className="font-black text-gray-700 text-sm">اعلان‌های سیستم</span>
+                <p className="text-[10px] text-gray-400 font-bold mt-0.5">{enabled ? 'فعال — روی گوشی شما نمایش داده می‌شود' : 'غیرفعال — نوتفیکیشن به گوشی می‌آید'}</p>
+            </div>
+            <div className={`w-11 h-6 rounded-full transition-colors relative flex-shrink-0 ${enabled ? 'bg-emerald-500' : 'bg-gray-300'}`}>
+                <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${enabled ? 'left-0.5' : 'left-[22px]'}`}></div>
+            </div>
+        </button>
+    );
+};
 
 interface UserProfilePageProps {
   onClose: () => void;
@@ -16,15 +51,28 @@ interface UserProfilePageProps {
   onDeletePost?: (postId: number) => void;
   onUpdateUser?: (user: User) => void;
   onOpenAdmin?: () => void;
+  myNotes?: PublishedBook[];
+  onSaveNote?: (data: { title: string; content: string; isDraft: boolean }) => Promise<PublishedBook | null>;
+  onUpdateNote?: (id: string, data: { title: string; content: string; isDraft?: boolean }) => Promise<PublishedBook | null>;
+  onDeleteNote?: (id: string) => Promise<boolean>;
+  onRepostToMahfel?: (note: PublishedBook) => Promise<void> | void;
+  viewAuthor?: { name: string; avatar?: string; authorId?: string } | null;
+  authorNotes?: PublishedBook[];
 }
 
-const UserProfilePage: React.FC<UserProfilePageProps> = ({ onClose, onLogout, user, allPodcasts, allVideos, onPlayPodcast, onPlayVideo, onEditPost, onDeletePost, onUpdateUser, onOpenAdmin }) => {
+const UserProfilePage: React.FC<UserProfilePageProps> = ({ onClose, onLogout, user, allPodcasts, allVideos, onPlayPodcast, onPlayVideo, onEditPost, onDeletePost, onUpdateUser, onOpenAdmin, myNotes, onSaveNote, onUpdateNote, onDeleteNote, onRepostToMahfel, viewAuthor, authorNotes }) => {
     const [view, setView] = useState<'main' | 'library' | 'myPosts' | 'editProfile'>('main');
     const [myPosts, setMyPosts] = useState<Post[]>([]);
     const [editName, setEditName] = useState(user.name);
     const [editPhone, setEditPhone] = useState(user.phoneNumber);
     const [editAvatar, setEditAvatar] = useState(user.avatar || '');
     const [isSaving, setIsSaving] = useState(false);
+    const [composerNote, setComposerNote] = useState<{ open: boolean; note?: PublishedBook }>({ open: false });
+    const [pushUnsupported, setPushUnsupported] = useState(false);
+
+    useEffect(() => { if (!isPushSecureContext()) setPushUnsupported(true); }, []);
+
+    useEffect(() => { setView('main'); }, [viewAuthor]);
     
     const maskedPhoneNumber = user.phoneNumber 
       ? `${user.phoneNumber.substring(0, 4)}****${user.phoneNumber.substring(8)}`
@@ -58,13 +106,47 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ onClose, onLogout, us
                                 <i className="fas fa-arrow-right"></i>
                             </button>
                         )}
-                        <h2 className="font-black text-gray-800">{view === 'main' ? 'پروفایل من' : view === 'library' ? 'کتابخانه من' : view === 'editProfile' ? 'ویرایش پروفایل' : 'یادداشت‌های من'}</h2>
+                        <h2 className="font-black text-gray-800">{viewAuthor ? `پروفایل ${viewAuthor.name}` : view === 'main' ? 'پروفایل من' : view === 'library' ? 'کتابخانه من' : view === 'editProfile' ? 'ویرایش پروفایل' : 'یادداشت‌های من'}</h2>
                     </div>
                     <button onClick={onClose} className="text-gray-300 text-2xl w-8 h-8 rounded-full hover:bg-gray-100">&times;</button>
                 </header>
                 
                 <main className="flex-grow overflow-y-auto no-scrollbar pb-10">
-                    {view === 'main' ? (
+                    {viewAuthor ? (
+                        <>
+                            <div className="flex flex-col items-center py-8 bg-white border-b border-gray-50 mb-6">
+                                <div className="w-24 h-24 rounded-[2rem] bg-primary flex items-center justify-center text-white text-5xl font-bold mb-4 overflow-hidden border-4 border-white shadow-xl rotate-3">
+                                    {viewAuthor.avatar ? <img src={viewAuthor.avatar} className="w-full h-full object-cover" /> : <i className="fas fa-user"></i>}
+                                </div>
+                                <p className="text-lg font-black text-gray-800">{viewAuthor.name}</p>
+                                <div className="mt-4">
+                                    <div className="bg-primary/10 text-primary px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-primary/20">
+                                        ✍️ نویسنده سرای هنر و اندیشه
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="px-6 space-y-3 pb-4">
+                                <div className="flex items-center justify-between mb-1">
+                                    <h4 className="font-black text-primary text-[10px] uppercase tracking-widest border-r-4 border-primary pr-3">یادداشت‌های عمومی ({toPersianDigits(authorNotes?.length || 0)})</h4>
+                                </div>
+                                {(authorNotes || []).length === 0 ? (
+                                    <div className="text-center py-12 text-gray-300">
+                                        <i className="fas fa-feather-alt text-4xl mb-3" />
+                                        <p className="text-[10px] font-bold">این نویسنده هنوز یادداشتی منتشر نکرده است</p>
+                                    </div>
+                                ) : (authorNotes || []).map(note => (
+                                    <div key={note.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                                        <span className="text-[11px] font-black text-gray-700 block mb-1">{note.title}</span>
+                                        <p className="text-[10px] text-gray-400 leading-relaxed line-clamp-2 text-right mb-2">{note.description?.replace(/<[^>]*>/g, '') || '...'}</p>
+                                        <div className="flex items-center gap-3 text-[9px] text-gray-300 font-bold">
+                                            {note.date && <span><i className="fas fa-calendar-alt text-gray-200 ml-1" />{note.date}</span>}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </>
+                    ) : view === 'main' ? (
                         <>
                             <div className="flex flex-col items-center py-8 bg-white border-b border-gray-50 mb-6">
                                 <div className="w-24 h-24 rounded-[2rem] bg-primary flex items-center justify-center text-white text-5xl font-bold mb-4 overflow-hidden border-4 border-white shadow-xl rotate-3">
@@ -108,6 +190,10 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ onClose, onLogout, us
                                     <i className="fas fa-chevron-left text-gray-200"></i>
                                 </button>
 
+                                <PushToggleButton /> {pushUnsupported && (
+                                    <p className="text-[9px] text-gray-400 font-bold px-2 -mt-2">برای دریافت اعلان، سایت باید روی HTTPS باز شود</p>
+                                )}
+
                                 {isAuthor && (
                                     <button onClick={() => setView('myPosts')} className="w-full text-right p-4 rounded-3xl hover:bg-gray-50 transition-colors flex items-center gap-4 bg-white border border-gray-100 shadow-sm group">
                                         <div className="w-10 h-10 rounded-2xl bg-secondary/10 text-secondary flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
@@ -148,8 +234,54 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ onClose, onLogout, us
                         </>
                     ) : view === 'myPosts' ? (
                         <div className="p-6 space-y-4 animate-fadeIn">
+                            {isAuthor && (
+                                <button onClick={() => setComposerNote({ open: true, note: undefined })} className="w-full py-3 rounded-2xl text-[11px] font-black text-white transition-all active:scale-95 shadow-lg bg-gradient-to-l from-primary to-secondary flex items-center justify-center gap-2 mb-4">
+                                    <i className="fas fa-pen-nib" /> نوشتن یادداشت جدید
+                                </button>
+                            )}
+
+                            {/* My Notes (PublishedBook type=note) */}
+                            {isAuthor && myNotes && myNotes.length > 0 && (
+                                <div className="mb-2">
+                                    <h4 className="font-black text-primary text-[10px] uppercase tracking-widest border-r-4 border-primary pr-3 mb-3">یادداشت‌های نشر ({toPersianDigits(myNotes.length)})</h4>
+                                    <div className="space-y-3">
+                                        {myNotes.map(note => (
+                                            <div key={note.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <span className="text-[10px] font-black text-gray-700">{note.title}</span>
+                                                    {note.isDraft ? (
+                                                        <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200">پیش‌نویس</span>
+                                                    ) : (
+                                                        <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200">منتشر شده</span>
+                                                    )}
+                                                </div>
+                                                <p className="text-[10px] text-gray-400 leading-relaxed line-clamp-2 mb-3 text-right">{note.description?.replace(/<[^>]*>/g, '') || '...'}</p>
+                                                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-50">
+                                                    {note.isDraft && onUpdateNote && (
+                                                        <button onClick={() => onUpdateNote(String(note.id), { title: note.title || '', content: note.contentHtml || note.description || '', isDraft: false })} className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 hover:bg-emerald-50 transition-colors px-2 py-1 rounded-lg flex-1 justify-center">
+                                                            <i className="fas fa-send" /> انتشار
+                                                        </button>
+                                                    )}
+                                                    <button onClick={() => setComposerNote({ open: true, note })} className="flex items-center gap-1 text-[10px] font-bold text-primary hover:bg-primary/5 transition-colors px-2 py-1 rounded-lg flex-1 justify-center">
+                                                        <i className="fas fa-edit" /> ویرایش
+                                                    </button>
+                                                    <button onClick={() => { if (confirm('این یادداشت حذف شود؟')) onDeleteNote?.(String(note.id)); }} className="flex items-center gap-1 text-[10px] font-bold text-red-400 hover:bg-red-50 transition-colors px-2 py-1 rounded-lg flex-1 justify-center">
+                                                        <i className="fas fa-trash" /> حذف
+                                                    </button>
+                                                    {!note.isDraft && onRepostToMahfel && (
+                                                        <button onClick={() => onRepostToMahfel(note)} className="flex items-center gap-1 text-[10px] font-bold text-secondary hover:bg-secondary/10 transition-colors px-2 py-1 rounded-lg flex-1 justify-center">
+                                                            <i className="fas fa-paper-plane" /> بازنشر در محفل
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="flex items-center justify-between mb-2">
-                                <h4 className="font-black text-secondary text-[10px] uppercase tracking-widest border-r-4 border-secondary pr-3">یادداشت‌های من ({toPersianDigits(myPosts.length)})</h4>
+                                <h4 className="font-black text-secondary text-[10px] uppercase tracking-widest border-r-4 border-secondary pr-3">پست‌های محفل من ({toPersianDigits(myPosts.length)})</h4>
                             </div>
                             {myPosts.length === 0 ? (
                                 <div className="text-center py-12 text-gray-300">
@@ -310,6 +442,74 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ onClose, onLogout, us
                         خروج از حساب کاربری
                     </button>
                 </footer>
+
+                {composerNote.open && isAuthor && (
+                    <NoteComposer
+                        note={composerNote.note}
+                        onSave={onSaveNote}
+                        onUpdate={onUpdateNote}
+                        onDelete={onDeleteNote}
+                        onClose={() => setComposerNote({ open: false })}
+                    />
+                )}
+            </div>
+        </div>
+    );
+};
+
+const NoteComposer: React.FC<{
+    note?: PublishedBook;
+    onSave?: (data: { title: string; content: string; isDraft: boolean }) => Promise<PublishedBook | null>;
+    onUpdate?: (id: string, data: { title: string; content: string; isDraft?: boolean }) => Promise<PublishedBook | null>;
+    onDelete?: (id: string) => Promise<boolean>;
+    onClose: () => void;
+}> = ({ note, onSave, onUpdate, onDelete, onClose }) => {
+    const [title, setTitle] = useState(note?.title || '');
+    const [content, setContent] = useState(note?.contentHtml || note?.description || '');
+    const [saving, setSaving] = useState(false);
+
+    return (
+        <div className="fixed inset-0 bg-black/60 z-[1100] flex items-end sm:items-center sm:justify-center p-0 sm:p-4 backdrop-blur-md animate-fadeIn" onClick={onClose}>
+            <div className="bg-white rounded-t-[2.5rem] sm:rounded-[2rem] shadow-2xl w-full max-w-md p-6 animate-slideInUp" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-4">
+                    <h4 className="font-black text-gray-800 text-sm">{note ? 'ویرایش یادداشت' : 'یادداشت جدید'}</h4>
+                    <button onClick={onClose} className="text-gray-300 text-2xl w-8 h-8 rounded-full hover:bg-gray-100">&times;</button>
+                </div>
+                <input value={title} onChange={e => setTitle(e.target.value)} placeholder="عنوان یادداشت" className="w-full px-4 py-3 rounded-2xl bg-gray-50 border border-gray-100 text-xs font-bold text-gray-700 outline-none focus:border-primary transition-colors mb-3" />
+                <textarea value={content} onChange={e => setContent(e.target.value)} placeholder="متن یادداشت..." rows={8} className="w-full px-4 py-3 rounded-2xl bg-gray-50 border border-gray-100 text-xs font-medium text-gray-700 outline-none focus:border-primary transition-colors resize-none leading-6 mb-4" />
+                <div className="flex gap-2">
+                    <button onClick={async () => {
+                        if (!title.trim() || !content.trim() || saving) return;
+                        setSaving(true);
+                        if (note && onUpdate) {
+                            await onUpdate(String(note.id), { title, content, isDraft: true });
+                        } else {
+                            await onSave?.({ title, content, isDraft: true });
+                        }
+                        setSaving(false);
+                        onClose();
+                    }} disabled={!title.trim() || !content.trim() || saving} className="flex-1 py-3 rounded-2xl text-[11px] font-black text-gray-600 bg-gray-100 hover:bg-gray-200 transition-all active:scale-95 disabled:opacity-30">
+                        <i className="fas fa-lock ml-1.5 text-[9px]" /> ذخیره پیش‌نویس
+                    </button>
+                    <button onClick={async () => {
+                        if (!title.trim() || !content.trim() || saving) return;
+                        setSaving(true);
+                        if (note && onUpdate) {
+                            await onUpdate(String(note.id), { title, content, isDraft: false });
+                        } else {
+                            await onSave?.({ title, content, isDraft: false });
+                        }
+                        setSaving(false);
+                        onClose();
+                    }} disabled={!title.trim() || !content.trim() || saving} className="flex-1 py-3 rounded-2xl text-[11px] font-black text-white bg-gradient-to-l from-primary to-secondary hover:opacity-90 transition-all active:scale-95 disabled:opacity-30 shadow-lg">
+                        <i className="fas fa-paper-plane ml-1.5 text-[9px]" /> انتشار در صفحه نشر
+                    </button>
+                </div>
+                {note && onDelete && (
+                    <button onClick={async () => { if (confirm('این یادداشت حذف شود؟') && await onDelete(String(note.id))) onClose(); }} className="w-full mt-3 py-2.5 rounded-2xl text-[10px] font-black text-red-500 bg-red-50 hover:bg-red-100 transition-all active:scale-95">
+                        <i className="fas fa-trash ml-1.5" /> حذف یادداشت
+                    </button>
+                )}
             </div>
         </div>
     );

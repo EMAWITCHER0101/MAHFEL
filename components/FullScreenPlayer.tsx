@@ -36,6 +36,7 @@ interface FullScreenPlayerProps {
   sleepTimer: number | null;
   onSleepTimer: (t: number | null) => void;
   onPlayEpisode: (podcast: Podcast, idx: number) => void;
+  onPlayInBackground: () => void;
   activeTab: Page;
   onTabChange: (tab: Page) => void;
   theme: 'light' | 'dark';
@@ -55,7 +56,7 @@ const SLEEP_OPTIONS = [
 ];
 
 const FullScreenPlayer: React.FC<FullScreenPlayerProps> = ({
-  track, isPlaying, progress, duration, authors, onPlayPause, onSeek, onMinimize, onClose, onNext, onPrev,
+  track, isPlaying, progress, duration, authors, onPlayPause, onSeek, onMinimize, onClose, onNext, onPrev, onPlayInBackground,
   comments, onAddComment, onDeleteComment, onUpdateComment, onLikeComment, currentUserName,
   playbackRate, onPlaybackRateChange, onOpenFile, onShowInstantView, isInLibrary, onToggleLibrary,
   volume, onVolumeChange, repeatMode, onRepeatModeChange, isShuffle, onShuffleToggle, sleepTimer, onSleepTimer,
@@ -211,6 +212,13 @@ const FullScreenPlayer: React.FC<FullScreenPlayerProps> = ({
           </button>
           <button onClick={onPrev} className={`${isDark ? 'text-white/50 hover:text-white' : 'text-gray-400 hover:text-gray-900'} active:scale-90 transition-all text-lg lg:text-sm`}><i className="fas fa-backward-step"></i></button>
         </div>
+
+        {/* Play in background (mobile) */}
+        <button onClick={onPlayInBackground}
+          className={`relative z-10 mx-auto mt-3 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[10px] font-black transition-all active:scale-95 ${isDark ? 'bg-white/[0.06] text-white/70 hover:bg-white/[0.1] border border-white/[0.08]' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'}`}>
+          <i className="fas fa-compact-disc text-[10px]" style={{ color: '#06b6d4' }}></i>
+          پخش در پس‌زمینه
+        </button>
 
         {/* Extras single row */}
         <div className="relative z-10 flex items-center justify-center gap-3 px-4 mt-4 w-full">
@@ -469,6 +477,10 @@ const FullScreenPlayer: React.FC<FullScreenPlayerProps> = ({
               <button onClick={() => setShowQueue(true)} className={`w-8 h-8 rounded-lg flex items-center justify-center ${isDark ? 'text-white/25 hover:text-white/50' : 'text-gray-400 hover:text-gray-900'} transition-all text-[10px]`}><i className="fas fa-list"></i></button>
               <button onClick={onToggleLibrary} className={'w-8 h-8 rounded-lg flex items-center justify-center transition-all text-[10px] ' + (isInLibrary ? 'text-primary' : (isDark ? 'text-white/25 hover:text-white/50' : 'text-gray-400 hover:text-gray-900'))}>
                 <i className={`${isInLibrary ? 'fas' : 'far'} fa-bookmark`}></i>
+              </button>
+              <button onClick={onPlayInBackground} className={`flex items-center gap-1.5 h-8 px-3 rounded-lg transition-all text-[10px] font-black ${isDark ? 'text-white/40 hover:text-white border border-white/[0.08] bg-white/[0.04]' : 'text-gray-500 hover:text-gray-900 border border-gray-200 bg-gray-50'}`}>
+                <i className="fas fa-compact-disc text-[10px]" style={{ color: '#06b6d4' }}></i>
+                پس‌زمینه
               </button>
               {hasStudyText && (
                 <button onClick={() => onShowInstantView(String(episode.title), String(episode.fullText || ''))} className={`w-8 h-8 rounded-lg flex items-center justify-center ${isDark ? 'text-white/25 hover:text-white/50' : 'text-gray-400 hover:text-gray-900'} transition-all text-[10px]`}>

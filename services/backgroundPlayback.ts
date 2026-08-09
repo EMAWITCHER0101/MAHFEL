@@ -6,6 +6,19 @@ interface BridgeLike {
   showNotification?: (title: string, body: string) => void;
 }
 
+export interface BackgroundMediaMeta {
+  title: string;
+  artist?: string;
+  album?: string;
+  artwork?: string;
+  duration?: number;
+  onPlay?: () => void;
+  onPause?: () => void;
+  onSeek?: (time: number) => void;
+  onNext?: () => void;
+  onPrev?: () => void;
+}
+
 let bridge: BridgeLike | null = null;
 let activeVideo: HTMLVideoElement | null = null;
 let audioPlaying = false;
@@ -41,6 +54,65 @@ const stopServiceIfIdle = () => {
   }
 };
 
+/* ---------- دکمه: پخش در پسزمینه (صوت) ---------- */
+const applyMediaSession = (meta: BackgroundMediaMeta) => {
+  try {
+    const ms = (navigator as any).mediaSession;
+    if (!ms) return;
+    ms.metadata = new (window as any).MediaMetadata({
+      title: meta.title || '',
+      artist: meta.artist || 'محفل',
+      album: meta.album || '',
+      artwork: meta.artwork ? [{ src: meta.artwork, sizes: '512x512', type: 'image/jpeg' }] : [],
+    });
+    const setHandler = (action: string, fn: (() => void) | null) => {
+      try { ms.setActionHandler(action, fn); } catch { /* unsupported action */ }
+    };
+    setHandler('play', () => meta.onPlay?.());
+    setHandler('pause', () => meta.onPause?.());
+    setHandler('seekto', (details: any) => { if (details && typeof details.seekTime === 'number') meta.onSeek?.(details.seekTime); });
+    setHandler('nexttrack', () => meta.onNext?.());
+    setHandler('previoustrack', () => meta.onPrev?.());
+  } catch { /* ignore */ }
+};
+
+export const playInBackgroundAudio = (meta: BackgroundMediaMeta) => {
+  audioPlaying = true;
+  applyMediaSession(meta);
+  const b = getBridge();
+  if (b) {
+    try { b.startPlayback?.('audio'); } catch { /* ignore */ }
+    if (meta.title) { try { b.showNotification?.('پخش در پسزمینه', meta.title); } catch { /* ignore */ } }
+  }
+};
+
+export const stopBackgroundAudio = () => {
+  audioPlaying = false;
+  stopServiceIfIdle();
+};
+
+/* ---------- دکمه: پخش در پسزمینه (ویدیو / PiP) ---------- */
+export const enterBackgroundVideo = async (videoEl: HTMLVideoElement | null): Promise<boolean> => {
+  if (!videoEl) return false;
+  activeVideo = videoEl;
+  const b = getBridge();
+  if (b && !document.pictureInPictureElement) {
+    try { b.enterPip?.(); } catch { /* ignore */ }
+    return true;
+  }
+  if (typeof document !== 'undefined' && (document as any).pictureInPictureEnabled && !videoInPip()) {
+    try {
+      await (videoEl as any).requestPictureInPicture?.();
+      return true;
+    } catch { return false; }
+  }
+  if (b) {
+    try { b.enterPip?.(); return true; } catch { /* ignore */ }
+  }
+  return false;
+};
+
+/* ---------- خودکار قبلی (محفوظ برای سازگاری) ---------- */
 export const initBackgroundPlayback = () => {
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
 

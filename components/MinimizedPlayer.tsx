@@ -15,6 +15,7 @@ interface MinimizedPlayerProps {
   isVisible: boolean;
   isInLibrary?: boolean;
   onToggleLibrary: () => void;
+  onPlayInBackground?: () => void;
   bottomOffset?: number;
   variant?: 'fixed' | 'inline';
   theme?: 'light' | 'dark';
@@ -27,7 +28,7 @@ const toPersianDigits = (num: number) => {
 
 const MinimizedPlayer: React.FC<MinimizedPlayerProps> = ({
   track, isPlaying, progress, onPlayPause, onNext, onPrev, onExpand, onClose, onSelectPodcast, isVisible,
-  isInLibrary, onToggleLibrary, bottomOffset = 0, variant = 'fixed', theme = 'dark',
+  isInLibrary, onToggleLibrary, onPlayInBackground, bottomOffset = 0, variant = 'fixed', theme = 'dark',
 }) => {
   const isDark = theme === 'dark';
   const coverUrl = track.episode.cover || track.podcast.cover || DEFAULT_COVER;
@@ -142,6 +143,13 @@ const MinimizedPlayer: React.FC<MinimizedPlayerProps> = ({
               className={`w-8 h-8 rounded-xl flex items-center justify-center active:scale-90 transition-all text-xs cursor-pointer select-none ${isInLibrary ? 'text-primary' : (isDark ? 'text-white/40 hover:text-white hover:bg-white/[0.06]' : 'text-gray-400 hover:text-gray-900 hover:bg-gray-100')}`}>
               <i className={`${isInLibrary ? 'fas' : 'far'} fa-bookmark`}></i>
             </span>
+            {onPlayInBackground && (
+            <span onMouseDown={e => { e.stopPropagation(); onPlayInBackground!(); }}
+              className={`w-8 h-8 rounded-xl flex items-center justify-center active:scale-90 transition-all text-xs cursor-pointer select-none ${isDark ? 'text-white/40 hover:text-white hover:bg-white/[0.06]' : 'text-gray-400 hover:text-gray-900 hover:bg-gray-100'}`}
+              role="button" aria-label="پخش در پس‌زمینه">
+              <i className="fas fa-compact-disc" style={{ color: '#06b6d4' }}></i>
+            </span>
+            )}
             <span onMouseDown={e => { e.stopPropagation(); onClose(); }}
               className={`w-8 h-8 rounded-xl flex items-center justify-center ${isDark ? 'text-white/20 hover:text-white/50 hover:bg-white/[0.06]' : 'text-gray-300 hover:text-gray-600 hover:bg-gray-100'} active:scale-90 transition-all text-[10px] cursor-pointer select-none`}>
               <i className="fas fa-times"></i>
@@ -220,6 +228,13 @@ const MinimizedPlayer: React.FC<MinimizedPlayerProps> = ({
                 role="button" aria-label="ذخیره">
                 <i className={`${isInLibrary ? 'fas' : 'far'} fa-bookmark`}></i>
               </span>
+              {onPlayInBackground && (
+              <span onMouseDown={e => { e.stopPropagation(); onPlayInBackground!(); }}
+                className={`w-9 h-9 lg:w-8 lg:h-8 rounded-xl flex items-center justify-center active:scale-90 transition-all text-sm lg:text-xs cursor-pointer select-none ${isDark ? 'text-white/40 hover:text-white hover:bg-white/[0.06]' : 'text-gray-400 hover:text-gray-900 hover:bg-gray-100'}`}
+                role="button" aria-label="پخش در پس‌زمینه">
+                <i className="fas fa-compact-disc" style={{ color: '#06b6d4' }}></i>
+              </span>
+              )}
               <span onMouseDown={e => { e.stopPropagation(); onClose(); }}
                 className={`w-8 h-8 lg:w-7 lg:h-7 rounded-xl flex items-center justify-center ${isDark ? 'text-white/20 hover:text-white/50 hover:bg-white/[0.06]' : 'text-gray-300 hover:text-gray-600 hover:bg-gray-100'} active:scale-90 transition-all text-[10px] lg:text-[10px] cursor-pointer select-none`}
                 role="button" aria-label="بستن">

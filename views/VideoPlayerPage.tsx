@@ -99,6 +99,7 @@ const VideoPlayerPage: React.FC<VideoPlayerPageProps> = (props) => {
     setCommentText('');
     setReplyTo(null);
     setCurrentTime(0);
+    import('../services/api').then(m => m.recordVideoView(String(video.id || (video as any)._id || '')));
     const pendingTs = (window as any).__pendingVideoTimestamp;
     if (pendingTs !== undefined && pendingTs !== null) {
       delete (window as any).__pendingVideoTimestamp;
@@ -543,6 +544,18 @@ const VideoPlayerPage: React.FC<VideoPlayerPageProps> = (props) => {
                 <i className="fas fa-arrow-right" style={{ fontSize: 14 }} />
               </button>
             </div>
+            <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 50 }}>
+              <button onClick={() => { videoPlayerRef.current?.enterBackground().then(ok => { if (!ok && (window as any).AndroidBridge) { (window as any).AndroidBridge.enterPip?.(); } }).catch(() => {}); }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: 44, borderRadius: 16,
+                  background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(12px)', color: 'rgba(255,255,255,0.85)',
+                  border: '1px solid rgba(255,255,255,0.12)', cursor: 'pointer', fontWeight: 700, fontSize: 12.5,
+                }}
+                title="پخش در پس‌زمینه">
+                <i className="fas fa-compact-disc" style={{ fontSize: 12, color: '#06b6d4' }} />
+                پخش در پس‌زمینه
+              </button>
+            </div>
             <div style={{ width: '100%', aspectRatio: '16/9', position: 'relative' }}>{videoPlayerElement}
               {seekLoading && (
                 <div style={{ position: 'absolute', inset: 0, zIndex: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}>
@@ -753,6 +766,14 @@ const VideoPlayerPage: React.FC<VideoPlayerPageProps> = (props) => {
               className="w-10 h-10 rounded-2xl bg-black/50 backdrop-blur-md flex items-center justify-center text-white/80 hover:text-white hover:bg-black/70 transition-all border border-white/10 hover:scale-105 active:scale-95"
               title="بازگشت">
               <i className="fas fa-arrow-right text-xs" />
+            </button>
+          </div>
+          <div className="absolute top-3 left-3 z-50 flex items-center gap-2">
+            <button onClick={() => { videoPlayerRef.current?.enterBackground().then(ok => { if (!ok && (window as any).AndroidBridge) { (window as any).AndroidBridge.enterPip?.(); } }).catch(() => {}); }}
+              className="h-10 px-3.5 rounded-2xl bg-black/50 backdrop-blur-md flex items-center gap-1.5 text-white/85 hover:text-white hover:bg-black/70 transition-all border border-white/10 active:scale-95 font-bold text-[11px]"
+              title="پخش در پس‌زمینه">
+              <i className="fas fa-compact-disc text-xs" style={{ color: '#06b6d4' }} />
+              پس‌زمینه
             </button>
           </div>
           <div className="w-full aspect-video relative">{videoPlayerElement}

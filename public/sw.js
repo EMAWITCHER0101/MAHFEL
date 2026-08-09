@@ -41,3 +41,37 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: 'محفل', body: 'اعلان جدید' };
+  }
+  const title = data.title || 'محفل';
+  const options = {
+    body: data.body || '',
+    icon: data.icon || '/logo.png',
+    badge: '/logo.png',
+    data: { url: data.url || '/' },
+    vibrate: [100, 50, 100],
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if ('focus' in client && url.includes(new URL(client.url).origin)) {
+          client.navigate(url).catch(() => {});
+          return client.focus();
+        }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(url);
+    })
+  );
+});
