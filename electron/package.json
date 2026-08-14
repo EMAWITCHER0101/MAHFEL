@@ -1,0 +1,49 @@
+{
+  "name": "mahfel-desktop",
+  "version": "1.0.0",
+  "description": "Mahfel - Desktop WebView app",
+  "main": "main.js",
+  "author": "Mahfel",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis --x64"
+  },
+  "build": {
+    "appId": "com.mahfel.app",
+    "productName": "Mahfel",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "logo.png"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "logo.png"
+    },
+    "nsis": {
+      "artifactName": "Mahfel-Setup-${version}.exe",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "محفل",
+      "installerIcon": "logo.ico",
+      "uninstallerIcon": "logo.ico",
+      "installerHeaderIcon": "logo.ico",
+      "include": "installer.nsh"
+    }
+  },
+  "devDependencies": {
+    "electron": "^22.3.27",
+    "electron-builder": "^24.13.3"
+  }
+}
