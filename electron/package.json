@@ -1,6 +1,6 @@
 {
   "name": "mahfel-desktop",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Mahfel - Desktop WebView app",
   "main": "main.js",
   "author": "Mahfel",
@@ -17,6 +17,7 @@
     },
     "files": [
       "main.js",
+      "preload.js",
       "logo.png"
     ],
     "win": {

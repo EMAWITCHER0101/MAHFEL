@@ -10,6 +10,9 @@ export interface Order {
   totalPrice: number;
   paymentMethod: string;
   cardLast4?: string;
+  transferDate?: string;
+  transferTime?: string;
+  trackingCode?: string;
   date: string;
   status: 'confirmed' | 'pending' | 'cancelled';
 }
@@ -251,6 +254,28 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ orders, publishedBooks, onBack,
                       </div>
                       <span className="text-[11px] font-black tabular-nums" style={{ color: 'var(--text)' }}>{toPersianDigits(order.totalPrice.toLocaleString('fa-IR'))} <span className="text-[9px] font-bold" style={{ color: 'var(--text-3)' }}>تومان</span></span>
                     </div>
+
+                    {/* Transfer info + pending note */}
+                    {isExpanded && order.paymentMethod === 'card-to-card' && (
+                      <div className="px-4 pb-4 space-y-2 animate-fadeIn">
+                        {order.status === 'pending' && (
+                          <div className="p-3 rounded-xl flex items-center gap-2.5" style={{ background: 'color-mix(in srgb, #f59e0b 10%, var(--surface))', border: '1px solid color-mix(in srgb, #f59e0b 20%, var(--border))' }}>
+                            <i className="fas fa-hourglass-half text-[10px]" style={{ color: '#f59e0b' }} />
+                            <p className="text-[10px] font-black" style={{ color: '#b45309' }}>در انتظار بررسی و تایید ادمین — پس از تایید، کتاب قابل مطالعه می‌شود</p>
+                          </div>
+                        )}
+                        {(order.transferDate || order.transferTime) && (
+                          <div className="p-3 rounded-xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                            <p className="text-[9px] font-black mb-1.5" style={{ color: 'var(--text-3)' }}><i className="fas fa-receipt text-[7px] ml-1" />اطلاعات انتقال ثبت‌شده</p>
+                            <div className="grid grid-cols-2 gap-y-1.5 text-[10px] font-bold" style={{ color: 'var(--text-2)' }}>
+                              {order.transferDate && <span>تاریخ: {toPersianDigits(order.transferDate)}</span>}
+                              {order.transferTime && <span>ساعت: {toPersianDigits(order.transferTime)}</span>}
+                              {order.trackingCode && <span className="col-span-2" dir="ltr">کد پیگیری: <span className="font-mono">{toPersianDigits(order.trackingCode)}</span></span>}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}

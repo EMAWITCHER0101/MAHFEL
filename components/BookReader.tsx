@@ -30,8 +30,23 @@ const BookReader: React.FC<BookReaderProps> = ({ book, onClose, startPage }) => 
   const [flipDirection, setFlipDirection] = useState<'next' | 'prev'>('next');
   const [showMenu, setShowMenu] = useState(false);
   const [showBrightness, setShowBrightness] = useState(false);
-  const [brightness, setBrightness] = useState(100);
-  const [bgColor, setBgColor] = useState('#1a1a1a');
+  const [brightness, setBrightness] = useState(() => {
+    try { return Number(localStorage.getItem('soha_reader_brightness') || '100') || 100; } catch { return 100; }
+  });
+  const [bgColor, setBgColor] = useState(() => {
+    try { return localStorage.getItem('soha_reader_bg') || '#1a1a1a'; } catch { return '#1a1a1a'; }
+  });
+  const [fontSize, setFontSize] = useState(() => {
+    try { return Number(localStorage.getItem('soha_reader_font') || '14') || 14; } catch { return 14; }
+  });
+  const [bookmarks, setBookmarks] = useState<number[]>(() => {
+    try {
+      const progress: Array<{ bookTitle: string; bookmarks: number[] }> = JSON.parse(localStorage.getItem('soha_reading_progress') || '[]');
+      return progress.find(p => p.bookTitle === book.title)?.bookmarks || [];
+    } catch { return []; }
+  });
+  const [showJump, setShowJump] = useState(false);
+  const [jumpInput, setJumpInput] = useState('');
   const touchStartX = useRef(0);
   const touchEndX = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -40,6 +55,37 @@ const BookReader: React.FC<BookReaderProps> = ({ book, onClose, startPage }) => 
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = ''; };
   }, []);
+
+  // ذخیره تنظیمات مطالعه
+  useEffect(() => {
+    try { localStorage.setItem('soha_reader_brightness', String(brightness)); } catch {}
+  }, [brightness]);
+  useEffect(() => {
+    try { localStorage.setItem('soha_reader_bg', bgColor); } catch {}
+  }, [bgColor]);
+  useEffect(() => {
+    try { localStorage.setItem('soha_reader_font', String(fontSize)); } catch {}
+  }, [fontSize]);
+
+  const toggleBookmark = (pageIndex: number) => {
+    setBookmarks(prev => {
+      const next = prev.includes(pageIndex) ? prev.filter(p => p !== pageIndex) : [...prev, pageIndex].sort((a, b) => a - b);
+      try {
+        const existing: Array<{ bookTitle: string; currentPage: number; totalPages: number; lastRead: string; bookmarks: number[] }> = JSON.parse(localStorage.getItem('soha_reading_progress') || '[]');
+        const idx = existing.findIndex(p => p.bookTitle === book.title);
+        if (idx >= 0) { existing[idx].bookmarks = next; localStorage.setItem('soha_reading_progress', JSON.stringify(existing)); }
+      } catch {}
+      return next;
+    });
+  };
+
+  const jumpToPage = () => {
+    const target = Number(String(jumpInput).replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))));
+    if (!Number.isFinite(target) || target < 1 || target > totalPages) return;
+    flipToPage(target - 1);
+    setShowJump(false);
+    setJumpInput('');
+  };
 
   const generatePages = (): PageContent[] => {
     const pages: PageContent[] = [
@@ -196,7 +242,7 @@ const BookReader: React.FC<BookReaderProps> = ({ book, onClose, startPage }) => 
       case 'content':
         return (
           <div className="w-full h-full flex flex-col p-8 justify-center" style={{ color: textColor }}>
-            <div className="text-sm leading-[2.4] text-justify font-medium" style={{ textAlign: 'justify', lineHeight: '2.4' }}>
+            <div className="text-justify font-medium" style={{ textAlign: 'justify', lineHeight: 2.4, fontSize: fontSize }}>
               {p.text}
             </div>
             {/* Page number */}
@@ -238,6 +284,10 @@ const BookReader: React.FC<BookReaderProps> = ({ book, onClose, startPage }) => 
           <button onClick={() => setShowMenu(!showMenu)} className="w-10 h-10 rounded-2xl bg-black/30 backdrop-blur-md flex items-center justify-center transition-all active:scale-90 hover:bg-black/50 border border-white/10">
             <i className="fas fa-bars text-sm text-white/80" />
           </button>
+          <button onClick={() => toggleBookmark(currentPage)}
+            className={`w-10 h-10 rounded-2xl backdrop-blur-md flex items-center justify-center transition-all active:scale-90 border ${bookmarks.includes(currentPage) ? 'bg-amber-500/90 border-amber-300' : 'bg-black/30 hover:bg-black/50 border-white/10'}`}>
+            <i className={`fas fa-bookmark text-sm ${bookmarks.includes(currentPage) ? 'text-white' : 'text-white/80'}`} />
+          </button>
         </div>
       )}
 
@@ -256,6 +306,16 @@ const BookReader: React.FC<BookReaderProps> = ({ book, onClose, startPage }) => 
               <input type="range" min="50" max="150" value={brightness} onChange={e => setBrightness(Number(e.target.value))} className="w-full h-1 rounded-full appearance-none bg-white/20 accent-white/60" />
             </div>
 
+            {/* Font Size */}
+            <div className="p-3 rounded-2xl bg-white/5 border border-white/10">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-bold text-white/60">اندازه متن</span>
+                <span className="text-[9px] font-black text-white/40">{toPersianDigits(fontSize)}</span>
+              </div>
+              <input type="range" min="11" max="24" value={fontSize} onChange={e => setFontSize(Number(e.target.value))} className="w-full h-1 rounded-full appearance-none bg-white/20 accent-white/60" />
+              <div className="flex justify-between text-[8px] font-bold text-white/30 mt-1"><span>کوچک</span><span>بزرگ</span></div>
+            </div>
+
             {/* Background Colors */}
             <div className="p-3 rounded-2xl bg-white/5 border border-white/10">
               <p className="text-[10px] font-bold text-white/60 mb-2">رنگ صفحه</p>
@@ -264,6 +324,43 @@ const BookReader: React.FC<BookReaderProps> = ({ book, onClose, startPage }) => 
                   <button key={c.value} onClick={() => setBgColor(c.value)} className="w-8 h-8 rounded-full border-2 transition-all active:scale-90" style={{ background: c.value, borderColor: bgColor === c.value ? 'white' : 'rgba(255,255,255,0.1)' }} />
                 ))}
               </div>
+            </div>
+
+            {/* Jump to page */}
+            {showJump ? (
+              <div className="p-3 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-2">
+                <input autoFocus value={jumpInput} onChange={e => setJumpInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') jumpToPage(); if (e.key === 'Escape') setShowJump(false); }}
+                  placeholder={`${toPersianDigits(1)} تا ${toPersianDigits(totalPages)}`} dir="ltr"
+                  className="flex-1 bg-white/10 border border-white/15 rounded-xl px-3 py-2 text-[11px] font-black text-white placeholder:text-white/30 outline-none focus:border-white/40" />
+                <button onClick={jumpToPage} className="px-3 py-2 rounded-xl bg-white/15 text-white text-[10px] font-black hover:bg-white/25 transition-all active:scale-95">
+                  <i className="fas fa-arrow-left text-[9px]"></i>
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => { setShowJump(true); setJumpInput(''); }} className="w-full p-3 rounded-2xl bg-white/10 text-white/80 text-sm font-bold flex items-center gap-3 transition-all active:scale-95 hover:bg-white/15 border border-white/5">
+                <i className="fas fa-magnifying-glass w-5 text-center text-xs" /> پرش به صفحه
+              </button>
+            )}
+
+            {/* Bookmarks */}
+            <div className="p-3 rounded-2xl bg-white/5 border border-white/10">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-bold text-white/60">نشان‌ها ({toPersianDigits(bookmarks.length)})</span>
+                <i className="fas fa-bookmark text-[10px] text-amber-400" />
+              </div>
+              {bookmarks.length === 0 ? (
+                <p className="text-[9px] text-white/30 font-bold text-center py-1">هنوز نشانی ثبت نشده — با آیکن نشان‌دار کن بالای صفحه</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                  {bookmarks.map(p => (
+                    <button key={p} onClick={() => { flipToPage(p); setShowMenu(false); }}
+                      className="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 text-[10px] font-black hover:bg-amber-500/35 transition-all active:scale-95">
+                      <i className="fas fa-bookmark text-[7px] ml-1"></i>{toPersianDigits(p + 1)}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <button onClick={() => { flipToPage(0); setShowMenu(false); }} className="w-full p-3 rounded-2xl bg-white/10 text-white/80 text-sm font-bold flex items-center gap-3 transition-all active:scale-95 hover:bg-white/15 border border-white/5">

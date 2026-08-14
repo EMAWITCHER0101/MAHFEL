@@ -19,6 +19,11 @@ interface BridgeLike {
   requestNotificationPermission?: () => void;
   // native PiP mini player: just the video, no controls
   enterVideoPip?: (json: string) => void;
+  // app update: current installed version + apk download/install
+  getAppVersion?: () => string;
+  downloadAndInstallApk?: (url: string) => void;
+  // OTP auto-fill
+  startOtpAutofill?: () => boolean;
 }
 
 export interface BackgroundMediaMeta {
@@ -60,6 +65,92 @@ export const sendNativeNotification = (title: string, body: string, link?: strin
       else { b.showNotification(title, body); }
     } catch { /* ignore */ }
   }
+};
+
+// --- نسخه نصب‌شده اپ اندروید ---
+export const getAppVersion = (): string => {
+  const b = getBridge();
+  if (b && typeof b.getAppVersion === 'function') {
+    try {
+      const v = b.getAppVersion();
+      if (v) return v;
+    } catch { /* ignore */ }
+  }
+  return '';
+};
+
+// --- دانلود و نصب خودکار APK ---
+export const downloadAndInstallApk = (url: string) => {
+  const b = getBridge();
+  if (b && typeof b.downloadAndInstallApk === 'function') {
+    try {
+      b.downloadAndInstallApk(url);
+      return true;
+    } catch { /* ignore */ }
+  }
+  return false;
+};
+
+// --- محیط دسکتاپ (Electron) ---
+export const isDesktop = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return !!(window as any).mahfelDesktop?.isElectron;
+  } catch {
+    return /Electron/i.test(navigator.userAgent);
+  }
+};
+
+export const getDesktopVersion = (): string => {
+  if (typeof window === 'undefined') return '';
+  try {
+    return String((window as any).mahfelDesktop?.appVersion || '');
+  } catch {
+    return '';
+  }
+};
+
+// فعال‌سازی OTP اتوفیل در اندروید: رسیور پیامک را فعال می‌کند (فقط در صورت داشتن مجوز)
+export const startOtpAutofill = (): boolean => {
+  const b = getBridge();
+  if (b && typeof b.startOtpAutofill === 'function') {
+    try {
+      return b.startOtpAutofill() === true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+};
+
+export const desktopOpenExternal = (url: string) => {
+  if (typeof window === 'undefined') return false;
+  try {
+    if ((window as any).mahfelDesktop?.openExternal) {
+      (window as any).mahfelDesktop.openExternal(url);
+      return true;
+    }
+  } catch { /* ignore */ }
+  return false;
+};
+
+// --- مقایسه نسخه (x.y.z) ---
+export const isVersionNewer = (latest: string, current: string): boolean => {
+  const toParts = (v: string): number[] =>
+    String(v || '')
+      .trim()
+      .split('.')
+      .map((p) => parseInt(p, 10) || 0);
+  const a = toParts(latest);
+  const b = toParts(current);
+  const len = Math.max(a.length, b.length);
+  for (let i = 0; i < len; i++) {
+    const x = a[i] || 0;
+    const y = b[i] || 0;
+    if (x > y) return true;
+    if (x < y) return false;
+  }
+  return false;
 };
 
 const videoInPip = (): boolean => {
@@ -200,6 +291,7 @@ export const handoffAudioToNative = (audioEl: HTMLAudioElement): boolean => {
     if (!b) return false;
     audioEl.pause();
     nativeMode = true;
+    clearWebMediaSession();
     try { b.startPlayback?.('audio'); } catch { /* ignore */ }
     nativeCommand({ cmd: 'play', url, positionMs: Math.round(pos), podcastId: pid, episodeIndex: isFinite(eidx) ? eidx : -1 });
     return true;
@@ -225,6 +317,19 @@ export const handbackAudioFromNative = (audioEl: HTMLAudioElement | null) => {
 };
 
 /* ---------- background play button (audio) ---------- */
+/** غیرفعال کردن مدیا سشن وب تا WebView نوتیفیکیشن خودش (Video player) را نشان ندهد */
+export const clearWebMediaSession = () => {
+  try {
+    const ms = (navigator as any).mediaSession;
+    if (!ms) return;
+    ms.metadata = null;
+    try { ms.playbackState = 'none'; } catch { /* ignore */ }
+    ['play', 'pause', 'seekto', 'nexttrack', 'previoustrack', 'seekbackward', 'seekforward'].forEach(a => {
+      try { ms.setActionHandler(a, null); } catch { /* unsupported action */ }
+    });
+  } catch { /* ignore */ }
+};
+
 const applyMediaSession = (meta: BackgroundMediaMeta, includeNavigation = true) => {
   try {
     const ms = (navigator as any).mediaSession;
@@ -253,15 +358,19 @@ const applyMediaSession = (meta: BackgroundMediaMeta, includeNavigation = true) 
 
 export const playInBackgroundAudio = (meta: BackgroundMediaMeta) => {
   audioPlaying = true;
-  applyMediaSession(meta);
   const b = getBridge();
   if (b) {
+    // APK: نوتیفیکیشن/لاک‌اسکرین را سرویس نیتیو می‌سازد — مدیا سشن وب را فعال نکن
+    // تا WebView نوتیفیکیشن خودش (Video player) را قبل از نوتیفیکیشن صوت نشان ندهد
+    clearWebMediaSession();
     // بدون هیچ درخواست مجوزی (باتری/نوتیفیکیشن) — پخش پس‌زمینه بدون اجازه کار می‌کند
     try { b.startPlayback?.('audio'); } catch { /* ignore */ }
     // push metadata & state to native service (notification + lock screen)
     updateAudioBackgroundMeta(meta);
     updateAudioBackgroundState(true, 0, Math.round((meta.duration || 0) * 1000));
+    return;
   }
+  applyMediaSession(meta);
 };
 
 export const stopBackgroundAudio = () => {
@@ -450,7 +559,11 @@ export const initBackgroundPlayback = () => {
       audioPlaying = true;
       if (document.hidden) {
         const b = getBridge();
-        if (b) { try { b.startPlayback?.('audio'); } catch { /* ignore */ } }
+        if (b) {
+          // مدیا سشن وب را غیرفعال کن تا WebView نوتیفیکیشن خودش (Video player) را نشان ندهد
+          clearWebMediaSession();
+          try { b.startPlayback?.('audio'); } catch { /* ignore */ }
+        }
       }
     }
   }, true);

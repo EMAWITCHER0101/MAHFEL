@@ -1,5 +1,5 @@
 #define MyAppName "محفل"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.1.0"
 #define MyAppExeName "Mahfel.exe"
 
 [Setup]
@@ -8,6 +8,7 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher=Mahfel
 DefaultDirName={localappdata}\Programs\Mahfel
+DisableDirPage=no
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest

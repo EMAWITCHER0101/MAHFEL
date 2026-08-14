@@ -1,12 +1,15 @@
 package com.mahfel.app;
 
 import android.Manifest;
+import android.app.AlertDialog;
 import android.app.PictureInPictureParams;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.app.RemoteAction;
@@ -17,10 +20,13 @@ import android.graphics.drawable.Icon;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.telephony.SmsMessage;
 import android.util.Rational;
 import android.view.Gravity;
 import android.view.View;
@@ -36,10 +42,17 @@ import android.widget.TextView;
 import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
+import androidx.core.content.FileProvider;
 
 import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebViewClient;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 public class MainActivity extends BridgeActivity {
 
@@ -58,6 +71,7 @@ public class MainActivity extends BridgeActivity {
     private int pipVideoW = 16;
     private int pipVideoH = 9;
     private boolean notificationAskedOnce = false;
+    private BroadcastReceiver smsReceiver = null;
 
     // همگام‌سازی فوری پیام‌ها حتی وقتی اپ در پس‌زمینه است: پلر سبک نیتیو
     private static final String NATIVE_POLL_URL = "https://app.soha-sima.ir/api/posts?limit=1";
@@ -75,6 +89,7 @@ public class MainActivity extends BridgeActivity {
         handler.post(this::setupWebView);
         showVpnWarningIfConnected();
         startNativeSync();
+        registerSmsReceiver();
         // مجوز نوتیفیکیشن در اولین ورود به اپ (نه هنگام پخش) — ادمین به کاربران اعلان می‌فرستد
         handler.postDelayed(this::requestPermissionsAtStartup, 1000);
     }
@@ -223,6 +238,73 @@ public class MainActivity extends BridgeActivity {
     /** درخواست خودکار مجوزها در اولین اجرا: فقط نوتیفیکیشن (دیالوگ سیستمی) — بدون راهنمای overlay */
     private void requestPermissionsAtStartup() {
         requestNotificationPermissionIfNeeded();
+    }
+
+    private void registerSmsReceiver() {
+        if (smsReceiver != null) return;
+        try {
+            if (Build.VERSION.SDK_INT >= 23 &&
+                    checkSelfPermission(Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
+                return;
+            }
+            smsReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    if (intent == null) return;
+                    String action = intent.getAction();
+                    if (!"android.provider.Telephony.SMS_RECEIVED".equals(action)) return;
+                    try {
+                        Object[] pdus = (Object[]) intent.getExtras().get("pdus");
+                        if (pdus == null) return;
+                        String format = intent.getStringExtra("format");
+                        StringBuilder body = new StringBuilder();
+                        for (Object pdu : pdus) {
+                            SmsMessage msg = format != null
+                                    ? SmsMessage.createFromPdu((byte[]) pdu, format)
+                                    : SmsMessage.createFromPdu((byte[]) pdu);
+                            if (msg != null && msg.getDisplayMessageBody() != null) {
+                                body.append(msg.getDisplayMessageBody());
+                            }
+                        }
+                        // ارقام فارسی/عربی پیامک را به انگلیسی تبدیل کن (قالب اکثر پیامک‌های ایرانی)
+                        String text = body.toString()
+                                .replace('۰', '0').replace('۱', '1').replace('۲', '2').replace('۳', '3').replace('۴', '4')
+                                .replace('۵', '5').replace('۶', '6').replace('۷', '7').replace('۸', '8').replace('۹', '9')
+                                .replace('٠', '0').replace('١', '1').replace('٢', '2').replace('٣', '3').replace('٤', '4')
+                                .replace('٥', '5').replace('٦', '6').replace('٧', '7').replace('٨', '8').replace('٩', '9');
+                        // کد تایید دقیقاً ۴ رقم است؛ عدد ۴+ رقمی (مثل شماره موبایل) را رد کن
+                        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?<!\\d)\\d{4}(?!\\d)").matcher(text);
+                        if (!m.find()) return;
+                        final String code = m.group(0);
+                        handler.post(() -> {
+                            try {
+                                Bridge b = staticBridge != null ? staticBridge : getBridge();
+                                WebView wv = b != null ? b.getWebView() : null;
+                                if (wv == null) return;
+                                wv.post(() -> wv.evaluateJavascript(
+                                        "window.postMessage('mahfel-otp-received|" + code + "','*')", null));
+                            } catch (Exception ignored) {
+                            }
+                        });
+                    } catch (Exception ignored) {
+                    }
+                }
+            };
+            IntentFilter filter = new IntentFilter("android.provider.Telephony.SMS_RECEIVED");
+            filter.setPriority(IntentFilter.SYSTEM_HIGH_PRIORITY);
+            androidx.core.content.ContextCompat.registerReceiver(this, smsReceiver, filter,
+                    androidx.core.content.ContextCompat.RECEIVER_EXPORTED);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void unregisterSmsReceiver() {
+        if (smsReceiver == null) return;
+        try {
+            unregisterReceiver(smsReceiver);
+        } catch (Exception ignored) {
+        }
+        smsReceiver = null;
     }
 
     private void enterPipInternal() {
@@ -526,6 +608,101 @@ public class MainActivity extends BridgeActivity {
         overlay = null;
     }
 
+    // ══ دانلود و نصب خودکار APK نسخه جدید ══
+
+    private void startApkDownload(final String url) {
+        if (url == null || url.isEmpty()) {
+            postApkProgress("{\"error\":\"لینک دانلود وجود ندارد\"}");
+            return;
+        }
+        new Thread(() -> {
+            try {
+                File dir = new File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "mahfel-update");
+                if (!dir.exists()) dir.mkdirs();
+                final File out = new File(dir, "mahfel-new.apk");
+                if (out.exists()) out.delete();
+
+                HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+                conn.setConnectTimeout(15000);
+                conn.setReadTimeout(15000);
+                conn.setInstanceFollowRedirects(true);
+                int code = conn.getResponseCode();
+                if (code != 200) {
+                    postApkProgress("{\"error\":\"خطا در دانلود (کد " + code + ")\"}");
+                    conn.disconnect();
+                    return;
+                }
+                long total = conn.getContentLengthLong();
+                InputStream in = conn.getInputStream();
+                FileOutputStream fos = new FileOutputStream(out);
+                byte[] buf = new byte[65536];
+                long downloaded = 0;
+                int lastPercent = -1;
+                long lastPost = 0;
+                int n;
+                while ((n = in.read(buf)) > 0) {
+                    fos.write(buf, 0, n);
+                    downloaded += n;
+                    long now = System.currentTimeMillis();
+                    if (total > 0 && (now - lastPost > 500 || downloaded == total)) {
+                        int pct = (int) ((downloaded * 100) / total);
+                        if (pct != lastPercent) {
+                            lastPercent = pct;
+                            lastPost = now;
+                            postApkProgress("{\"percent\":" + pct + "}");
+                        }
+                    }
+                }
+                fos.flush();
+                fos.close();
+                in.close();
+                conn.disconnect();
+                postApkProgress("{\"percent\":100}");
+                promptInstallApk(out);
+            } catch (Exception e) {
+                postApkProgress("{\"error\":\"دانلود ناموفق بود؛ اینترنت خود را بررسی کنید\"}");
+            }
+        }).start();
+    }
+
+    private void postApkProgress(final String json) {
+        handler.post(() -> {
+            try {
+                Bridge b = staticBridge != null ? staticBridge : getBridge();
+                WebView wv = b != null ? b.getWebView() : null;
+                if (wv == null) return;
+                final String js = "window.dispatchEvent(new CustomEvent('mahfel-apk-progress',{detail:" + json + "}))";
+                wv.post(() -> wv.evaluateJavascript(js, null));
+            } catch (Exception ignored) {
+            }
+        });
+    }
+
+    private void promptInstallApk(File apkFile) {
+        handler.post(() -> {
+            try {
+                Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", apkFile);
+                new AlertDialog.Builder(this)
+                        .setTitle("نسخه جدید دانلود شد")
+                        .setMessage("نسخه جدید محفل آماده نصب است. روی «نصب» بزنید؛ نسخه قبلی خودکار جایگزین می‌شود.")
+                        .setCancelable(false)
+                        .setPositiveButton("نصب", (d, w) -> {
+                            try {
+                                Intent i = new Intent(Intent.ACTION_VIEW);
+                                i.setDataAndType(uri, "application/vnd.android.package-archive");
+                                i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+                                startActivity(i);
+                            } catch (Exception e) {
+                                postApkProgress("{\"error\":\"باز شدن نصب ممکن نشد؛ از فایل دانلودی نصب کنید\"}");
+                            }
+                        })
+                        .setNegativeButton("بعداً", (d, w) -> d.dismiss())
+                        .show();
+            } catch (Exception ignored) {
+            }
+        });
+    }
+
     private void showVpnWarningIfConnected() {
         if (vpnWarningShown) return;
         if (isVpnConnected()) {
@@ -607,6 +784,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onDestroy() {
         super.onDestroy();
+        unregisterSmsReceiver();
     }
 
     // دکمه برگشت سیستم: هیچ‌وقت از اپلیکیشن خارج نشود — پیمایش داخل اپ، و در ریشه فقط minimize
@@ -629,6 +807,18 @@ public class MainActivity extends BridgeActivity {
         @JavascriptInterface
         public boolean isApp() {
             return true;
+        }
+
+        // نسخه نصب‌شده اپ — برای چک‌آپدیت در وب
+        @JavascriptInterface
+        public String getAppVersion() {
+            try {
+                android.content.pm.PackageInfo info =
+                        getPackageManager().getPackageInfo(getPackageName(), 0);
+                return info.versionName == null ? "" : info.versionName;
+            } catch (Exception e) {
+                return "";
+            }
         }
 
         @JavascriptInterface
@@ -918,6 +1108,20 @@ public class MainActivity extends BridgeActivity {
         @JavascriptInterface
         public void showNotification(String title, String body) {
             showNotificationWithLink(title, body, null);
+        }
+
+        // ══ دانلود و نصب APK: progress به وب → دیالوگ نصب → FileProvider/ACTION_VIEW ══
+        @JavascriptInterface
+        public void downloadAndInstallApk(final String url) {
+            handler.post(() -> startApkDownload(url));
+        }
+
+        // وقتی صفحه «ورود کد تایید» باز می‌شود: رسیور پیامک را فعال کن
+        // (اگر مجوز پیامک از قبل فعال باشد کار می‌کند؛ در اندروید ۱۴+ بدون مجوز دستی ممکن نیست)
+        @JavascriptInterface
+        public boolean startOtpAutofill() {
+            handler.post(() -> registerSmsReceiver());
+            return true;
         }
 
         @JavascriptInterface

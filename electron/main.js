@@ -1,4 +1,4 @@
-const { app, BrowserWindow, session, powerSaveBlocker } = require('electron');
+const { app, BrowserWindow, session, powerSaveBlocker, shell, ipcMain } = require('electron');
 const path = require('path');
 
 const APP_URL = 'https://app.soha-sima.ir';
@@ -29,7 +29,8 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       backgroundThrottling: false,
-      spellcheck: false
+      spellcheck: false,
+      preload: path.join(__dirname, 'preload.js')
     }
   });
 
@@ -42,11 +43,22 @@ function createWindow() {
     }
   });
 
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:/.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+
   win.on('closed', () => { win = null; });
 }
 
 app.whenReady().then(() => {
   powerSaveBlocker.start('prevent-app-suspension');
+  ipcMain.handle('open-external', (_e, url) => {
+    if (typeof url === 'string' && /^https?:/.test(url)) shell.openExternal(url);
+  });
+  ipcMain.on('get-app-version', (e) => {
+    e.returnValue = app.getVersion();
+  });
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
     callback(allowedPermissions.includes(permission));
   });

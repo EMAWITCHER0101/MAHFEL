@@ -190,4 +190,4 @@ export interface PublishedBook {
   isDraft?: boolean;
 }
 
-export type Page = 'mahfel' | 'sowt' | 'matn' | 'videos' | 'library' | 'nashr';
+export type Page = 'mahfel' | 'sowt' | 'matn' | 'videos' | 'library' | 'nashr' | 'support';

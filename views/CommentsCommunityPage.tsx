@@ -4,7 +4,8 @@ import { toPersianDigits, isSameDay, formatDateSeparator, formatTimeFromISO, for
 import AudioPlayer from '../components/AudioPlayer';
 import MinimizedPlayer from '../components/MinimizedPlayer';
 import TimestampThumbnail from '../components/TimestampThumbnail';
-import { createPost, addPostComment } from '../services/api';
+import { createPost, addPostComment, getCommunitySettings } from '../services/api';
+import UserProfileModal from '../components/UserProfileModal';
 import { ImageLightbox, VideoLightbox } from '../components/MediaLightbox';
 
 const formatTimestamp = (sec: number) => {
@@ -114,9 +115,10 @@ type RenderReplyProps = {
   getCommentId: (c: any) => string;
   handleLikeReply: (id: string) => void;
   handleDeleteReply: (id: string) => void;
+  onOpenProfile?: (userId?: string, name?: string, avatar?: string) => void;
 };
 
-const RenderReply = React.memo<RenderReplyProps>(({ comment, depth, postId, localComments, currentUser, likedReplies, touchStartX, onSwipeReply, getCommentId, handleLikeReply, handleDeleteReply }) => {
+const RenderReply = React.memo<RenderReplyProps>(({ comment, depth, postId, localComments, currentUser, likedReplies, touchStartX, onSwipeReply, getCommentId, handleLikeReply, handleDeleteReply, onOpenProfile }) => {
   const commentId = getCommentId(comment);
   const repliedTo = comment.replyTo ? localComments.find(c => getCommentId(c) === comment.replyTo) : null;
   const children = localComments.filter(c => c.replyTo === commentId);
@@ -144,7 +146,7 @@ const RenderReply = React.memo<RenderReplyProps>(({ comment, depth, postId, loca
     <div className="flex items-start gap-2 group/reply py-1"
       onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
       onTouchEnd={(e) => { const d = e.changedTouches[0].clientX - touchStartX.current; if (d > 50 && onSwipeReply) onSwipeReply({ postId, author: comment.author, text: comment.text, commentId }); }}>
-      <div className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0 mt-0.5 shadow-sm" style={{ background: `linear-gradient(135deg, hsl(${colorSeed % 360}, 55%, 50%), hsl(${(colorSeed + 40) % 360}, 55%, 40%))` }}>
+      <div className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0 mt-0.5 shadow-sm cursor-pointer active:scale-95 transition-transform" style={{ background: `linear-gradient(135deg, hsl(${colorSeed % 360}, 55%, 50%), hsl(${(colorSeed + 40) % 360}, 55%, 40%))` }} onClick={() => onOpenProfile?.(comment.userId, comment.author, comment.authorAvatarUrl)}>
         {comment.authorAvatarUrl ? (
           <img src={comment.authorAvatarUrl} className="w-full h-full object-cover" alt="" />
         ) : (
@@ -154,7 +156,7 @@ const RenderReply = React.memo<RenderReplyProps>(({ comment, depth, postId, loca
       <div className="flex-1 min-w-0">
           <div className="rounded-xl px-3 py-2 transition-all duration-200 relative" style={{ background: 'color-mix(in srgb, var(--surface-3) 80%, transparent)', border: '1px solid color-mix(in srgb, var(--border) 40%, transparent)' }}>
             <div className="flex items-center gap-2 mb-1">
-              <span className="font-bold text-[10px]" style={{ color: 'var(--text-1)' }}>{comment.author}</span>
+              <span className="font-bold text-[10px] cursor-pointer hover:opacity-70 transition-opacity" style={{ color: 'var(--text-1)' }} onClick={() => onOpenProfile?.(comment.userId, comment.author, comment.authorAvatarUrl)}>{comment.author}</span>
               <div className="w-0.5 h-0.5 rounded-full" style={{ background: 'var(--text-3)' }}></div>
               <span className="text-[8px] font-medium" style={{ color: 'var(--text-3)' }}>{formatTimeFromISO(comment.isoDate)}</span>
             </div>
@@ -252,7 +254,7 @@ const RenderReply = React.memo<RenderReplyProps>(({ comment, depth, postId, loca
         {showChildReplies && children.length > 0 && (
           <div className="pr-3 mt-1 space-y-1" style={{ borderRight: '1px solid color-mix(in srgb, var(--primary) 15%, transparent)' }}>
             {children.map(child => (
-              <RenderReply key={getCommentId(child)} comment={child} depth={depth + 1} postId={postId} localComments={localComments} currentUser={currentUser} likedReplies={likedReplies} touchStartX={touchStartX} onSwipeReply={onSwipeReply} getCommentId={getCommentId} handleLikeReply={handleLikeReply} handleDeleteReply={handleDeleteReply} />
+              <RenderReply key={getCommentId(child)} comment={child} depth={depth + 1} postId={postId} localComments={localComments} currentUser={currentUser} likedReplies={likedReplies} touchStartX={touchStartX} onSwipeReply={onSwipeReply} getCommentId={getCommentId} handleLikeReply={handleLikeReply} handleDeleteReply={handleDeleteReply} onOpenProfile={onOpenProfile} />
             ))}
           </div>
                )}
@@ -283,7 +285,8 @@ const PostBubble: React.FC<{
   onDeletePost?: (postId: number) => void;
   currentUser?: string;
   onSwipeReply?: (target: { postId: number; author: string; text: string; commentId?: string }) => void;
-}> = React.memo(({ post, video, podcast, publishedBook, onShowComments, onPlayVideo, onPlayPodcast, onShowBook, onOpenMenu, isFirstInGroup, isLastInGroup, onShowInstantView, onAddComment, onNewPost, onUpdatePost, onDeletePost, currentUser, onSwipeReply }) => {
+  onOpenProfile?: (userId?: string, name?: string, avatar?: string) => void;
+}> = React.memo(({ post, video, podcast, publishedBook, onShowComments, onPlayVideo, onPlayPodcast, onShowBook, onOpenMenu, isFirstInGroup, isLastInGroup, onShowInstantView, onAddComment, onNewPost, onUpdatePost, onDeletePost, currentUser, onSwipeReply, onOpenProfile }) => {
   const isAdminPost = post.author === 'سرای هنر و اندیشه' || post.author?.includes('مجموعه:');
   const [liked, setLiked] = useState(() => {
     try { return JSON.parse(localStorage.getItem('soha_liked_posts') || '[]').includes(String(post.id)); } catch { return false; }
@@ -379,7 +382,7 @@ const PostBubble: React.FC<{
   return (<>
     <div className={`flex items-start gap-1.5 ${isAdminPost ? 'flex-row-reverse' : ''} ${isFirstInGroup ? 'mt-4' : 'mt-0.5'}`}>
        <div className={`w-8 flex-shrink-0 ${isFirstInGroup ? '' : 'invisible'}`}>
-         {isFirstInGroup && (post.authorAvatarUrl ? <img src={post.authorAvatarUrl} className="w-8 h-8 rounded-full object-cover shadow-sm" alt={post.author} /> : <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-bold shadow-sm" style={{ background: `hsl(${post.author.charCodeAt(0) * 37 % 360}, 55%, 45%)` }}>{post.author[0]}</div>)}
+         {isFirstInGroup && (post.authorAvatarUrl ? <img src={post.authorAvatarUrl} className="w-8 h-8 rounded-full object-cover shadow-sm cursor-pointer active:scale-95 transition-transform" alt={post.author} onClick={(e) => { e.stopPropagation(); onOpenProfile?.(post.userId, post.author, post.authorAvatarUrl); }} /> : <button onClick={(e) => { e.stopPropagation(); onOpenProfile?.(post.userId, post.author, post.authorAvatarUrl); }} className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-bold shadow-sm cursor-pointer active:scale-95 transition-transform" style={{ background: `hsl(${post.author.charCodeAt(0) * 37 % 360}, 55%, 45%)` }}>{post.author[0]}</button>)}
        </div>
 
        <div className={`flex flex-col flex-1 min-w-0 ${isAdminPost ? 'items-end' : 'items-start'}`}>
@@ -404,7 +407,7 @@ const PostBubble: React.FC<{
                {/* Header */}
                <div className="flex items-center justify-between mb-1">
                  <div className="flex items-center gap-1.5">
-                   <span className="font-black text-[11px]" style={{ color: isAdminPost ? 'var(--primary)' : 'var(--text-1)' }}>{post.author}</span>
+                   <span className="font-black text-[11px] cursor-pointer hover:opacity-70 transition-opacity" style={{ color: isAdminPost ? 'var(--primary)' : 'var(--text-1)' }} onClick={(e) => { e.stopPropagation(); onOpenProfile?.(post.userId, post.author, post.authorAvatarUrl); }}>{post.author}</span>
                    <span className="text-[8px]" style={{ color: 'var(--text-3)' }}>{formatTimeFromISO(post.isoDate)}</span>
                  </div>
                   {currentUser && post.author === currentUser && (
@@ -519,7 +522,7 @@ const PostBubble: React.FC<{
                  {showReplies && (
                    <div className="pb-2 px-2 ml-2 border-r-2" style={{ borderColor: 'color-mix(in srgb, var(--primary) 15%, transparent)' }}>
                       {localComments.filter(c => !c.replyTo || !localComments.find(x => getCommentId(x) === c.replyTo)).map((rootComment) => (
-                         <RenderReply key={getCommentId(rootComment)} comment={rootComment} depth={0} postId={post.id} localComments={localComments} currentUser={currentUser} likedReplies={likedReplies} touchStartX={touchStartX} onSwipeReply={onSwipeReply} getCommentId={getCommentId} handleLikeReply={handleLikeReply} handleDeleteReply={handleDeleteReply} />
+                         <RenderReply key={getCommentId(rootComment)} comment={rootComment} depth={0} postId={post.id} localComments={localComments} currentUser={currentUser} likedReplies={likedReplies} touchStartX={touchStartX} onSwipeReply={onSwipeReply} getCommentId={getCommentId} handleLikeReply={handleLikeReply} handleDeleteReply={handleDeleteReply} onOpenProfile={onOpenProfile} />
                       ))}
                    </div>
                 )}
@@ -548,7 +551,8 @@ const VideoCommentItem: React.FC<{
   userRole?: string;
   depth?: number;
   likedComments?: Set<string>;
-}> = ({ comment, video, allComments, onOpenVideo, onAddComment, onDeleteComment, onLikeComment, onUpdateComment, onShowDiscussion, currentUserName, userRole, depth = 0, likedComments = new Set() }) => {
+  onOpenProfile?: (userId?: string, name?: string, avatar?: string) => void;
+}> = ({ comment, video, allComments, onOpenVideo, onAddComment, onDeleteComment, onLikeComment, onUpdateComment, onShowDiscussion, currentUserName, userRole, depth = 0, likedComments = new Set(), onOpenProfile }) => {
   const [showReplies, setShowReplies] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
   const [replyText, setReplyText] = useState('');
@@ -619,7 +623,7 @@ const VideoCommentItem: React.FC<{
 
     if (depth === 0) {
     return (
-      <div className="mb-4 lg:mb-5">
+      <div className="mt-3 mb-4 sm:mt-0 lg:mb-5">
         <div className="rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-lg"
           style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
           <div
@@ -671,15 +675,15 @@ const VideoCommentItem: React.FC<{
               </button>
             )}
             <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[11px] font-bold shadow-lg transition-transform group-hover:scale-105 overflow-hidden"
-                style={{ background: `linear-gradient(135deg, hsl(${(comment.author.charCodeAt(0) * 37) % 360}, 60%, 50%), hsl(${(comment.author.charCodeAt(0) * 73) % 360}, 60%, 40%))` }}>
+              <div className="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[11px] font-bold shadow-lg transition-transform group-hover:scale-105 overflow-hidden cursor-pointer active:scale-95"
+                style={{ background: `linear-gradient(135deg, hsl(${(comment.author.charCodeAt(0) * 37) % 360}, 60%, 50%), hsl(${(comment.author.charCodeAt(0) * 73) % 360}, 60%, 40%))` }} onClick={() => onOpenProfile?.(comment.userId, comment.author, comment.authorAvatarUrl)}>
                 {comment.authorAvatarUrl ? (
                   <img src={comment.authorAvatarUrl} alt={comment.author} className="w-full h-full object-cover" />
                 ) : comment.author.charAt(0)}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1.5">
-                  <span className="font-black text-[12px]" style={{ color: 'var(--primary)' }}>{comment.author}</span>
+                  <span className="font-black text-[12px] cursor-pointer hover:opacity-70 transition-opacity" style={{ color: 'var(--primary)' }} onClick={() => onOpenProfile?.(comment.userId, comment.author, comment.authorAvatarUrl)}>{comment.author}</span>
                   <span className="text-[10px]" style={{ color: 'var(--text-3)' }}>{formatTimeFromISO(comment.isoDate)}</span>
                 </div>
                 {isEditing ? (
@@ -849,7 +853,8 @@ const ReplyItem: React.FC<{
   onSendReply?: () => void;
   onCancelReply?: () => void;
   replyTo?: string;
-}> = ({ reply, video, allComments, onOpenVideo, onDeleteComment, onLikeComment, onUpdateComment, onReply, currentUserName, userRole, likedComments = new Set(), isReplyingHere, replyText, onReplyTextChange, onSendReply, onCancelReply, replyTo = '' }) => {
+  onOpenProfile?: (userId?: string, name?: string, avatar?: string) => void;
+}> = ({ reply, video, allComments, onOpenVideo, onDeleteComment, onLikeComment, onUpdateComment, onReply, currentUserName, userRole, likedComments = new Set(), isReplyingHere, replyText, onReplyTextChange, onSendReply, onCancelReply, replyTo = '', onOpenProfile }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(reply.text);
   const [showNestedReplies, setShowNestedReplies] = useState(false);
@@ -881,15 +886,15 @@ const ReplyItem: React.FC<{
     )}
     <div className="flex gap-2.5 p-3 rounded-xl transition-all"
       style={{ background: 'var(--surface-3)', border: '1px solid var(--border)' }}>
-      <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[9px] font-bold shadow-sm overflow-hidden"
-        style={{ background: `linear-gradient(135deg, hsl(${(reply.author.charCodeAt(0) * 37) % 360}, 60%, 50%), hsl(${(reply.author.charCodeAt(0) * 73) % 360}, 60%, 40%))` }}>
+      <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[9px] font-bold shadow-sm overflow-hidden cursor-pointer active:scale-95 transition-transform"
+        style={{ background: `linear-gradient(135deg, hsl(${(reply.author.charCodeAt(0) * 37) % 360}, 60%, 50%), hsl(${(reply.author.charCodeAt(0) * 73) % 360}, 60%, 40%))` }} onClick={() => onOpenProfile?.(reply.userId, reply.author, reply.authorAvatarUrl)}>
         {reply.authorAvatarUrl ? (
           <img src={reply.authorAvatarUrl} alt={reply.author} className="w-full h-full object-cover" />
         ) : reply.author.charAt(0)}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <span className="font-bold text-[11px]" style={{ color: 'var(--primary)' }}>{reply.author}</span>
+          <span className="font-bold text-[11px] cursor-pointer hover:opacity-70 transition-opacity" style={{ color: 'var(--primary)' }} onClick={() => onOpenProfile?.(reply.userId, reply.author, reply.authorAvatarUrl)}>{reply.author}</span>
           <span className="text-[9px]" style={{ color: 'var(--text-3)' }}>{formatTimeFromISO(reply.isoDate)}</span>
         </div>
         {isEditing ? (
@@ -1010,6 +1015,7 @@ const ReplyItem: React.FC<{
                 onReplyTextChange={onReplyTextChange}
                 onSendReply={onSendReply}
                 onCancelReply={onCancelReply}
+                onOpenProfile={onOpenProfile}
               />
               );
             })}
@@ -1034,7 +1040,8 @@ const PodcastReplyItem: React.FC<{
   currentUserName?: string;
   userRole?: string;
   likedComments?: Set<string>;
-}> = ({ reply, allComments, podcast, epIdx, onPlayPodcast, onDeleteComment, onLikeComment, onUpdateComment, onRequestReply, onAddComment, currentUserName, userRole, likedComments = new Set() }) => {
+  onOpenProfile?: (userId?: string, name?: string, avatar?: string) => void;
+}> = ({ reply, allComments, podcast, epIdx, onPlayPodcast, onDeleteComment, onLikeComment, onUpdateComment, onRequestReply, onAddComment, currentUserName, userRole, likedComments = new Set(), onOpenProfile }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(reply.text);
   const [replyText, setReplyText] = useState('');
@@ -1048,6 +1055,8 @@ const PodcastReplyItem: React.FC<{
     if (reply.replies?.length) return reply.replies;
     return allComments.filter((c: any) => String(c.parentId) === rid);
   })();
+
+  const openProfile = () => onOpenProfile?.(reply.userId, reply.author, reply.authorAvatarUrl);
 
   const handleSaveEdit = () => {
     if (!editText.trim()) { setIsEditing(false); return; }
@@ -1073,13 +1082,13 @@ const PodcastReplyItem: React.FC<{
             <i className="fas fa-pen text-[7px]"></i>
           </button>
         )}
-        <div className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[7px] font-bold overflow-hidden"
-          style={{ background: `linear-gradient(135deg, hsl(${(reply.author.charCodeAt(0) * 37) % 360}, 60%, 50%), hsl(${(reply.author.charCodeAt(0) * 73) % 360}, 60%, 40%))` }}>
+        <div className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[7px] font-bold overflow-hidden cursor-pointer active:scale-95 transition-transform"
+          style={{ background: `linear-gradient(135deg, hsl(${(reply.author.charCodeAt(0) * 37) % 360}, 60%, 50%), hsl(${(reply.author.charCodeAt(0) * 73) % 360}, 60%, 40%))` }} onClick={openProfile}>
           {reply.authorAvatarUrl ? <img src={reply.authorAvatarUrl} alt="" className="w-full h-full object-cover" /> : reply.author.charAt(0)}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5">
-            <span className="font-bold text-[10px]" style={{ color: 'var(--primary)' }}>{reply.author}</span>
+            <span className="font-bold text-[10px] cursor-pointer hover:opacity-70 transition-opacity" style={{ color: 'var(--primary)' }} onClick={openProfile}>{reply.author}</span>
             <span className="text-[8px]" style={{ color: 'var(--text-3)' }}>{formatTimeFromISO(reply.isoDate)}</span>
           </div>
           {(reply.audioTimestamp ?? reply.timestamp) != null && (
@@ -1166,6 +1175,7 @@ const PodcastReplyItem: React.FC<{
                 currentUserName={currentUserName}
                 userRole={userRole}
                 likedComments={likedComments}
+                onOpenProfile={onOpenProfile}
               />
             ))}
           </div>
@@ -1194,7 +1204,8 @@ const PodcastCommentItem: React.FC<{
   onGlobalTogglePlay?: () => void;
   onShowDiscussion?: () => void;
   onRequestReply?: (commentId: string, author: string, text: string, podcastId: string, episodeIndex: number, audioTimestamp?: number) => void;
-}> = ({ comment, podcast, allComments, onPlayPodcast, onAddComment, onDeleteComment, onLikeComment, onUpdateComment, currentUserName, userRole, depth = 0, likedComments = new Set(), currentPlayingPodcastId, currentPlayingEpIdx, isGloballyPlaying, onGlobalTogglePlay, onShowDiscussion, onRequestReply }) => {
+  onOpenProfile?: (userId?: string, name?: string, avatar?: string) => void;
+}> = ({ comment, podcast, allComments, onPlayPodcast, onAddComment, onDeleteComment, onLikeComment, onUpdateComment, currentUserName, userRole, depth = 0, likedComments = new Set(), currentPlayingPodcastId, currentPlayingEpIdx, isGloballyPlaying, onGlobalTogglePlay, onShowDiscussion, onRequestReply, onOpenProfile }) => {
   const [showReplies, setShowReplies] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
   const [replyText, setReplyText] = useState('');
@@ -1245,7 +1256,7 @@ const PodcastCommentItem: React.FC<{
   if (depth === 0) {
     const ts = Number(comment.audioTimestamp ?? comment.timestamp);
     return (
-      <div className="mb-5">
+      <div className="mt-3 mb-5 sm:mt-0">
         <div className="rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-xl"
           style={{
             background: 'var(--surface-2)',
@@ -1308,7 +1319,7 @@ const PodcastCommentItem: React.FC<{
                   <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
                     style={{ background: 'color-mix(in srgb, var(--primary) 10%, transparent)', color: 'var(--primary)', fontSize: '8px' }}>
                     <i className="fas fa-headphones text-[9px]"></i>
-                    <span className="font-bold">{formatTime(episode?.duration ? parseInt(episode.duration) : 0)}</span>
+                    <span className="font-bold">{formatTime(typeof episode?.duration === 'number' ? episode.duration : (typeof episode?.duration === 'string' && episode.duration.includes(':') ? episode.duration.split(':').reduce((a, b) => a * 60 + Number(b), 0) : (Number(episode?.duration) || 0)))}</span>
                   </div>
                 )}
               </div>
@@ -1324,11 +1335,11 @@ const PodcastCommentItem: React.FC<{
               </button>
             )}
             <div className="flex items-center gap-2 mb-1.5">
-              <div className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[8px] font-bold overflow-hidden shadow-sm"
-                style={{ background: `linear-gradient(135deg, hsl(${(comment.author.charCodeAt(0) * 37) % 360}, 60%, 50%), hsl(${(comment.author.charCodeAt(0) * 73) % 360}, 60%, 40%))` }}>
+              <div className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[8px] font-bold overflow-hidden shadow-sm cursor-pointer active:scale-95 transition-transform"
+                style={{ background: `linear-gradient(135deg, hsl(${(comment.author.charCodeAt(0) * 37) % 360}, 60%, 50%), hsl(${(comment.author.charCodeAt(0) * 73) % 360}, 60%, 40%))` }} onClick={() => onOpenProfile?.(comment.userId, comment.author, comment.authorAvatarUrl)}>
                 {comment.authorAvatarUrl ? <img src={comment.authorAvatarUrl} alt="" className="w-full h-full object-cover" /> : comment.author.charAt(0)}
               </div>
-              <span className="text-[11px] font-bold" style={{ color: 'var(--primary)' }}>{comment.author}</span>
+              <span className="text-[11px] font-bold cursor-pointer hover:opacity-70 transition-opacity" style={{ color: 'var(--primary)' }} onClick={() => onOpenProfile?.(comment.userId, comment.author, comment.authorAvatarUrl)}>{comment.author}</span>
               <span className="text-[8px]" style={{ color: 'var(--text-3)' }}>{formatTimeFromISO(comment.isoDate)}</span>
             </div>
             {isEditing ? (
@@ -1385,6 +1396,7 @@ const PodcastCommentItem: React.FC<{
                       currentUserName={currentUserName}
                       userRole={userRole}
                       likedComments={likedComments}
+                      onOpenProfile={onOpenProfile}
                     />
                   ))}
                 </div>
@@ -1414,10 +1426,28 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
   const [replyTarget, setReplyTarget] = useState<{ postId: number; author: string; text: string; commentId?: string } | null>(null);
   const [podcastReplyTarget, setPodcastReplyTarget] = useState<{ commentId: string; author: string; text: string; podcastId: string; episodeIndex: number; audioTimestamp?: number } | null>(null);
   const [markAudioTimestamp, setMarkAudioTimestamp] = useState(false);
+  const [chatEnabled, setChatEnabled] = useState(true);
+  const [chatMessage, setChatMessage] = useState('');
+  const [profileTarget, setProfileTarget] = useState<{ userId?: string; name?: string; avatar?: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const touchStartX = useRef<number>(0);
+
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const s = await getCommunitySettings();
+        if (alive && s) { setChatEnabled(s.chatEnabled); setChatMessage(s.chatMessage || ''); }
+      } catch {}
+    };
+    load();
+    const t = setInterval(load, 10000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
+
+  const openProfile = (userId?: string, name?: string, avatar?: string) => setProfileTarget({ userId, name, avatar });
 
   useEffect(() => {
     const el = messagesEndRef.current;
@@ -1438,6 +1468,12 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
 
   const handleCreatePost = async () => {
     if ((!inputText.trim() && !inputMedia) || sending || !currentUser) return;
+    if (!chatEnabled && userRole !== 'admin') {
+      setToastMessage('🚫 چت محفل توسط ادمین بسته شده است — فعلاً فقط میتوانید پیامها را ببینید');
+      setToastVisible(true);
+      setTimeout(() => setToastVisible(false), 4000);
+      return;
+    }
     setSending(true);
     if (podcastReplyTarget) {
       const text = inputText.trim();
@@ -1482,11 +1518,30 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
             }
           }, 100);
         }
-      } catch {}
+      } catch (err: any) {
+        if (err?.chatClosed) {
+          setChatEnabled(false);
+          setToastMessage('🚫 چت محفل توسط ادمین بسته شده است — فعلاً فقط میتوانید پیامها را ببینید');
+          setToastVisible(true);
+          setTimeout(() => setToastVisible(false), 4000);
+        }
+      }
     } else {
       const media = inputMedia ? [{ type: inputMedia.type, url: inputMedia.url }] : [];
       const postData = { text: inputText.trim(), media: media.length > 0 ? media : undefined };
-      const newPost = await createPost(postData);
+      let newPost;
+      try {
+        newPost = await createPost(postData);
+      } catch (err: any) {
+        if (err?.chatClosed) {
+          setChatEnabled(false);
+          setToastMessage('🚫 چت محفل توسط ادمین بسته شده است — فعلاً فقط میتوانید پیامها را ببینید');
+          setToastVisible(true);
+          setTimeout(() => setToastVisible(false), 4000);
+        }
+        setSending(false);
+        return;
+      }
       if (newPost && (newPost as any).warnings) {
         setToastMessage(`⚠️ اخطار ${(newPost as any).warnings} از ۳ — پیام شما حذف شد`);
         setToastVisible(true);
@@ -1739,7 +1794,7 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
             if (item.itemType === 'post') {
               return (
                 <div key={item.id}>
-                    <PostBubble post={item} video={videos.find((v:any) => String(v.id) === String(item.videoId))} podcast={podcasts.find((p:any) => String(p.id) === String(item.podcastId))} publishedBook={publishedBooks.find((b:any) => String(b.id) === String(item.bookId))} onShowComments={onShowComments} onPlayVideo={onPlayVideoFromFeed} onPlayPodcast={onPlayPodcastFromFeed} onShowBook={onShowBook} onOpenMenu={(post, rect) => setMenuState({ post, rect })} isFirstInGroup={item.isFirst} isLastInGroup={item.isLast} onShowInstantView={onShowInstantView} onNewPost={onNewPost} onUpdatePost={onUpdatePost} onDeletePost={onDeletePost} currentUser={currentUser} onSwipeReply={(t) => { setReplyTarget(t); inputRef.current?.focus(); }} />
+                    <PostBubble post={item} video={item.videoId ? videos.find((v:any) => String(v.id) === String(item.videoId)) : undefined} podcast={item.podcastId ? podcasts.find((p:any) => String(p.id) === String(item.podcastId)) : undefined} publishedBook={item.bookId ? publishedBooks.find((b:any) => String(b.id) === String(item.bookId)) : undefined} onShowComments={onShowComments} onPlayVideo={onPlayVideoFromFeed} onPlayPodcast={onPlayPodcastFromFeed} onShowBook={onShowBook} onOpenMenu={(post, rect) => setMenuState({ post, rect })} isFirstInGroup={item.isFirst} isLastInGroup={item.isLast} onShowInstantView={onShowInstantView} onNewPost={onNewPost} onUpdatePost={onUpdatePost} onDeletePost={onDeletePost} currentUser={currentUser} onSwipeReply={(t) => { setReplyTarget(t); inputRef.current?.focus(); }} onOpenProfile={openProfile} />
                 </div>
               );
             }
@@ -1759,6 +1814,7 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
                     currentUserName={currentUser}
                     userRole={userRole}
                     likedComments={likedComments}
+                    onOpenProfile={openProfile}
                   />
                 </div>
               );
@@ -1778,6 +1834,7 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
                     currentUserName={currentUser}
                     userRole={userRole}
                     likedComments={likedComments}
+                    onOpenProfile={openProfile}
                     currentPlayingPodcastId={miniPlayerProps?.track?.podcast?.id}
                     currentPlayingEpIdx={miniPlayerProps?.track?.episodeIndex}
                     isGloballyPlaying={miniPlayerProps?.isPlaying}
@@ -1812,6 +1869,20 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
         {/* Input bar at bottom */}
         <div className="border-t px-3 py-2.5 flex justify-center flex-shrink-0" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
           <div className="w-full max-w-2xl">
+          {!chatEnabled && (
+            <div className="flex items-center gap-2.5 mb-2 px-3 py-2.5 rounded-xl shadow-sm animate-fadeIn"
+              style={{ background: 'color-mix(in srgb, #f59e0b 8%, var(--surface-2))', border: '1px solid color-mix(in srgb, #f59e0b 30%, transparent)' }}>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-white" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>
+                <i className="fas fa-lock text-[10px]"></i>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-black" style={{ color: '#b45309' }}>چت محفل توسط ادمین بسته شده است</p>
+                <p className="text-[9px] font-medium mt-0.5 leading-relaxed" style={{ color: '#92400e' }}>
+                  {chatMessage || 'فعلاً فقط میتوانید پیامها را ببینید — بهزودی دوباره باز میشود'}
+                </p>
+              </div>
+            </div>
+          )}
           {/* Reply banner */}
           {replyTarget && (
             <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-xl shadow-sm" style={{ background: 'color-mix(in srgb, var(--primary) 8%, var(--surface-2))', border: '1px solid color-mix(in srgb, var(--primary) 20%, transparent)' }}>
@@ -1904,9 +1975,9 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
             })()}
             <div className="flex-1 min-w-0 rounded-xl overflow-hidden transition-all duration-200"
               style={{ border: `1.5px solid var(--border)`, background: 'var(--surface-2)' }}>
-              <input value={inputText} onChange={(e) => setInputText(e.target.value)} onKeyDown={handleKeyDown} placeholder={podcastReplyTarget ? `پاسخ به ${podcastReplyTarget.author}...` : "پیام..."} className="w-full bg-transparent outline-none px-3.5 py-2.5 text-[13px] font-medium" style={{ color: 'var(--text)', direction: 'rtl' }} />
+              <input value={inputText} onChange={(e) => setInputText(e.target.value)} onKeyDown={handleKeyDown} readOnly={!chatEnabled && userRole !== 'admin'} placeholder={!chatEnabled && userRole !== 'admin' ? 'چت محفل بسته شده است...' : podcastReplyTarget ? `پاسخ به ${podcastReplyTarget.author}...` : "پیام..."} className="w-full bg-transparent outline-none px-3.5 py-2.5 text-[13px] font-medium" style={{ color: 'var(--text)', direction: 'rtl', opacity: !chatEnabled && userRole !== 'admin' ? 0.5 : 1 }} />
             </div>
-            <button onClick={handleCreatePost} disabled={(!inputText.trim() && !inputMedia) || sending || !currentUser}
+            <button onClick={handleCreatePost} disabled={(!inputText.trim() && !inputMedia) || sending || !currentUser || (!chatEnabled && userRole !== 'admin')}
               className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 active:scale-90 transition-all disabled:opacity-40 shadow-md"
               style={{ background: (inputText.trim() || inputMedia) && !sending ? 'linear-gradient(135deg, var(--primary), #0d9488)' : 'var(--surface-2)', color: (inputText.trim() || inputMedia) && !sending ? 'white' : 'var(--text-2)', border: `1.5px solid ${(inputText.trim() || inputMedia) && !sending ? 'transparent' : 'var(--border)'}` }}>
               <i className={`fas ${sending ? 'fa-spinner fa-spin' : 'fa-paper-plane'} text-sm`}></i>
@@ -1916,6 +1987,10 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
         </div>
 
         <InteractionMenu post={menuState.post} rect={menuState.rect} onClose={() => setMenuState({ post: null, rect: null })} isAdmin={userRole === 'admin'} onDelete={onDeletePost} />
+
+        {profileTarget && (
+          <UserProfileModal userId={profileTarget.userId} name={profileTarget.name} avatar={profileTarget.avatar} onClose={() => setProfileTarget(null)} />
+        )}
 
         {/* Hidden file input */}
         <input ref={fileInputRef} type="file" accept="image/*,audio/*,video/*" className="hidden" onChange={handleFileChange} />

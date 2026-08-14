@@ -7,7 +7,9 @@ import OnboardingGuide from './components/OnboardingGuide';
 import WelcomeVideo from './components/WelcomeVideo';
 import { ADMIN_STEPS, USER_STEPS, AUTHOR_STEPS } from './data/guideSteps';
 import ErrorBoundary from './components/ErrorBoundary';
-import { initBackgroundPlayback, isApp, sendNativeNotification, playInBackgroundAudio, stopBackgroundAudio, updateAudioBackgroundMeta, updateAudioBackgroundState, stopPlaybackService, isNativeMode, setNativeModeActive, nativeCommand, getNativeSnapshot, isVideoBackgroundActive, stopVideoBackground } from './services/backgroundPlayback';
+import { initBackgroundPlayback, isApp, sendNativeNotification, playInBackgroundAudio, stopBackgroundAudio, updateAudioBackgroundMeta, updateAudioBackgroundState, stopPlaybackService, isNativeMode, setNativeModeActive, nativeCommand, getNativeSnapshot, isVideoBackgroundActive, stopVideoBackground, getAppVersion, isDesktop, getDesktopVersion, isVersionNewer, clearWebMediaSession } from './services/backgroundPlayback';
+import { getAppUpdate, AppUpdateInfo } from './services/api';
+import UpdateDialog from './components/UpdateDialog';
 import { getPushEnabled, syncWebPushSubscription } from './services/webPush';
 import { OfflineDetector, NetworkErrorPage, VPNBanner, useVPNDetection } from './components/ErrorPages';
 import SearchModal from './components/SearchModal';
@@ -31,6 +33,7 @@ const VideoVaultPage = React.lazy(() => import('./views/VideoVaultPage'));
 const VideoPlayerPage = React.lazy(() => import('./views/VideoPlayerPage'));
 const LibraryPage = React.lazy(() => import('./views/LibraryPage'));
 const MahfelPage = React.lazy(() => import('./views/CommentsCommunityPage'));
+const SupportPage = React.lazy(() => import('./views/SupportPage'));
 const PlaylistPage = React.lazy(() => import('./views/PlaylistPage'));
 const AdminPage = React.lazy(() => import('./views/AdminPage'));
 const LoginPage = React.lazy(() => import('./views/LoginPage'));
@@ -56,6 +59,8 @@ const AppInner: React.FC = () => {
     const [usersVersion, setUsersVersion] = useState(0);
     const [isLoadingData, setIsLoadingData] = useState(true);
     const [networkError, setNetworkError] = useState(false);
+    const [updateInfo, setUpdateInfo] = useState<AppUpdateInfo | null>(null);
+    const [showUpdateDialog, setShowUpdateDialog] = useState(false);
     const [activeTab, setActiveTab] = useState<Page>('mahfel');
     const [playlistTab, setPlaylistTab] = useState<'about' | 'episodes' | 'comments'>('episodes');
     const [playlistEpisodeIndex, setPlaylistEpisodeIndex] = useState(0);
@@ -325,8 +330,37 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
         const notifTimer = setInterval(checkNotifications, 30000);
         window.addEventListener('focus', checkNotifications);
 
+        // چک‌آپدیت نسخه (فقط در اپ اندروید یا دسکتاپ)
+        const checkForUpdate = async () => {
+            try {
+                const mobile = isApp();
+                const desktop = isDesktop();
+                if (!mobile && !desktop) return;
+                const info = await getAppUpdate();
+                if (!info) return;
+                if (mobile && info.apkVersion) {
+                    const current = getAppVersion();
+                    if (!current || isVersionNewer(info.apkVersion, current)) {
+                        setUpdateInfo(info);
+                        setShowUpdateDialog(true);
+                        return;
+                    }
+                }
+                if (desktop && info.desktopVersion) {
+                    const current = getDesktopVersion();
+                    if (!current || isVersionNewer(info.desktopVersion, current)) {
+                        setUpdateInfo(info);
+                        setShowUpdateDialog(true);
+                    }
+                }
+            } catch { /* ignore */ }
+        };
+        checkForUpdate();
+        const updateTimer = setInterval(checkForUpdate, 10 * 60 * 1000);
+
         return () => {
             clearInterval(notifTimer);
+            clearInterval(updateTimer);
             window.removeEventListener('focus', checkNotifications);
         };
     }, []);
@@ -507,33 +541,15 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
         setter((prev: any[]) => {
             if (action === 'create' && payload.item) {
                 if (prev.some(p => key(p) === key(payload.item))) return prev;
-                return [payload.item, ...prev];
+                return [{ ...payload.item, id: payload.item._id ?? payload.item.id }, ...prev];
             }
             if (action === 'update' && payload.item) {
-                return prev.map(p => key(p) === key(payload.item) ? { ...payload.item } : p);
+                return prev.map(p => key(p) === key(payload.item) ? { ...payload.item, id: payload.item._id ?? payload.item.id } : p);
             }
             if (action === 'delete') return prev.filter(p => key(p) !== sid(payload.id));
             return prev;
         });
     }, [refreshAllData]);
-
-    useEffect(() => {
-        let interval: ReturnType<typeof setInterval>;
-        let wasConnected: boolean | null = null;
-        const tick = async () => {
-            const m = await import('./services/realtime');
-            const connected = m.isRealtimeConnected();
-            refreshComments();
-            if (wasConnected === null) wasConnected = connected;
-            if (wasConnected !== connected) {
-                wasConnected = connected;
-                clearInterval(interval);
-                interval = setInterval(tick, connected ? 5000 : 1000);
-            }
-        };
-        interval = setInterval(tick, 1000);
-        return () => clearInterval(interval);
-    }, [refreshComments]);
 
     useEffect(() => {
         let realtimeStarted = false;
@@ -937,6 +953,8 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
         if (!currentTrack || !audioRef.current) return;
         const { podcast, episode } = currentTrack;
         const author = authors.find(a => a.id === podcast.speakerId);
+        // مدیا سشن وب را غیرفعال کن تا WebView نوتیفیکیشن خودش (Video player) را نشان ندهد
+        clearWebMediaSession();
         updateAudioBackgroundMeta({
             title: String(episode.title || ''),
             artist: author?.name || String(podcast.title || ''),
@@ -1289,6 +1307,14 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
 
     const insertCommentIntoTree = (prev: Comment[], newComment: Comment): Comment[] => {
         const nc = { ...newComment, id: (newComment as any)._id || newComment.id, replies: [] as Comment[] };
+        // جلوگیری از دوبار درج: پیام تکراری از race بین broadcast ریل‌تایم و پاسخ POST
+        const ncKey = String((newComment as any)._id || newComment.id || '');
+        const existsIn = (list: Comment[]): boolean =>
+            list.some(c => {
+                if (ncKey && String((c as any)._id || c.id || '') === ncKey) return true;
+                return c.replies && c.replies.length > 0 ? existsIn(c.replies) : false;
+            });
+        if (ncKey && existsIn(prev)) return prev;
         if (!nc.parentId) return [nc, ...prev];
         const addReply = (list: Comment[]): Comment[] =>
             list.map(c => {
@@ -1604,6 +1630,7 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
             case 'videos': return <VideoVaultPage videos={videos} onVideoSelect={(v) => { setIsVideoMini(false); handlePlayVideo(v); }} user={user} theme={theme} onToggleTheme={toggleTheme} onProfileClick={() => setIsProfileOpen(true)} onOpenSidebar={() => setDesktopSidebarCollapsed(v => !v)} onPlaylistOpen={setVaultPlaylistOpen} vaultBackSignal={vaultBackSignal} />;
             case 'nashr': return <NashrPage publishedBooks={publishedBooks} allPodcasts={podcasts} comments={comments} onAddComment={(text, book) => openWriteModalWithAttachment('book', book)} user={user} onUpdateUser={(u) => { setUser(u); localStorage.setItem('user_data', JSON.stringify(u)); }} onDeleteComment={handleDeleteComment} onLikeComment={handleLikeComment} onUpdateComment={handleUpdateComment} onToggleSidebar={() => setDesktopSidebarCollapsed(v => !v)} myNotes={myNotes} onSaveNote={handleSaveNote} onUpdateNote={handleUpdateNote} onDeleteNote={handleDeleteNote} onRepostToMahfel={handleRepostNoteToMahfel} onOpenAuthorProfile={handleOpenAuthorProfile} />;
             case 'library': return <LibraryPage savedVideoIds={user?.library?.videos || localVideoLibrary} allVideos={videos} onPlayVideo={(v) => { setIsVideoMini(false); handlePlayVideo(v); }} onRemoveVideo={(id) => handleToggleLibrary(id)} savedPodcastIds={user?.library?.podcasts || []} savedEpisodes={user?.library?.episodes || []} allPodcasts={podcasts} authors={authors} onSelectPodcast={setSelectedPodcast} onRemovePodcast={(p) => togglePodcastLibrary(p)} onRemoveEpisode={(podcastId, episodeIndex) => toggleEpisodeLibrary(podcastId, episodeIndex)} onPlayPodcast={(podcast, idx) => playEpisode(podcast, idx)} theme={theme} onToggleTheme={toggleTheme} user={user} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} onToggleSidebar={() => setDesktopSidebarCollapsed(v => !v)} />;
+            case 'support': return <SupportPage user={user} theme={theme} onToggleTheme={toggleTheme} onOpenProfile={() => setIsProfileOpen(true)} onToggleSidebar={() => setDesktopSidebarCollapsed(v => !v)} />;
             case 'ai': return <AiAssistantPage podcasts={podcasts} videos={videos} posts={posts} books={publishedBooks} authors={authors} onPlayPodcast={playEpisode} onPlayVideo={(v) => { setIsVideoMini(false); handlePlayVideo(v); }} onShowBook={(b) => { setSelectedPublishedBook(b); }} />;
             default: return null;
         }
@@ -1845,6 +1872,9 @@ onPlayVideo={(v) => { setIsVideoMini(false); handlePlayVideo(v); }}
               )}
              
               {toast && <Toast key={toast.id} message={toast.message} image={toast.image} name={toast.name} onClose={() => setToast(null)} />}
+              {showUpdateDialog && updateInfo && (
+                  <UpdateDialog update={updateInfo} isMobile={isApp()} onClose={() => setShowUpdateDialog(false)} />
+              )}
               {notif && <NotificationBanner key={notif.id} title={notif.title} body={notif.body} link={notif.link} onClose={() => setNotif(null)} onClick={handleNotifOpen} />}
               {showWelcomeVideo && (
                   <WelcomeVideo onComplete={handleWelcomeComplete} />

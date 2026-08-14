@@ -26,6 +26,7 @@ const NAV_ITEMS: { page: Page; icon: string; label: string }[] = [
   { page: 'library', icon: 'fas fa-book-open', label: 'کتابخانه' },
   { page: 'videos', icon: 'fas fa-video', label: 'ویدیو' },
   { page: 'nashr', icon: 'fas fa-book-reader', label: 'نشر' },
+  { page: 'support', icon: 'fas fa-headset', label: 'پشتیبانی' },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -67,7 +68,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-2 py-2.5 space-y-0.5">
+          <nav className="flex-1 px-2 py-2.5 space-y-0.5 overflow-y-auto no-scrollbar">
             {NAV_ITEMS.map(item => {
               const isActive = activeTab === item.page;
               return (

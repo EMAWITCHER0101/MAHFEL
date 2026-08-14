@@ -25,6 +25,12 @@ import uploadRoutes from './routes/upload.js';
 import adminRoutes from './routes/admin.js';
 import aiRoutes from './routes/ai.js';
 import notificationRoutes from './routes/notifications.js';
+import appUpdateRoutes from './routes/appUpdate.js';
+import purchaseRequestRoutes from './routes/purchaseRequests.js';
+import expenseRoutes from './routes/expenses.js';
+import communityRoutes from './routes/community.js';
+import userProfileRoutes from './routes/users.js';
+import supportRoutes from './routes/support.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -99,6 +105,12 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/app-update', appUpdateRoutes);
+app.use('/api/purchase-requests', purchaseRequestRoutes);
+app.use('/api/expenses', expenseRoutes);
+app.use('/api/community', communityRoutes);
+app.use('/api/users', userProfileRoutes);
+app.use('/api/support', supportRoutes);
 app.use('/uploads', express.static(path.resolve('uploads')));
 
 app.use((err, req, res, next) => {

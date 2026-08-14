@@ -1,8 +1,9 @@
 
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { User, UserRole } from '../types';
 import { getRandomTailwindColor, getInitials } from '../utils/helpers';
 import { register, login, completeProfile, sendOtp, verifyOtp, resetPassword } from '../services/api';
+import { startOtpAutofill } from '../services/backgroundPlayback';
 import { SohaLogo } from '../components/SohaLogo';
 
 interface LoginPageProps {
@@ -247,6 +248,57 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     }
     setIsSubmitting(false);
   };
+
+  // درج خودکار کد OTP: پیامک که می‌رسد، نسخه اندروید کد را به اینجا پست می‌کند
+  useEffect(() => {
+    if (step !== 'otp') return;
+    try { startOtpAutofill(); } catch { /* ignore */ }
+    const onMsg = (e: MessageEvent) => {
+      const data = typeof e.data === 'string' ? e.data : '';
+      if (!data.startsWith('mahfel-otp-received|')) return;
+      const code = (data.split('|')[1] || '').replace(/\D/g, '').slice(0, 4);
+      if (code.length < 4) return;
+      setOtpCode(code);
+      setTimeout(() => {
+        if (mode === 'register') handleVerifyOtpAndRegister();
+        else handleVerifyOtp(phoneNumber, 'forgot');
+      }, 50);
+    };
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, mode, phoneNumber]);
+
+  // ══ دکمه برگشت موبایل در صفحه ورود: هر استپ یک entry تاریخچه دارد ══
+  // (فرم → کد تایید → رمز جدید): back هر مرحله را یک قدم به عقب برمی‌گرداند
+  const stepHistoryRef = useRef<{ from: string; to: string }[]>([]);
+  const prevStepRef = useRef(step);
+
+  useEffect(() => {
+    const prev = prevStepRef.current;
+    prevStepRef.current = step;
+    if (step === prev) return;
+    if (step === 'form') {
+      stepHistoryRef.current = [];
+      return;
+    }
+    const isForward = prev === 'form' || (prev === 'otp' && (step === 'newPassword' || step === 'profile'));
+    if (isForward) {
+      stepHistoryRef.current.push({ from: prev, to: step });
+      history.pushState({ sohaStep: step }, '');
+    }
+  }, [step]);
+
+  useEffect(() => {
+    const onPop = () => {
+      const h = stepHistoryRef.current;
+      if (h.length === 0) return;
+      const last = h.pop();
+      if (last && last.from) setStep(last.from as any);
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
 
   const handleResetPasswordSubmit = async () => {
     if (!password || password.length < 4) {

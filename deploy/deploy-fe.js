@@ -59,7 +59,7 @@ function uploadFile(lp, rp) {
       'server/routes/auth.js', 'server/routes/ai.js', 'server/routes/proxy.js', 'server/routes/upload.js',
       'server/models/User.js', 'server/models/Podcast.js', 'server/models/PublishedBook.js', 'server/models/Notification.js',
       'server/middleware/auth.js', 'server/utils/profanityFilter.js', 'server/utils/ipCheck.js',
-      'server/routes/notifications.js',
+      'server/routes/notifications.js', 'server/routes/support.js', 'server/models/SupportMessage.js',
       'server/package.json',
     ];
     for (const f of serverFiles) {

@@ -2,11 +2,36 @@ import { Router } from 'express';
 import Post from '../models/Post.js';
 import User from '../models/User.js';
 import Notification from '../models/Notification.js';
+import Setting from '../models/Setting.js';
 import { requireAuth, requireRole, auth } from '../middleware/auth.js';
 import { containsProfanity } from '../utils/profanityFilter.js';
 import { broadcast } from '../utils/broadcast.js';
 
 const router = Router();
+
+async function isChatClosed() {
+  try {
+    const doc = await Setting.findOne({ key: 'community_chat' });
+    return doc?.value?.chatEnabled === false;
+  } catch {
+    return false;
+  }
+}
+
+async function notifyAdminsOfCommunityMessage(name, text, kind) {
+  try {
+    const snippet = String(text || '').slice(0, 60);
+    await Notification.create({
+      title: kind === 'post' ? '💬 پیام جدید در محفل' : '💬 نظر جدید در محفل',
+      body: `${name}${snippet ? ' — ' + snippet : ''}`,
+      type: 'admin',
+      link: '',
+    });
+    broadcast('data-changed', { type: 'notifications', action: 'create' });
+  } catch (e) {
+    console.error('COMMUNITY MSG NOTIFY ERROR', e);
+  }
+}
 
 router.get('/', async (req, res) => {
   try {
@@ -72,6 +97,9 @@ router.post('/', requireAuth, async (req, res) => {
       const until = req.user.mutedUntil ? new Date(req.user.mutedUntil).toLocaleString('fa-IR') : 'نامحدود';
       return res.status(403).json({ error: `شما در حالت سکوت هستید تا ${until}`, muted: true, mutedUntil: req.user.mutedUntil });
     }
+    if (req.user.role !== 'admin' && await isChatClosed()) {
+      return res.status(403).json({ error: 'چت محفل توسط ادمین بسته شده است — فعلاً فقط می‌توانید پیام‌ها را ببینید', chatClosed: true });
+    }
     const body = { ...req.body };
     if (body.text) {
       const check = containsProfanity(body.text);
@@ -103,6 +131,9 @@ router.post('/', requireAuth, async (req, res) => {
     });
     await post.save();
     broadcast('data-changed', { type: 'posts', action: 'create', item: post.toObject() });
+    if (req.user.role !== 'admin') {
+      await notifyAdminsOfCommunityMessage(req.user.name, req.body.text, 'post');
+    }
     res.status(201).json(post);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -253,6 +284,9 @@ router.post('/:id/comments', requireAuth, async (req, res) => {
       const until = req.user.mutedUntil ? new Date(req.user.mutedUntil).toLocaleString('fa-IR') : 'نامحدود';
       return res.status(403).json({ error: `شما در حالت سکوت هستید تا ${until}`, muted: true, mutedUntil: req.user.mutedUntil });
     }
+    if (req.user.role !== 'admin' && await isChatClosed()) {
+      return res.status(403).json({ error: 'چت محفل توسط ادمین بسته شده است — فعلاً فقط می‌توانید پیام‌ها را ببینید', chatClosed: true });
+    }
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ error: 'پست یافت نشد' });
 
@@ -294,6 +328,11 @@ router.post('/:id/comments', requireAuth, async (req, res) => {
     post.comments.push(comment);
     await post.save();
     broadcast('data-changed', { type: 'posts', action: 'update', item: post.toObject() });
+
+    // نوتیفیکیشن پیام جدید به ادمین
+    if (req.user.role !== 'admin') {
+      await notifyAdminsOfCommunityMessage(req.user.name, req.body.text, 'comment');
+    }
 
     // نوتیفیکیشن پاسخ: اگر ریپلای باشد → برای صاحب نظر اصلی
     try {

@@ -7,6 +7,7 @@ import CustomVideoPlayer from '../components/CustomVideoPlayer';
 import type { CustomVideoPlayerHandle } from '../components/CustomVideoPlayer';
 import AudioPlayer from '../components/AudioPlayer';
 import MinimizedPlayer from '../components/MinimizedPlayer';
+import UserProfileModal from '../components/UserProfileModal';
 
 interface DiscussionTarget {
     type: 'post' | 'video-comment';
@@ -28,11 +29,14 @@ const PostHeader: React.FC<{
     onShowBook?: (book: PublishedBook) => void;
     onPlayEpisode?: (podcast: Podcast, episodeIndex: number) => void;
     miniPlayerProps?: any;
-}> = ({ target, authors, onAudioRef, onVideoClick, onImageClick, currentUser, onUpdatePost, publishedBook, onShowBook, onPlayEpisode, miniPlayerProps }) => {
+    onOpenProfile?: (userId?: string, name?: string, avatar?: string) => void;
+}> = ({ target, authors, onAudioRef, onVideoClick, onImageClick, currentUser, onUpdatePost, publishedBook, onShowBook, onPlayEpisode, miniPlayerProps, onOpenProfile }) => {
     const { post, video, podcast, comment, type } = target;
     const isAdminPost = post?.author === 'سرای هنر و اندیشه';
     const authorName = type === 'video-comment' ? comment?.author : post?.author;
     const authorAvatar = type === 'video-comment' ? (comment as any)?.authorAvatarUrl : post?.authorAvatarUrl;
+    const authorUserId = type === 'video-comment' ? (comment as any)?.userId : post?.userId;
+    const openProfile = () => onOpenProfile?.(authorUserId, authorName, authorAvatar);
     const authorText = type === 'video-comment' ? comment?.text : post?.text;
     const authorMedia = type === 'video-comment' ? (comment as any)?.media : post?.media;
     const lastImageIndex = authorMedia ? authorMedia.reduce((last, m, i) => m.type === 'image' ? i : last, -1) : -1;
@@ -89,8 +93,8 @@ const PostHeader: React.FC<{
     return (
         <div className="px-4 sm:px-6 lg:px-8 pt-5 pb-3" style={{ borderBottom: '1px solid var(--border)' }}>
             <div className="flex items-start gap-3 sm:gap-4" style={{ maxWidth: '700px', margin: '0 auto' }}>
-                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full flex-shrink-0 overflow-hidden shadow-sm ring-2 ring-white/80"
-                  style={{ background: `linear-gradient(135deg, hsl(${(authorName?.charCodeAt(0) || 0) * 37 % 360}, 55%, 50%), hsl(${(authorName?.charCodeAt(0) || 0) * 73 % 360}, 55%, 40%))` }}>
+                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full flex-shrink-0 overflow-hidden shadow-sm ring-2 ring-white/80 cursor-pointer active:scale-95 transition-transform"
+                  style={{ background: `linear-gradient(135deg, hsl(${(authorName?.charCodeAt(0) || 0) * 37 % 360}, 55%, 50%), hsl(${(authorName?.charCodeAt(0) || 0) * 73 % 360}, 55%, 40%))` }} onClick={openProfile}>
                   {authorAvatar ? (
                     <img src={authorAvatar} alt="" className="w-full h-full object-cover" />
                   ) : (
@@ -99,7 +103,7 @@ const PostHeader: React.FC<{
                 </div>
                 <div className="flex-1 min-w-0 space-y-2.5">
                     <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-sm leading-none" style={{ color: isAdminPost ? 'var(--primary)' : 'var(--text-1)' }}>
+                        <span className="font-bold text-sm leading-none cursor-pointer hover:opacity-70 transition-opacity" style={{ color: isAdminPost ? 'var(--primary)' : 'var(--text-1)' }} onClick={openProfile}>
                             {authorName}
                         </span>
                         {isAdminPost && (
@@ -346,7 +350,8 @@ const ChatBubble: React.FC<{
     onVideoClick?: (url: string) => void;
     onTimestampClick?: (seconds: number) => void;
     onAudioTimestampClick?: (seconds: number) => void;
-}> = ({ comment, allComments, isOwn, showAuthor, currentUser, onReply, onLike, onDelete, onEdit, onImageClick, onVideoClick, onTimestampClick, onAudioTimestampClick }) => {
+    onOpenProfile?: (userId?: string, name?: string, avatar?: string) => void;
+}> = ({ comment, allComments, isOwn, showAuthor, currentUser, onReply, onLike, onDelete, onEdit, onImageClick, onVideoClick, onTimestampClick, onAudioTimestampClick, onOpenProfile }) => {
     const [showMenu, setShowMenu] = useState(false);
     const [menuPos, setMenuPos] = useState<{ top: number; right?: number; left?: number } | null>(null);
     const [isEditing, setIsEditing] = useState(false);
@@ -438,8 +443,8 @@ const ChatBubble: React.FC<{
       <div className="mb-1">
       <div id={`bubble-${commentId}`} className={`flex items-end gap-1.5 px-3 group/bubble animate-fadeIn ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
         {!isOwn && (
-        <div className="w-8 h-8 rounded-full flex-shrink-0 overflow-hidden shadow-sm mb-0.5"
-             style={{ background: avatarColor }}>
+        <div className="w-8 h-8 rounded-full flex-shrink-0 overflow-hidden shadow-sm mb-0.5 cursor-pointer active:scale-95 transition-transform"
+             style={{ background: avatarColor }} onClick={(e) => { e.stopPropagation(); onOpenProfile?.(comment.userId, comment.author, (comment as any).authorAvatarUrl); }}>
           {(comment as any).authorAvatarUrl ? (
             <img src={(comment as any).authorAvatarUrl} alt="" className="w-full h-full object-cover" />
           ) : (
@@ -464,7 +469,7 @@ const ChatBubble: React.FC<{
             )}
 
             {showAuthor && !isOwn && !hasImage && (
-              <p className="text-[11px] font-bold mb-0.5" style={{ color: 'var(--primary)' }}>{comment.author}</p>
+              <p className="text-[11px] font-bold mb-0.5 cursor-pointer hover:opacity-70 transition-opacity" style={{ color: 'var(--primary)' }} onClick={() => onOpenProfile?.(comment.userId, comment.author, (comment as any).authorAvatarUrl)}>{comment.author}</p>
             )}
 
             {comment.audioTimestamp != null && onAudioTimestampClick && (
@@ -668,6 +673,7 @@ const ChatBubble: React.FC<{
                   onVideoClick={onVideoClick}
                   onTimestampClick={onTimestampClick}
                   onAudioTimestampClick={onAudioTimestampClick}
+                  onOpenProfile={onOpenProfile}
                 />
               ))}
             </div>
@@ -741,6 +747,8 @@ const PostCommentsPage: React.FC<PostCommentsPageProps> = ({ post, video, podcas
     const fileInputRef = useRef<HTMLInputElement>(null);
     const mainRef = useRef<HTMLDivElement>(null);
     const tempIdCounter = useRef(0);
+    const [profileTarget, setProfileTarget] = useState<{ userId?: string; name?: string; avatar?: string } | null>(null);
+    const openProfile = (userId?: string, name?: string, avatar?: string) => setProfileTarget({ userId, name, avatar });
 
     useEffect(() => { setLocalComments(discussionComments || post.comments); }, [discussionComments, post.comments]);
     useEffect(() => { commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [localComments.length]);
@@ -914,7 +922,7 @@ const PostCommentsPage: React.FC<PostCommentsPageProps> = ({ post, video, podcas
                     </div>
                   </div>
                 )}
-                <PostHeader target={{ type: 'post', post, video, podcast }} authors={authors} onAudioRef={(el) => { audioElementRef.current = el; }} onVideoClick={setVideoLightbox} onImageClick={(data) => setLightboxData(data)} currentUser={currentUser} onUpdatePost={onUpdatePost} publishedBook={publishedBooks?.find((b: any) => String(b.id) === String(post.bookId))} onShowBook={onShowBook} onPlayEpisode={onPlayEpisode} miniPlayerProps={miniPlayerProps} />
+                <PostHeader target={{ type: 'post', post, video, podcast }} authors={authors} onAudioRef={(el) => { audioElementRef.current = el; }} onVideoClick={setVideoLightbox} onImageClick={(data) => setLightboxData(data)} currentUser={currentUser} onUpdatePost={onUpdatePost} publishedBook={publishedBooks?.find((b: any) => String(b.id) === String(post.bookId))} onShowBook={onShowBook} onPlayEpisode={onPlayEpisode} miniPlayerProps={miniPlayerProps} onOpenProfile={openProfile} />
                 <div className="py-3 pb-28 sm:pb-40">
                     {localComments.length > 0 ? (
                         (() => {
@@ -945,6 +953,7 @@ const PostCommentsPage: React.FC<PostCommentsPageProps> = ({ post, video, podcas
                                         onVideoClick={setVideoLightbox}
                                         onTimestampClick={handleVideoTimestampClick}
                                         onAudioTimestampClick={handleAudioTimestampClick}
+                                        onOpenProfile={openProfile}
                                     />
                                 </React.Fragment>
                             );
@@ -1073,6 +1082,9 @@ const PostCommentsPage: React.FC<PostCommentsPageProps> = ({ post, video, podcas
         </div>
         {lightboxData && <ImageLightbox src={lightboxData.src} onClose={() => setLightboxData(null)} text={lightboxData.text} author={lightboxData.author} authorAvatar={lightboxData.authorAvatar} time={lightboxData.time} onReply={lightboxData.comment ? (replyText) => { handleReply(lightboxData.comment!, replyText); setLightboxData(null); } : undefined} onAttachMedia={() => fileInputRef.current?.click()} />}
         {videoLightbox && <VideoLightbox url={videoLightbox} onClose={() => setVideoLightbox(null)} />}
+        {profileTarget && (
+          <UserProfileModal userId={profileTarget.userId} name={profileTarget.name} avatar={profileTarget.avatar} onClose={() => setProfileTarget(null)} />
+        )}
     </>
     );
 };

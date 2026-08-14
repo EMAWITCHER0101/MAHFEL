@@ -8,6 +8,7 @@ import CartModal, { type CartItem } from '../components/CartModal';
 import CheckoutFlow from '../components/CheckoutFlow';
 import OrdersPage, { type Order } from './OrdersPage';
 import BookReader from '../components/BookReader';
+import { getMyPurchaseRequests } from '../services/api';
 
 // ─── Wallet Payment Page ──────────────────────────────────────────────────────
 const WalletPaymentPage: React.FC<{
@@ -874,6 +875,52 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
   useEffect(() => { localStorage.setItem('soha_orders', JSON.stringify(orders)); }, [orders]);
   useEffect(() => { localStorage.setItem('soha_wallet', String(walletBalance)); }, [walletBalance]);
 
+  // ─── سینک سفارش‌ها با سرور: تایید/رد ادمین روی درخواست‌های پرداخت ───
+  const syncPurchaseRequests = useCallback(async () => {
+    if (!user) return;
+    try {
+      const reqs = await getMyPurchaseRequests();
+      if (!reqs || reqs.length === 0) return;
+      setOrders(prev => {
+        let next = [...prev];
+        let changed = false;
+        for (const r of reqs) {
+          const orderNum = String(r.orderNumber || '');
+          if (!orderNum) continue;
+          const idx = next.findIndex(o => o.orderNumber === orderNum);
+          if (idx >= 0) {
+            const st = r.status === 'confirmed' ? 'confirmed' : r.status === 'rejected' ? 'cancelled' : 'pending';
+            if (next[idx].status !== st) { next = [...next]; next[idx] = { ...next[idx], status: st }; changed = true; }
+          } else {
+            next = [{
+              id: Date.now() + next.length,
+              orderNumber: orderNum,
+              items: (r.items || []).map(i => ({ title: i.title, cover: i.cover, price: i.price, quantity: i.quantity })),
+              totalPrice: r.totalPrice || 0,
+              paymentMethod: 'card-to-card',
+              transferDate: r.transferDate,
+              transferTime: r.transferTime,
+              trackingCode: r.trackingCode,
+              date: r.createdAt || new Date().toISOString(),
+              status: r.status === 'confirmed' ? 'confirmed' : r.status === 'rejected' ? 'cancelled' : 'pending',
+            }, ...next];
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    } catch { /* سرور در دسترس نیست — سفارش‌های محلی کافی است */ }
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    syncPurchaseRequests();
+    const t = setInterval(syncPurchaseRequests, 15000);
+    const onFocus = () => syncPurchaseRequests();
+    window.addEventListener('focus', onFocus);
+    return () => { clearInterval(t); window.removeEventListener('focus', onFocus); };
+  }, [user, syncPurchaseRequests]);
+
   useEffect(() => {
     if (walletPayStep === 'amount') {
       const c = String(Math.floor(1000 + Math.random() * 9000));
@@ -941,7 +988,7 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
 
   const removeFromCart = useCallback((bookId: number) => { setCartItems(prev => prev.filter(i => i.book.id !== bookId)); showToast('حذف شد', 'fa-trash-alt'); }, [showToast]);
   const updateCartQuantity = useCallback((bookId: number, qty: number) => { if (qty <= 0) { removeFromCart(bookId); return; } setCartItems(prev => prev.map(i => i.book.id === bookId ? { ...i, quantity: qty } : i)); }, [removeFromCart]);
-  const handleCheckoutComplete = useCallback((order: Order) => { setOrders(prev => [order, ...prev]); setCartItems([]); showToast(`سفارش ${order.orderNumber} ثبت شد`, 'fa-receipt'); }, [showToast]);
+  const handleCheckoutComplete = useCallback((order: Order) => { setOrders(prev => [order, ...prev]); setCartItems([]); showToast(`درخواست ${order.orderNumber} ثبت شد — در انتظار تایید ادمین`, 'fa-clock'); }, [showToast]);
   const cartCount = cartItems.reduce((sum, i) => sum + i.quantity, 0);
 
   const topUpWallet = useCallback((amount: number) => {
@@ -1434,7 +1481,7 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
 
     {/* ═══════════════ MODALS ═══════════════ */}
     <CartModal items={cartItems} isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} onRemove={removeFromCart} onUpdateQuantity={updateCartQuantity} onCheckout={() => { setIsCartOpen(false); setIsCheckoutOpen(true); }} />
-    <CheckoutFlow items={cartItems} isOpen={isCheckoutOpen} onClose={() => setIsCheckoutOpen(false)} onComplete={handleCheckoutComplete} walletBalance={walletBalance} onTopUp={topUpWallet} onDeduct={deductWallet} />
+    <CheckoutFlow items={cartItems} isOpen={isCheckoutOpen} onClose={() => setIsCheckoutOpen(false)} onComplete={handleCheckoutComplete} user={user} />
     
     {/* ═══ PROFILE MODAL ═══ */}
     {isProfileOpen && (
@@ -1551,7 +1598,7 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
               </div>
             )}
 
-            {/* WALLET + QUICK CHARGE */}
+            {/* WALLET — در حال توسعه */}
             {walletPayStep === 'idle' && (
               <div>
                 <p className="text-[10px] font-bold mb-2 " style={{ color: 'var(--text-3)' }}>کیف پول</p>
@@ -1563,18 +1610,14 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
                   <p className="text-xl font-bold text-white">{toPersianDigits(walletBalance.toLocaleString('fa-IR'))} <span className="text-xs font-medium">تومان</span></p>
                 </div>
 
-                <p className="text-[10px] font-bold mt-3 mb-1.5 " style={{ color: 'var(--text-3)' }}>شارژ سریع</p>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {[100000, 200000, 500000, 1000000].map(a => (
-                    <button key={a} onClick={() => { setWalletPayAmount(String(a)); setWalletPayStep('amount'); }} className="py-2 rounded-xl text-center transition-all active:scale-95" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                      <span className="text-[10px] font-bold" style={{ color: 'var(--text)' }}>{toPersianDigits(a.toLocaleString('fa-IR'))}</span>
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex gap-2 mt-2 mb-2">
-                  <input type="text" value={walletPayAmount} onChange={e => setWalletPayAmount(e.target.value)} placeholder="مبلغ دلخواه" className="flex-1 px-3 py-2 rounded-xl text-[11px] font-medium outline-none" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text)' } as any} />
-                  <button onClick={() => { if ((parseInt(walletPayAmount.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString()).replace(/[^0-9]/g, '')) || 0) >= 10000) setWalletPayStep('amount'); }} disabled={(parseInt(walletPayAmount.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString()).replace(/[^0-9]/g, '')) || 0) < 10000} className="px-4 py-2 rounded-xl text-[10px] font-bold text-white transition-all active:scale-95 disabled:opacity-30" style={{ background: '#f59e0b' }}>شارژ</button>
+                <div className="mt-3 p-4 rounded-2xl flex items-center gap-3 opacity-80 select-none" style={{ background: 'var(--surface-2)', border: '1px dashed var(--border)' }}>
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'color-mix(in srgb, #f59e0b 12%, transparent)' }}>
+                    <i className="fas fa-tools text-sm" style={{ color: 'var(--text-3)' }} />
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-black" style={{ color: 'var(--text-2)' }}>شارژ کیف پول</p>
+                    <p className="text-[9px] font-bold mt-0.5" style={{ color: '#f59e0b' }}>در حال توسعه — به‌زودی فعال می‌شود</p>
+                  </div>
                 </div>
               </div>
             )}

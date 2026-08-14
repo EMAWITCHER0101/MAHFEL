@@ -646,6 +646,185 @@ export const adminDeleteNotification = async (id: string): Promise<any> => {
   return apiFetch(`/notifications/${id}`, { method: 'DELETE' });
 };
 
+// --- درخواست‌های خرید کتاب مجازی (کارت به کارت + تایید ادمین) ---
+export interface PurchaseRequestItem {
+  title: string;
+  cover?: string;
+  price?: string;
+  quantity: number;
+}
+
+export interface PurchaseRequest {
+  _id: string;
+  userId: string;
+  userName: string;
+  userPhone: string;
+  orderNumber: string;
+  items: PurchaseRequestItem[];
+  totalPrice: number;
+  cardNumber: string;
+  transferDate: string;
+  transferTime: string;
+  trackingCode: string;
+  status: 'pending' | 'confirmed' | 'rejected';
+  adminNote?: string;
+  createdAt?: string;
+}
+
+export const createPurchaseRequest = async (data: {
+  items: PurchaseRequestItem[];
+  totalPrice: number;
+  transferDate: string;
+  transferTime: string;
+  trackingCode: string;
+  cardNumber?: string;
+  orderNumber?: string;
+}): Promise<PurchaseRequest | null> => {
+  return apiFetch<PurchaseRequest>('/purchase-requests', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+};
+
+export const getMyPurchaseRequests = async (): Promise<PurchaseRequest[] | null> => {
+  return apiFetch<PurchaseRequest[]>('/purchase-requests');
+};
+
+export const adminGetPurchaseRequests = async (status?: string): Promise<PurchaseRequest[] | null> => {
+  return apiFetch<PurchaseRequest[]>(`/purchase-requests/admin${status ? `?status=${status}` : ''}`);
+};
+
+export const adminUpdatePurchaseRequest = async (id: string, status: 'confirmed' | 'rejected', adminNote?: string): Promise<PurchaseRequest | null> => {
+  return apiFetch<PurchaseRequest>(`/purchase-requests/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status, adminNote }),
+  });
+};
+
+// --- آمار فروش، سود و هزینه‌ها (ادمین) ---
+export interface Expense {
+  _id: string;
+  title: string;
+  amount: number;
+  note?: string;
+  date?: string;
+  createdAt?: string;
+}
+
+export interface PurchaseStats {
+  period: string;
+  totals: {
+    confirmed: { count: number; sum: number };
+    pending: { count: number; sum: number };
+    rejected: { count: number; sum: number };
+  };
+  daily: { date: string; value: number }[];
+  topBooks: { title: string; revenue: number; qty: number }[];
+  books: {
+    title: string;
+    qty: number;
+    revenue: number;
+    orders: number;
+    buyers: { name: string; phone: string; qty: number; date: string }[];
+  }[];
+  expenses: { count: number; sum: number };
+  netProfit: number;
+}
+
+export const adminGetPurchaseStats = async (period?: string): Promise<PurchaseStats | null> => {
+  return apiFetch<PurchaseStats>(`/purchase-requests/admin/stats${period ? `?period=${period}` : ''}`);
+};
+
+export const adminGetExpenses = async (period?: string): Promise<Expense[] | null> => {
+  return apiFetch<Expense[]>(`/expenses${period ? `?period=${period}` : ''}`);
+};
+
+export const adminCreateExpense = async (data: { title: string; amount: number; note?: string }): Promise<Expense | null> => {
+  return apiFetch<Expense>('/expenses', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+};
+
+export const adminDeleteExpense = async (id: string): Promise<any> => {
+  return apiFetch(`/expenses/${id}`, { method: 'DELETE' });
+};
+
+// --- پروفایل عمومی کاربر + وضعیت چت محفل ---
+export interface PublicUserProfile {
+  id: string;
+  name: string;
+  avatar: string;
+  role: string;
+  createdAt?: string;
+  banned?: boolean;
+  muted?: boolean;
+  mutedUntil?: string | null;
+  warnings?: number;
+  postCount?: number;
+  commentCount?: number;
+}
+
+export const getUserById = async (id: string): Promise<PublicUserProfile | null> => {
+  return apiFetch<PublicUserProfile>(`/users/${id}`);
+};
+
+export interface CommunityChatSettings {
+  chatEnabled: boolean;
+  chatMessage: string;
+}
+
+export const getCommunitySettings = async (): Promise<CommunityChatSettings | null> => {
+  return apiFetch<CommunityChatSettings>('/community/settings');
+};
+
+export const updateCommunitySettings = async (chatEnabled: boolean, chatMessage?: string): Promise<CommunityChatSettings | null> => {
+  return apiFetch<CommunityChatSettings>('/community/settings', {
+    method: 'PUT',
+    body: JSON.stringify({ chatEnabled, chatMessage }),
+  });
+};
+
+// --- App Update (نسخه‌های جدید اندروید/دسکتاپ) ---
+export interface AppUpdateInfo {
+  apkVersion?: string;
+  apkUrl?: string;
+  apkMessage?: string;
+  desktopVersion?: string;
+  desktopUrl?: string;
+  desktopMessage?: string;
+  updatedAt?: string;
+}
+
+export const getAppUpdate = async (): Promise<AppUpdateInfo | null> => {
+  return apiFetch<AppUpdateInfo>('/app-update/latest');
+};
+
+export const adminSaveAppUpdate = async (data: AppUpdateInfo): Promise<any> => {
+  return apiFetch('/app-update', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+};
+
+export const adminUploadApk = async (file: File): Promise<{ url?: string; error?: string }> => {
+  try {
+    const token = getToken();
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${API_BASE}/app-update/upload-apk`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: data.error || 'خطا در آپلود' };
+    return { url: data.url };
+  } catch (e) {
+    return { error: 'خطا در ارتباط با سرور' };
+  }
+};
+
 // --- Web Push ---
 export const getPushPublicKey = async (): Promise<string | null> => {
   try {
@@ -676,6 +855,47 @@ export const unsubscribeFromPush = async (subscription: PushSubscription): Promi
     });
     return res.ok;
   } catch { return false; }
+};
+
+// --- پشتیبانی ---
+export type SupportCategory = 'bug' | 'suggestion' | 'question' | 'other';
+export type SupportMessage = {
+  _id: string;
+  name: string;
+  contact: string;
+  category: SupportCategory;
+  message: string;
+  userId?: string;
+  isRead: boolean;
+  createdAt: string;
+};
+
+export const submitSupportMessage = async (payload: {
+  name?: string;
+  contact?: string;
+  category: SupportCategory;
+  message: string;
+}): Promise<SupportMessage | null> => {
+  return apiFetch('/support', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+};
+
+export const getSupportMessages = async (page = 1, limit = 20, isRead?: boolean): Promise<{ messages: SupportMessage[]; total: number } | null> => {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (isRead !== undefined) params.set('isRead', String(isRead));
+  return apiFetch(`/support?${params.toString()}`);
+};
+
+export const markSupportMessageRead = async (id: string): Promise<boolean> => {
+  const res = await apiFetch(`/support/${id}/read`, { method: 'PUT' });
+  return !!res;
+};
+
+export const deleteSupportMessage = async (id: string): Promise<boolean> => {
+  const res = await apiFetch(`/support/${id}`, { method: 'DELETE' });
+  return !!res;
 };
 
 // --- Save All (legacy compatibility) ---

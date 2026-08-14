@@ -2,10 +2,12 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import type { Podcast, Episode, Video, PublishedBook, Author, Book } from '../types';
 import { toPersianDigits } from '../utils/helpers';
-import { uploadFile, getAdminStats, getAdminUsers, updateUserRole, deleteUser, getAdminPosts, adminDeletePost, adminUpdatePost, getAdminComments, adminDeleteComment, adminUpdateComment, getPodcasts, getBooks, getAuthors, getVideos, getComments, getPosts, getPublishedBooks, getAdminAnalytics, getAdminAnalyticsSegments, getAdminInsights, getAdminActivity, adminExportData, adminSearchGlobal, adminBulkUsers, adminBulkPosts, adminBulkComments, muteUser, unmuteUser, unbanUser, resetUserWarnings, getNotifications, adminSendNotification, adminDeleteNotification, getAICorpus, getAdminVideoPlaylists, createVideoPlaylist, updateVideoPlaylist, deleteVideoPlaylist, adminGetNotes, adminCreateNote, adminUpdateNote, adminDeleteNote, adminGetAuthors } from '../services/api';
+import { uploadFile, getAdminStats, getAdminUsers, updateUserRole, deleteUser, getAdminPosts, adminDeletePost, adminUpdatePost, getAdminComments, adminDeleteComment, adminUpdateComment, getPodcasts, getBooks, getAuthors, getVideos, getComments, getPosts, getPublishedBooks, getAdminAnalytics, getAdminAnalyticsSegments, getAdminInsights, getAdminActivity, adminExportData, adminSearchGlobal, adminBulkUsers, adminBulkPosts, adminBulkComments, muteUser, unmuteUser, unbanUser, resetUserWarnings, getNotifications, adminSendNotification, adminDeleteNotification, getAICorpus, getAdminVideoPlaylists, createVideoPlaylist, updateVideoPlaylist, deleteVideoPlaylist, adminGetNotes, adminCreateNote, adminUpdateNote, adminDeleteNote, adminGetAuthors, getAppUpdate, adminSaveAppUpdate, adminUploadApk, AppUpdateInfo, adminGetPurchaseRequests, adminUpdatePurchaseRequest, getCommunitySettings, updateCommunitySettings, getSupportMessages, markSupportMessageRead, deleteSupportMessage } from '../services/api';
 import { fetchAparatVideoDetails, extractAparatId } from '../utils/aparatApi';
 import { GoogleGenAI } from "@google/genai";
 import { AreaTrendChart, StackedDailyBars, RankBars } from '../components/AdminCharts';
+import BookReader from '../components/BookReader';
+import AdminSalesPanel from '../components/AdminSalesPanel';
 
 const FormField = ({ label, children }: any) => (
   <div className="mb-4">
@@ -278,7 +280,7 @@ const StatCard = ({ icon, label, value, color }: { icon: string; label: string; 
     </div>
 );
 
-type AdminTab = 'dashboard' | 'users' | 'posts' | 'comments' | 'sowt' | 'videos' | 'library' | 'nashr' | 'notes' | 'authors' | 'analytics' | 'notifications';
+type AdminTab = 'dashboard' | 'users' | 'posts' | 'comments' | 'sowt' | 'videos' | 'library' | 'nashr' | 'notes' | 'authors' | 'analytics' | 'notifications' | 'versions' | 'purchases' | 'sales' | 'support';
 
 const MiniBarChart = ({ data, height = 56, color = '#8b5cf6' }: { data: { label: string; value: number }[]; height?: number; color?: string }) => {
   const max = Math.max(1, ...data.map(d => d.value));
@@ -369,6 +371,62 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
     const [notifTarget, setNotifTarget] = useState('all');
     const [notifSending, setNotifSending] = useState(false);
 
+    const [supportMessages, setSupportMessages] = useState<any[]>([]);
+    const [supportTotal, setSupportTotal] = useState(0);
+    const [supportPage, setSupportPage] = useState(1);
+    const [supportReadFilter, setSupportReadFilter] = useState<'' | 'true' | 'false'>('');
+
+    const [versionForm, setVersionForm] = useState<AppUpdateInfo>({
+        apkVersion: '', apkUrl: '', apkMessage: '',
+        desktopVersion: '', desktopUrl: '', desktopMessage: '',
+    });
+    const [versionSaving, setVersionSaving] = useState(false);
+    const [versionUploading, setVersionUploading] = useState(false);
+    const versionFileInputRef = useRef<HTMLInputElement>(null);
+
+    // ─── درخواست‌های پرداخت (کارت به کارت + تایید ادمین) ───
+    const [purchaseRequests, setPurchaseRequests] = useState<any[]>([]);
+    const [purchaseFilter, setPurchaseFilter] = useState('');
+    const [purchaseLoading, setPurchaseLoading] = useState(false);
+
+    const loadPurchaseRequests = useCallback(async () => {
+        setPurchaseLoading(true);
+        try {
+            const list = await adminGetPurchaseRequests(purchaseFilter || undefined);
+            if (list) setPurchaseRequests(list);
+        } finally {
+            setPurchaseLoading(false);
+        }
+    }, [purchaseFilter]);
+
+    const reviewPurchase = useCallback(async (id: string, status: 'confirmed' | 'rejected') => {
+        const res = await adminUpdatePurchaseRequest(id, status);
+        if (res) {
+            showAdminToast(status === 'confirmed' ? 'خرید تایید شد — دسترسی کتاب برای کاربر فعال شد ✅' : 'درخواست رد شد ❌', status === 'confirmed' ? 'success' : 'warning');
+            loadPurchaseRequests();
+        } else {
+            showAdminToast('خطا در بررسی درخواست', 'error');
+        }
+    }, [loadPurchaseRequests]);
+
+    // رفرش خودکار درخواست‌ها هنگام باز بودن تب
+    useEffect(() => {
+        if (activeTab !== 'purchases') return;
+        loadPurchaseRequests();
+        const t = setInterval(loadPurchaseRequests, 10000);
+        return () => clearInterval(t);
+    }, [activeTab, loadPurchaseRequests]);
+
+    const loadVersions = useCallback(async () => {
+        const info = await getAppUpdate();
+        if (info) {
+            setVersionForm({
+                apkVersion: info.apkVersion || '', apkUrl: info.apkUrl || '', apkMessage: info.apkMessage || '',
+                desktopVersion: info.desktopVersion || '', desktopUrl: info.desktopUrl || '', desktopMessage: info.desktopMessage || '',
+            });
+        }
+    }, []);
+
     const [adminPlaylists, setAdminPlaylists] = useState<any[]>([]);
     const [playlistSearch, setPlaylistSearch] = useState('');
     const [editingPlaylist, setEditingPlaylist] = useState<any | null>(null);
@@ -378,6 +436,15 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
         const list = await getNotifications();
         if (list) setNotifList(list);
     }, []);
+
+    const loadSupportMessages = useCallback(async (page = supportPage, readFilter = supportReadFilter) => {
+        const data = await getSupportMessages(page, 20, readFilter === '' ? undefined : readFilter === 'true');
+        if (data) {
+            setSupportMessages(data.messages);
+            setSupportTotal(data.total);
+            setSupportPage(data.page);
+        }
+    }, [supportPage, supportReadFilter]);
 
     const [adminNotes, setAdminNotes] = useState<any[]>([]);
     const [adminNotesPage, setAdminNotesPage] = useState(1);
@@ -450,6 +517,10 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
     const [activity, setActivity] = useState<any[]>([]);
     const [adminToast, setAdminToast] = useState<{ message: string; type: 'error' | 'success' | 'warning' } | null>(null);
     const [confirmToast, setConfirmToast] = useState<{ message: string; onConfirm: () => void; type?: 'danger' | 'warning' } | null>(null);
+    const [chatEnabled, setChatEnabled] = useState(true);
+    const [chatMessage, setChatMessage] = useState('');
+    const [chatSettingsLoading, setChatSettingsLoading] = useState(false);
+    const [readingBook, setReadingBook] = useState<PublishedBook | null>(null);
 
     const showAdminToast = (message: string, type: 'error' | 'success' | 'warning' = 'success') => {
         setAdminToast({ message, type });
@@ -470,6 +541,31 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
         const s = await getAdminStats();
         if (s) setStats(s);
     }, []);
+
+    useEffect(() => {
+        let alive = true;
+        getCommunitySettings().then(s => {
+            if (alive && s) { setChatEnabled(s.chatEnabled); setChatMessage(s.chatMessage || ''); }
+        }).catch(() => {});
+        return () => { alive = false; };
+    }, []);
+
+    const handleToggleChat = async () => {
+        setChatSettingsLoading(true);
+        try {
+            const r = await updateCommunitySettings(!chatEnabled, chatMessage);
+            if (r) {
+                setChatEnabled(r.chatEnabled);
+                setChatMessage(r.chatMessage || '');
+                showAdminToast(r.chatEnabled ? 'چت محفل باز شد ✅' : 'چت محفل بسته شد — کاربران فقط میتوانند ببینند ⚠️', r.chatEnabled ? 'success' : 'warning');
+            } else {
+                showAdminToast('خطا در ذخیره تنظیمات', 'error');
+            }
+        } catch {
+            showAdminToast('خطا در ذخیره تنظیمات', 'error');
+        }
+        setChatSettingsLoading(false);
+    };
 
     const loadUsers = useCallback(async (page = 1) => {
         const r = await getAdminUsers({ search: usersSearch, role: usersRoleFilter, page });
@@ -529,9 +625,11 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
         if (activeTab === 'analytics') loadActivity();
         if (activeTab === 'dashboard' || activeTab === 'analytics') loadInsights();
         if (activeTab === 'notifications') loadNotifications();
+        if (activeTab === 'support') loadSupportMessages();
+if (activeTab === 'versions') loadVersions();
         if (activeTab === 'notes') loadAdminNotes(1);
         if (activeTab === 'authors') loadAdminAuthors();
-    }, [activeTab, loadStats, loadUsers, loadPosts, loadComments, loadAnalytics, loadActivity, loadInsights, loadAICorpus, loadNotifications, loadAdminNotes, loadAdminAuthors]);
+    }, [activeTab, loadStats, loadUsers, loadPosts, loadComments, loadAnalytics, loadActivity, loadInsights, loadAICorpus, loadNotifications, loadAdminNotes, loadAdminAuthors, loadVersions]);
 
     // ریل‌تایم مدیریت کاربران: هر تغییر کاربر (ثبت‌نام/نقش/حذف) → ری‌فچ لحظه‌ای صفحهٔ فعلی بدون رفرش
     useEffect(() => {
@@ -884,11 +982,44 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
         </div>
     );
 
-    const renderPostsPanel = () => (
+const renderPostsPanel = () => (
         <div className="p-4 space-y-4 animate-fadeIn">
+            <div className="bg-white p-4 rounded-2xl border shadow-sm">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white flex-shrink-0" style={{ background: chatEnabled ? 'linear-gradient(135deg, #10b981, #059669)' : 'linear-gradient(135deg, #f59e0b, #d97706)' }}>
+                        <i className={`fas ${chatEnabled ? 'fa-unlock' : 'fa-lock'} text-sm`}></i>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-black text-gray-800">چت محفل {chatEnabled ? 'باز است' : 'بسته است'}</p>
+                        <p className="text-[9px] text-gray-400 font-bold mt-0.5 leading-relaxed">{chatEnabled ? 'کاربران میتوانند پیام بفرستند' : 'کاربران فقط میتوانند پیامها را ببینند'}</p>
+                    </div>
+                    <button onClick={handleToggleChat} disabled={chatSettingsLoading}
+                        className={`relative w-12 h-7 rounded-full transition-all duration-300 flex-shrink-0 disabled:opacity-50 ${chatEnabled ? 'bg-emerald-500' : 'bg-gray-300'}`}>
+                        <span className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow-md transition-all duration-300 ${chatEnabled ? 'left-0.5' : 'left-[22px]'}`}></span>
+                    </button>
+                </div>
+                <div className="flex items-center gap-2 mt-3">
+                    <i className="fas fa-comment-slash text-[10px] text-gray-300 flex-shrink-0"></i>
+                    <input
+                        value={chatMessage}
+                        onChange={(e) => setChatMessage(e.target.value)}
+                        placeholder="پیام نمایشی هنگام بسته بودن چت (اختیاری)..."
+                        className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-[10px] text-gray-700 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                    />
+                    <button onClick={async () => {
+                        try {
+                            const r = await updateCommunitySettings(chatEnabled, chatMessage);
+                            if (r) { setChatEnabled(r.chatEnabled); setChatMessage(r.chatMessage || ''); showAdminToast('پیام چت ذخیره شد ✅'); }
+                            else showAdminToast('خطا در ذخیره پیام', 'error');
+                        } catch { showAdminToast('خطا در ذخیره پیام', 'error'); }
+                    }} className="px-3 py-2 bg-primary text-white rounded-xl text-[9px] font-black flex items-center gap-1.5 active:scale-95 transition-all">
+                        <i className="fas fa-save text-[9px]"></i> ذخیره پیام
+                    </button>
+                </div>
+            </div>
             <div className="bg-white p-3 rounded-2xl border shadow-sm">
                 <div className="relative">
-                    <TextInput placeholder="جستجو در پست‌ها..." value={adminPostsSearch} onChange={(e: any) => setAdminPostsSearch(e.target.value)} onKeyDown={(e: any) => e.key === 'Enter' && loadPosts(1)} />
+                    <TextInput placeholder="جستجو در پستها..." value={adminPostsSearch} onChange={(e: any) => setAdminPostsSearch(e.target.value)} onKeyDown={(e: any) => e.key === 'Enter' && loadPosts(1)} />
                     <i className="fas fa-search absolute left-3 top-3.5 text-gray-300"></i>
                 </div>
             </div>
@@ -1421,6 +1552,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                     <div key={b.id} className="bg-white p-3 rounded-2xl border shadow-sm flex items-center justify-between group hover:border-blue-300 transition-all">
                         <div className="flex items-center gap-3"><img src={b.cover || 'https://via.placeholder.com/100'} className="w-10 h-14 rounded-lg object-cover shadow-sm" /><p className="font-black text-[11px] text-gray-800">{b.title || 'بی‌عنوان'}</p></div>
                         <div className="flex items-center gap-2">
+                            <button onClick={() => setReadingBook(b)} className="bg-blue-600 text-white w-8 h-8 rounded-xl hover:bg-blue-700 shadow-md transition-all flex items-center justify-center active:scale-95" title="باز کردن با پلیر کتاب"><i className="fas fa-book-open text-[10px]"></i></button>
                             <button onClick={async () => { const { shareToMahfel } = await import('../services/api'); const ok = await shareToMahfel('book', b.id); if (ok) showAdminToast('در محفل شیر شد!', 'success'); }} className="text-green-500 font-black text-[9px] bg-green-50 px-4 py-2 rounded-xl hover:bg-green-100 transition-colors whitespace-nowrap"><i className="fas fa-share-alt ml-1"></i>محفل</button>
                             <button onClick={() => setEditingItem({ type: 'PublishedBook', id: b.id })} className="bg-blue-50 text-blue-600 px-5 py-2 rounded-xl text-[10px] font-black hover:bg-blue-100 transition-colors">ویرایش</button>
                             <button onClick={() => handleDelete('publishedBooks', b.id)} className="w-8 h-8 rounded-xl bg-red-500 text-white hover:bg-red-600 shadow-md transition-all flex items-center justify-center"><i className="fas fa-trash text-[10px]"></i></button>
@@ -1892,6 +2024,195 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
 };
 
     const isEditing = editingItem !== null;
+    const renderVersionsPanel = () => (
+        <div className="p-4 sm:p-6 flex flex-col gap-4">
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border shadow-sm">
+                <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2">
+                    <i className="fas fa-robot text-primary"></i> اعلان نسخه جدید — اندروید (APK)
+                </h3>
+                <p className="text-[9px] text-gray-400 mb-4 leading-relaxed">
+                    کاربران اپ اندروید به‌محض باز کردن اپ، پیشنهاد «دانلود و نصب» نسخه جدید را می‌بینند.
+                </p>
+                <div className="space-y-3">
+                    <FormField label="شماره نسخه جدید (مثال: 1.1.0)">
+                        <TextInput dir="ltr" placeholder="1.1.0" value={versionForm.apkVersion || ''} onChange={(e: any) => setVersionForm(f => ({ ...f, apkVersion: e.target.value.trim() }))} />
+                    </FormField>
+                    <FormField label="پیام به کاربران (اختیاری)">
+                        <TextArea rows={2} placeholder="مثلاً: قابلیت درج خودکار کد تایید اضافه شد" value={versionForm.apkMessage || ''} onChange={(e: any) => setVersionForm(f => ({ ...f, apkMessage: e.target.value }))} />
+                    </FormField>
+                    <FormField label="فایل APK جدید">
+                        <div className="flex flex-col gap-2">
+                            <input
+                                ref={versionFileInputRef}
+                                type="file"
+                                accept=".apk,application/vnd.android.package-archive,application/octet-stream"
+                                className="hidden"
+                                onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    e.target.value = '';
+                                    if (!file) return;
+                                    setVersionUploading(true);
+                                    const res = await adminUploadApk(file);
+                                    setVersionUploading(false);
+                                    if (res.url) {
+                                        setVersionForm(f => ({ ...f, apkUrl: res.url || '' }));
+                                        setAdminToast({ type: 'success', message: 'فایل APK با موفقیت آپلود شد ✅' });
+                                    } else {
+                                        setAdminToast({ type: 'error', message: res.error || 'خطا در آپلود فایل' });
+                                    }
+                                }}
+                            />
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => versionFileInputRef.current?.click()}
+                                    disabled={versionUploading}
+                                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-white text-xs font-black transition-all active:scale-95 shadow-lg disabled:bg-gray-300 disabled:cursor-not-allowed">
+                                    {versionUploading ? <><i className="fas fa-spinner fa-spin"></i> در حال آپلود…</> : <><i className="fas fa-upload"></i> انتخاب فایل APK</>}
+                                </button>
+                                {versionForm.apkUrl && (
+                                    <span className="text-[9px] text-green-600 bg-green-50 px-3 py-1.5 rounded-full font-black truncate max-w-[220px]">{versionForm.apkUrl}</span>
+                                )}
+                            </div>
+                        </div>
+                    </FormField>
+                </div>
+            </div>
+
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border shadow-sm">
+                <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2">
+                    <i className="fas fa-desktop text-primary"></i> اعلان نسخه جدید — دسکتاپ ویندوز
+                </h3>
+                <p className="text-[9px] text-gray-400 mb-4 leading-relaxed">
+                    هنگام باز شدن اپ دسکتاپ، به کاربر پیشنهاد دانلود نصاب جدید داده می‌شود.
+                </p>
+                <div className="space-y-3">
+                    <FormField label="شماره نسخه جدید (مثال: 1.1.0)">
+                        <TextInput dir="ltr" placeholder="1.1.0" value={versionForm.desktopVersion || ''} onChange={(e: any) => setVersionForm(f => ({ ...f, desktopVersion: e.target.value.trim() }))} />
+                    </FormField>
+                    <FormField label="لینک نصاب جدید (https://...)">
+                        <TextInput dir="ltr" placeholder="https://app.soha-sima.ir/downloads/Mahfel-Setup.exe" value={versionForm.desktopUrl || ''} onChange={(e: any) => setVersionForm(f => ({ ...f, desktopUrl: e.target.value.trim() }))} />
+                    </FormField>
+                    <FormField label="پیام به کاربران (اختیاری)">
+                        <TextArea rows={2} placeholder="مثلاً: مشکلات نصب نسخه قبلی برطرف شده است" value={versionForm.desktopMessage || ''} onChange={(e: any) => setVersionForm(f => ({ ...f, desktopMessage: e.target.value }))} />
+                    </FormField>
+                </div>
+            </div>
+
+            <button
+                disabled={versionSaving || (!versionForm.apkVersion && !versionForm.desktopVersion)}
+                onClick={async () => {
+                    setVersionSaving(true);
+                    const res = await adminSaveAppUpdate(versionForm);
+                    setVersionSaving(false);
+                    if (res) {
+                        setAdminToast({ type: 'success', message: 'نسخه‌ها با موفقیت ذخیره شد ✅' });
+                        loadVersions();
+                    } else {
+                        setAdminToast({ type: 'error', message: 'خطا در ذخیره نسخه‌ها' });
+                    }
+                }}
+                className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-white text-xs font-black transition-all active:scale-95 shadow-lg ${versionSaving || (!versionForm.apkVersion && !versionForm.desktopVersion) ? 'bg-gray-300 cursor-not-allowed' : 'bg-primary hover:opacity-90'}`}>
+                {versionSaving ? <><i className="fas fa-spinner fa-spin"></i> در حال ذخیره…</> : <><i className="fas fa-save"></i> ذخیره و اعلام به کاربران</>}
+            </button>
+        </div>
+    );
+    const renderPurchasesPanel = () => (
+        <div className="p-4 sm:p-6 flex flex-col gap-4">
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border shadow-sm">
+                <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <i className="fas fa-money-bill-transfer text-primary"></i> درخواست‌های خرید کتاب مجازی
+                </h3>
+                <p className="text-[9px] text-gray-400 mb-4 leading-relaxed">
+                    کاربران پس از کارت به کارت، اطلاعات پرداخت (تاریخ/ساعت/کد پیگیری) را ثبت می‌کنند. پس از بررسی واریز، درخواست را تایید کنید تا دسترسی کتاب برای کاربر فعال شود. تایید کردن و رفرش خودکار هر ۱۰ ثانیه.
+                </p>
+
+                {/* فیلتر وضعیت */}
+                <div className="flex gap-2 mb-4 flex-wrap">
+                    {[{ v: '', l: 'همه' }, { v: 'pending', l: '⏳ در انتظار' }, { v: 'confirmed', l: '✅ تایید شده' }, { v: 'rejected', l: '❌ رد شده' }].map(f => (
+                        <button key={f.v} onClick={() => setPurchaseFilter(f.v)}
+                            className={`px-3.5 py-1.5 rounded-full text-[10px] font-black transition-all active:scale-95 ${purchaseFilter === f.v ? 'text-white shadow-md' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                            style={{ background: purchaseFilter === f.v ? 'var(--primary)' : undefined }}>
+                            {f.l}
+                        </button>
+                    ))}
+                    <button onClick={loadPurchaseRequests} className="px-3.5 py-1.5 rounded-full text-[10px] font-black bg-gray-100 text-gray-500 hover:bg-gray-200 transition-all active:scale-95">
+                        <i className={`fas ${purchaseLoading ? 'fa-spinner fa-spin' : 'fa-rotate'} text-[9px] ml-1`} /> رفرش
+                    </button>
+                </div>
+
+                {purchaseRequests.length === 0 ? (
+                    <div className="text-center py-10">
+                        <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-3" style={{ background: 'var(--surface-2)', border: '2px dashed var(--border)' }}>
+                            <i className="fas fa-receipt text-xl" style={{ color: 'var(--text-3)' }} />
+                        </div>
+                        <p className="text-[11px] font-black text-gray-400">درخواستی یافت نشد</p>
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        {purchaseRequests.map(r => {
+                            const pending = r.status === 'pending';
+                            return (
+                                <div key={r._id} className="rounded-2xl p-4 border transition-all" style={{ background: pending ? 'color-mix(in srgb, #f59e0b 4%, white)' : 'white', borderColor: pending ? 'color-mix(in srgb, #f59e0b 30%, transparent)' : 'var(--border)' }}>
+                                    {/* header */}
+                                    <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm font-black ${pending ? 'bg-amber-500' : r.status === 'confirmed' ? 'bg-green-500' : 'bg-red-400'}`}>
+                                                <i className={`fas ${pending ? 'fa-hourglass-half' : r.status === 'confirmed' ? 'fa-check' : 'fa-xmark'} text-[11px]`}></i>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-black text-gray-800">{r.userName || 'کاربر'}</p>
+                                                <p className="text-[9px] text-gray-400 font-mono" dir="ltr">{r.userPhone}</p>
+                                            </div>
+                                        </div>
+                                        <span className={`px-2.5 py-1 rounded-full text-[9px] font-black ${pending ? 'bg-amber-50 text-amber-600' : r.status === 'confirmed' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'}`}>
+                                            {pending ? 'در انتظار بررسی' : r.status === 'confirmed' ? 'تایید شده' : 'رد شده'}
+                                        </span>
+                                    </div>
+
+                                    {/* items */}
+                                    <div className="space-y-1.5 mb-3">
+                                        {r.items.map((it: any, i: number) => (
+                                            <div key={i} className="flex items-center justify-between text-[10px] font-bold text-gray-600 bg-gray-50 rounded-lg px-2.5 py-1.5">
+                                                <span className="truncate ml-2">{it.title} <span className="text-gray-400">× {it.quantity}</span></span>
+                                                <span className="tabular-nums text-gray-700">{toPersianDigits(it.price || '۰')}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* transfer info */}
+                                    <div className="grid grid-cols-2 gap-2 mb-3 text-[10px] font-bold text-gray-700">
+                                        <div className="bg-gray-50 rounded-lg px-2.5 py-1.5"><span className="text-gray-400">تاریخ:</span> {toPersianDigits(r.transferDate || '—')}</div>
+                                        <div className="bg-gray-50 rounded-lg px-2.5 py-1.5"><span className="text-gray-400">ساعت:</span> {toPersianDigits(r.transferTime || '—')}</div>
+                                        <div className="col-span-2 bg-gray-50 rounded-lg px-2.5 py-1.5" dir="ltr"><span className="text-gray-400 ml-2">کد پیگیری:</span> <span className="font-mono">{toPersianDigits(r.trackingCode || '—')}</span></div>
+                                    </div>
+
+                                    {/* amount + actions */}
+                                    <div className="flex items-center justify-between flex-wrap gap-2">
+                                        <span className="text-sm font-black tabular-nums" style={{ color: 'var(--primary)' }}>{toPersianDigits((r.totalPrice || 0).toLocaleString('fa-IR'))} <span className="text-[9px] font-bold text-gray-400">تومان</span></span>
+                                        {pending && (
+                                            <div className="flex gap-2">
+                                                <button onClick={() => showConfirmToast('تایید این خرید؟ پس از تایید دسترسی کتاب برای کاربر فعال می‌شود.', () => reviewPurchase(r._id, 'confirmed'), 'warning')}
+                                                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[10px] font-black text-white transition-all active:scale-95 bg-green-500 hover:bg-green-600 shadow-md shadow-green-500/25">
+                                                    <i className="fas fa-check text-[9px]" /> تایید و فعال‌سازی
+                                                </button>
+                                                <button onClick={() => showConfirmToast('این درخواست رد شود؟', () => reviewPurchase(r._id, 'rejected'))}
+                                                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[10px] font-black text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 transition-all active:scale-95">
+                                                    <i className="fas fa-xmark text-[9px]" /> رد
+                                                </button>
+                                            </div>
+                                        )}
+                                        {!pending && r.adminNote && (
+                                            <span className="text-[9px] text-gray-400 font-bold">یادداشت: {r.adminNote}</span>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
     const renderNotificationsPanel = () => (
         <div className="p-4 sm:p-6 flex flex-col gap-4">
             <div className="bg-white p-4 sm:p-5 rounded-2xl border shadow-sm">
@@ -1970,6 +2291,99 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
             </div>
         </div>
     );
+    const renderSupportPanel = () => (
+        <div className="p-4 sm:p-6 flex flex-col gap-4">
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border shadow-sm flex-1 overflow-auto">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                        <i className="fas fa-headset text-primary"></i> پیام‌های پشتیبانی ({toPersianDigits(supportTotal)})
+                    </h3>
+                    <div className="flex gap-1.5">
+                        {[['', 'همه'], ['false', 'خوانده‌نشده'], ['true', 'خوانده‌شده']].map(([val, label]) => (
+                            <button key={val}
+                                onClick={() => { setSupportReadFilter(val as any); loadSupportMessages(1, val as any); }}
+                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black transition-all ${
+                                    supportReadFilter === val ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                                }`}>
+                                {label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {supportMessages.length === 0 ? (
+                    <p className="text-center text-xs text-gray-400 py-10">پیامی دریافت نشده است</p>
+                ) : (
+                    <div className="space-y-2">
+                        {supportMessages.map((m: any) => (
+                            <div key={String(m._id)} className={`p-3 bg-gray-50 rounded-xl border border-gray-100 ${!m.isRead ? 'bg-amber-50/50 border-amber-200/60' : ''}`}>
+                                <div className="flex items-start gap-3">
+                                    <div className="w-8 h-8 flex-shrink-0 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+                                        <i className="fas fa-user text-xs"></i>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <p className="text-xs font-black text-gray-700 truncate">{m.name || 'کاربر'}</p>
+                                                {!m.isRead && <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" title="خوانده‌نشده"></span>}
+                                            </div>
+                                            <span className="text-[9px] text-gray-400 flex-shrink-0">{m.createdAt ? new Date(m.createdAt).toLocaleString('fa-IR', { dateStyle: 'short', timeStyle: 'short' }) : ''}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <span className="px-2 py-0.5 rounded-md text-[8px] font-black"
+                                                style={{ background: m.category === 'bug' ? '#fee2e2' : m.category === 'suggestion' ? '#fef3c7' : m.category === 'question' ? '#dbeafe' : '#d1fae5',
+                                                    color: m.category === 'bug' ? '#ef4444' : m.category === 'suggestion' ? '#f59e0b' : m.category === 'question' ? '#3b82f6' : '#10b981' }}>
+                                                {m.category === 'bug' ? 'گزارش باگ' : m.category === 'suggestion' ? 'پیشنهاد' : m.category === 'question' ? 'سؤال' : 'سایر'}
+                                            </span>
+                                            {m.contact && <span className="text-[9px] text-gray-400 truncate" dir="ltr">{m.contact}</span>}
+                                        </div>
+                                        <p className="text-[10px] text-gray-600 mt-1.5 leading-relaxed whitespace-pre-line">{m.message}</p>
+                                    </div>
+                                    <div className="flex flex-col gap-1 flex-shrink-0">
+                                        <button
+                                            onClick={async () => {
+                                                if (!m.isRead) {
+                                                    await markSupportMessageRead(String(m._id));
+                                                    loadSupportMessages();
+                                                }
+                                            }}
+                                            disabled={m.isRead}
+                                            className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${m.isRead ? 'text-gray-300 cursor-default' : 'text-green-500 hover:bg-green-50'}`}
+                                            title={m.isRead ? 'خوانده شد' : 'علامت‌گذاری خوانده‌شده'}>
+                                            <i className="fas fa-check text-[10px]"></i>
+                                        </button>
+                                        <button
+                                            onClick={async () => {
+                                                await deleteSupportMessage(String(m._id));
+                                                loadSupportMessages();
+                                            }}
+                                            className="w-7 h-7 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 flex items-center justify-center transition-all"
+                                            title="حذف">
+                                            <i className="fas fa-trash-alt text-[10px]"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {supportTotal > 20 && (
+                    <div className="flex items-center justify-center gap-2 mt-4">
+                        <button onClick={() => loadSupportMessages(Math.max(1, supportPage - 1))} disabled={supportPage <= 1}
+                            className="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-500 text-[9px] font-black disabled:opacity-30 transition-all hover:bg-gray-200">
+                            قبلی
+                        </button>
+                        <span className="text-[9px] font-black text-gray-400">صفحه {toPersianDigits(supportPage)} از {toPersianDigits(Math.ceil(supportTotal / 20))}</span>
+                        <button onClick={() => loadSupportMessages(supportPage + 1)} disabled={supportPage * 20 >= supportTotal}
+                            className="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-500 text-[9px] font-black disabled:opacity-30 transition-all hover:bg-gray-200">
+                            بعدی
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
     const tabs: { id: AdminTab; label: string; icon: string; color: string }[] = [
         { id: 'dashboard', label: 'داشبورد', icon: 'fa-chart-pie', color: '#6366f1' },
         { id: 'users', label: 'کاربران', icon: 'fa-users', color: '#10b981' },
@@ -1983,6 +2397,10 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
         { id: 'authors', label: 'نویسندگان', icon: 'fa-pen-fancy', color: '#db2777' },
         { id: 'videos', label: 'ویدیو', icon: 'fa-video', color: '#2e86c1' },
         { id: 'notifications', label: 'نوتیفیکیشن', icon: 'fa-bell', color: '#f59e0b' },
+        { id: 'versions', label: 'نسخه اپ', icon: 'fa-rocket', color: '#7c5cff' },
+        { id: 'purchases', label: 'درخواست خرید', icon: 'fa-money-bill-transfer', color: '#059669' },
+        { id: 'sales', label: 'آمار فروش', icon: 'fa-chart-line', color: '#2e86c1' },
+        { id: 'support', label: 'پشتیبانی', icon: 'fa-headset', color: '#7c3aed' },
     ];
 
     return (
@@ -2089,6 +2507,10 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                         {activeTab === 'notes' && renderAdminNotesPanel()}
                         {activeTab === 'authors' && renderAdminAuthorsPanel()}
                         {activeTab === 'notifications' && renderNotificationsPanel()}
+                        {activeTab === 'versions' && renderVersionsPanel()}
+{activeTab === 'purchases' && renderPurchasesPanel()}
+                    {activeTab === 'sales' && <AdminSalesPanel />}
+                    {activeTab === 'support' && renderSupportPanel()}
                     </div>
                 </div>
 
@@ -2114,6 +2536,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                     </div>
                 </div>
             )}
+            {readingBook && <BookReader book={readingBook} onClose={() => setReadingBook(null)} />}
         </div>
     );
 };
