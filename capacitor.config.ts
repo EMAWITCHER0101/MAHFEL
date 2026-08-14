@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'MAHFEL',
   webDir: 'out',
   server: {
-    url: 'http://87.248.145.44',
+    url: 'https://app.soha-sima.ir',
     cleartext: true,
     androidScheme: 'https',
     allowNavigation: ['87.248.145.44', 'soha-sima.ir', '*.soha-sima.ir']

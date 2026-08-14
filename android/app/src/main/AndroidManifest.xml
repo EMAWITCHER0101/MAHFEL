@@ -29,10 +29,14 @@
 
         </activity>
 
-        <service
-            android:name=".AudioPlaybackService"
+        <!-- مینی‌پلیر نیتیو PiP ویدیو: فقط ویدیو، بدون هیچ دکمه/المان -->
+        <activity
+            android:name=".PipActivity"
             android:exported="false"
-            android:foregroundServiceType="mediaPlayback" />
+            android:supportsPictureInPicture="true"
+            android:resizeableActivity="true"
+            android:theme="@android:style/Theme.Black.NoTitleBar"
+            android:configChanges="orientation|keyboardHidden|screenSize|smallestScreenSize|screenLayout|uiMode|navigation|density" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -43,13 +47,26 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- پخش در پس‌زمینه: سرویس پیش‌زمینه با اعلان کنترل -->
+        <service
+            android:name=".PlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
+        <!-- اکشن‌های پنجره PiP (دکمه پخش/توقف) -->
+        <receiver
+            android:name=".MediaCommandReceiver"
+            android:exported="false" />
     </application>
 
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- پلیر شناور ویدیو (مثل یوتیوب): نمایش روی سایر اپ‌ها -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 </manifest>

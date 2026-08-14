@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import Book from '../models/Book.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
+import { broadcast } from '../utils/broadcast.js';
 
 const router = Router();
 
@@ -37,6 +38,7 @@ router.post('/', requireAuth, requireRole('admin', 'author'), async (req, res) =
   try {
     const book = new Book(req.body);
     await book.save();
+    broadcast('data-changed', { type: 'books', action: 'create', item: book.toObject() });
     res.status(201).json(book);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -57,6 +59,7 @@ router.delete('/:id', requireAuth, requireRole('admin'), async (req, res) => {
   try {
     const book = await Book.findByIdAndDelete(req.params.id);
     if (!book) return res.status(404).json({ error: 'کتاب یافت نشد' });
+    broadcast('data-changed', { type: 'books', action: 'delete', id: req.params.id });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'خطای سرور' });

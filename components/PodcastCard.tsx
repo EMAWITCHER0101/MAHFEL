@@ -97,10 +97,10 @@ const PodcastCard: React.FC<PodcastCardProps> = ({
         </div>
       </div>
       <div className="p-2 flex-grow flex flex-col">
-        <h3 className="text-[11px] font-black leading-tight line-clamp-2 text-text-primary flex-grow">{podcast.title}</h3>
+        <h3 className="text-[11px] font-black leading-tight line-clamp-2 text-text-primary flex-grow ">{podcast.title}</h3>
         {!isMaster && author && (
             <p 
-              className="text-[9px] text-text-secondary mt-1 whitespace-nowrap overflow-hidden text-ellipsis font-bold"
+              className="text-[9px] text-text-secondary mt-1 whitespace-nowrap overflow-hidden text-ellipsis font-bold "
               onClick={handleAuthorClick}
             >
                 با دبیری: {author.name}

@@ -6,11 +6,29 @@ import Comment from '../models/Comment.js';
 import Podcast from '../models/Podcast.js';
 import Author from '../models/Author.js';
 import Book from '../models/Book.js';
+import { broadcast } from '../utils/broadcast.js';
 import PublishedBook from '../models/PublishedBook.js';
+import AnalyticsEvent from '../models/AnalyticsEvent.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
+import { generateText } from '../utils/aiClient.js';
+import { deleteUserContent } from '../utils/deleteUserContent.js';
 
 const router = Router();
 router.use(requireAuth, requireRole('admin'));
+
+const DAY = 24 * 60 * 60 * 1000;
+
+function periodRange(period = '7d') {
+  const days = period === '30d' ? 30 : period === '90d' ? 90 : 7;
+  const since = new Date(Date.now() - days * DAY);
+  const prevSince = new Date(since.getTime() - days * DAY);
+  return { days, since, prevSince };
+}
+
+function pctChange(current, previous) {
+  if (!previous || previous === 0) return current > 0 ? 100 : 0;
+  return Math.round(((current - previous) / previous) * 1000) / 10;
+}
 
 router.get('/stats', async (req, res) => {
   try {
@@ -24,28 +42,58 @@ router.get('/stats', async (req, res) => {
     const commentsByType = await Comment.aggregate([{ $group: { _id: '$type', count: { $sum: 1 } } }]);
     const totalLikes = await Comment.aggregate([{ $group: { _id: null, total: { $sum: '$likes' } } }]);
     const totalPostLikes = await Post.aggregate([{ $group: { _id: null, total: { $sum: '$likes' } } }]);
-    const popularPodcasts = await Podcast.find().sort('-viewCount').limit(5).select('title cover viewCount episodes');
+    const popularPodcasts = await Podcast.aggregate([
+      { $project: { title: 1, cover: 1, episodes: 1, viewCount: 1, likes: 1, totalViews: { $ifNull: ['$viewCount', 0] } } },
+      { $sort: { totalViews: -1 } },
+      { $limit: 8 },
+    ]);
     const popularVideos = await Video.find().sort('-viewCount').limit(5).select('title thumbnailUrl viewCount likes');
-    const newUsersThisWeek = await User.countDocuments({ createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } });
-    const newPostsThisWeek = await Post.countDocuments({ createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } });
-    const newCommentsThisWeek = await Comment.countDocuments({ createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } });
+    const newUsersThisWeek = await User.countDocuments({ createdAt: { $gte: new Date(Date.now() - 7 * DAY) } });
+    const newPostsThisWeek = await Post.countDocuments({ createdAt: { $gte: new Date(Date.now() - 7 * DAY) } });
+    const newCommentsThisWeek = await Comment.countDocuments({ createdAt: { $gte: new Date(Date.now() - 7 * DAY) } });
     const dailyUsers = await User.aggregate([
-      { $match: { createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } } },
+      { $match: { createdAt: { $gte: new Date(Date.now() - 30 * DAY) } } },
       { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, count: { $sum: 1 } } },
       { $sort: { _id: 1 } }
     ]);
     const dailyPosts = await Post.aggregate([
-      { $match: { createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } } },
+      { $match: { createdAt: { $gte: new Date(Date.now() - 30 * DAY) } } },
       { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, count: { $sum: 1 } } },
       { $sort: { _id: 1 } }
+    ]);
+    const podcastViews = await Podcast.aggregate([
+      { $group: { _id: null, total: { $sum: { $ifNull: ['$viewCount', 0] } } } },
+    ]);
+    const videoViews = await Video.aggregate([{ $group: { _id: null, total: { $sum: '$viewCount' } } }]);
+    const podcastLikes = await Podcast.aggregate([{ $group: { _id: null, total: { $sum: { $ifNull: ['$likes', 0] } } } }]);
+    const videoLikes = await Video.aggregate([{ $group: { _id: null, total: { $sum: { $ifNull: ['$likes', 0] } } } }]);
+    const dailyPlays = await AnalyticsEvent.aggregate([
+      { $match: { event: { $in: ['podcast_play', 'video_view'] }, createdAt: { $gte: new Date(Date.now() - 14 * DAY) } } },
+      { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, count: { $sum: 1 } } },
+      { $sort: { _id: 1 } }
+    ]);
+    const dailyPlaysByType = await AnalyticsEvent.aggregate([
+      { $match: { event: { $in: ['podcast_play', 'video_view'] }, createdAt: { $gte: new Date(Date.now() - 14 * DAY) } } },
+      { $group: { _id: { date: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, event: '$event' }, count: { $sum: 1 } } },
+      { $sort: { '_id.date': 1 } },
+    ]);
+    const eventBreakdown = await AnalyticsEvent.aggregate([
+      { $match: { createdAt: { $gte: new Date(Date.now() - 30 * DAY) } } },
+      { $group: { _id: '$event', count: { $sum: 1 } } },
+      { $sort: { count: -1 } }
     ]);
     res.json({
       users, videos, posts, comments, podcasts, authors, books, publishedBooks,
       recentUsers, recentPosts, roleStats, commentsByType,
       totalLikes: (totalLikes[0]?.total || 0) + (totalPostLikes[0]?.total || 0),
+      totalPlays: (podcastViews[0]?.total || 0) + (videoViews[0]?.total || 0),
+      podcastViews: podcastViews[0]?.total || 0,
+      videoViews: videoViews[0]?.total || 0,
+      podcastLikes: podcastLikes[0]?.total || 0,
+      videoLikes: videoLikes[0]?.total || 0,
       popularPodcasts, popularVideos,
       newUsersThisWeek, newPostsThisWeek, newCommentsThisWeek,
-      dailyUsers, dailyPosts,
+      dailyUsers, dailyPosts, dailyPlays, dailyPlaysByType, eventBreakdown,
     });
   } catch (error) {
     res.status(500).json({ error: 'خطای سرور' });
@@ -55,12 +103,16 @@ router.get('/stats', async (req, res) => {
 router.get('/analytics', async (req, res) => {
   try {
     const { period = '7d' } = req.query;
-    const days = period === '30d' ? 30 : period === '90d' ? 90 : 7;
-    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-    const [newUsers, newPosts, newComments, topAuthors, topCommenters, postsWithMostComments] = await Promise.all([
+    const { days, since, prevSince } = periodRange(period);
+    const [newUsers, newPosts, newComments, prevNewUsers, prevNewPosts, prevNewComments] = await Promise.all([
       User.countDocuments({ createdAt: { $gte: since } }),
       Post.countDocuments({ createdAt: { $gte: since } }),
       Comment.countDocuments({ createdAt: { $gte: since } }),
+      User.countDocuments({ createdAt: { $gte: prevSince, $lt: since } }),
+      Post.countDocuments({ createdAt: { $gte: prevSince, $lt: since } }),
+      Comment.countDocuments({ createdAt: { $gte: prevSince, $lt: since } }),
+    ]);
+    const [topAuthors, topCommenters, postsWithMostComments] = await Promise.all([
       Post.aggregate([
         { $match: { createdAt: { $gte: since } } },
         { $group: { _id: '$author', count: { $sum: 1 }, totalLikes: { $sum: '$likes' } } },
@@ -73,12 +125,364 @@ router.get('/analytics', async (req, res) => {
       ]),
       Post.find({ createdAt: { $gte: since } }).sort({ 'comments': -1 }).limit(10).select('author text comments likes createdAt'),
     ]);
+
+    const [topPodcastEvents, topVideoEvents, dailyPlays, peakHours, weekdayActivity] = await Promise.all([
+      AnalyticsEvent.aggregate([
+        { $match: { event: 'podcast_play', createdAt: { $gte: since } } },
+        { $group: { _id: { refId: '$refId', refTitle: '$refTitle' }, count: { $sum: 1 } } },
+        { $sort: { count: -1 } }, { $limit: 10 }
+      ]),
+      AnalyticsEvent.aggregate([
+        { $match: { event: 'video_view', createdAt: { $gte: since } } },
+        { $group: { _id: { refId: '$refId', refTitle: '$refTitle' }, count: { $sum: 1 } } },
+        { $sort: { count: -1 } }, { $limit: 10 }
+      ]),
+      AnalyticsEvent.aggregate([
+        { $match: { event: { $in: ['podcast_play', 'video_view'] }, createdAt: { $gte: since } } },
+        { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, count: { $sum: 1 } } },
+        { $sort: { _id: 1 } }
+      ]),
+      AnalyticsEvent.aggregate([
+        { $match: { event: { $in: ['podcast_play', 'video_view'] }, createdAt: { $gte: since } } },
+        { $group: { _id: { $hour: '$createdAt' }, count: { $sum: 1 } } },
+        { $sort: { _id: 1 } }
+      ]),
+      AnalyticsEvent.aggregate([
+        { $match: { event: { $in: ['podcast_play', 'video_view'] }, createdAt: { $gte: since } } },
+        { $group: { _id: { $dayOfWeek: '$createdAt' }, count: { $sum: 1 } } },
+        { $sort: { _id: 1 } }
+      ]),
+    ]);
+
+    const totalPlays = dailyPlays.reduce((s, d) => s + d.count, 0);
+    const prevPlays = await AnalyticsEvent.countDocuments({
+      event: { $in: ['podcast_play', 'video_view'] },
+      createdAt: { $gte: prevSince, $lt: since },
+    });
+
+    const hotPodcastIds = topPodcastEvents.map(p => String(p._id.refId)).filter(Boolean).slice(0, 20);
+    const podcastsMap = {};
+    if (hotPodcastIds.length) {
+      (await Podcast.find({ _id: { $in: hotPodcastIds } }).lean()).forEach(p => { podcastsMap[String(p._id)] = p; });
+    }
+    const topPodcasts = topPodcastEvents.map(e => {
+      const p = podcastsMap[String(e._id.refId)];
+      return { _id: e._id.refId, title: p?.title || e._id.refTitle || 'بدون عنوان', cover: p?.cover || '', count: e.count, categories: p?.categories || [] };
+    });
+    const topVideos = topVideoEvents.map(e => ({ _id: e._id.refId, title: e._id.refTitle || 'بدون عنوان', count: e.count }));
+
+    const categoryCounts = {};
+    topPodcasts.forEach(p => (p.categories || []).forEach(c => { categoryCounts[c] = (categoryCounts[c] || 0) + p.count; }));
+    const topCategories = Object.entries(categoryCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 10);
+
     const hourlyActivity = await Post.aggregate([
       { $match: { createdAt: { $gte: since } } },
       { $group: { _id: { $hour: '$createdAt' }, count: { $sum: 1 } } },
       { $sort: { _id: 1 } }
     ]);
-    res.json({ newUsers, newPosts, newComments, topAuthors, topCommenters, postsWithMostComments, hourlyActivity, period });
+
+    const peakHour = peakHours.reduce((m, h) => (h.count > m.count ? h : m), { count: 0, _id: -1 });
+    const busiestWeekday = weekdayActivity.reduce((m, d) => (d.count > m.count ? d : m), { count: 0, _id: -1 });
+    const weekdayNames = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
+    const weekdayEvents = weekdayActivity.map(w => ({ ...w, name: weekdayNames[w._id - 1] || '' }));
+
+    const weeklyHeatmap = await AnalyticsEvent.aggregate([
+      { $match: { event: { $in: ['podcast_play', 'video_view'] }, createdAt: { $gte: since } } },
+      { $group: { _id: { day: { $dayOfWeek: '$createdAt' }, hour: { $hour: '$createdAt' } }, count: { $sum: 1 } } },
+    ]);
+    const dailyPlaysByType = await AnalyticsEvent.aggregate([
+      { $match: { event: { $in: ['podcast_play', 'video_view'] }, createdAt: { $gte: since } } },
+      { $group: { _id: { date: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, event: '$event' }, count: { $sum: 1 } } },
+      { $sort: { '_id.date': 1 } },
+    ]);
+
+    res.json({
+      newUsers, newPosts, newComments,
+      userGrowth: pctChange(newUsers, prevNewUsers),
+      postGrowth: pctChange(newPosts, prevNewPosts),
+      commentGrowth: pctChange(newComments, prevNewComments),
+      totalPlays, playsGrowth: pctChange(totalPlays, prevPlays),
+      topAuthors, topCommenters, postsWithMostComments, topPodcasts, topVideos, topCategories,
+      hourlyActivity, dailyPlays, dailyPlaysByType, peakHours, weekdayEvents,
+      weeklyHeatmap: weeklyHeatmap.map(h => ({ day: h._id.day, hour: h._id.hour, count: h.count })),
+      peakHour: peakHour.count > 0 ? peakHour : null,
+      busiestWeekday: busiestWeekday.count > 0 ? busiestWeekday : null,
+      period, days,
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'خطای سرور' });
+  }
+});
+
+const insightsCache = new Map();
+const INSIGHTS_TTL = 5 * 60 * 1000;
+
+async function segmentEventData(event, since, { withCovers = false } = {}) {
+  const prevSince = new Date(since.getTime() - (Date.now() - since.getTime()));
+  const [total, prev, daily, hours, heatmap, topAgg] = await Promise.all([
+    AnalyticsEvent.countDocuments({ event, createdAt: { $gte: since } }),
+    AnalyticsEvent.countDocuments({ event, createdAt: { $gte: prevSince, $lt: since } }),
+    AnalyticsEvent.aggregate([
+      { $match: { event, createdAt: { $gte: since } } },
+      { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, count: { $sum: 1 } } },
+      { $sort: { _id: 1 } },
+    ]),
+    AnalyticsEvent.aggregate([
+      { $match: { event, createdAt: { $gte: since } } },
+      { $group: { _id: { $hour: '$createdAt' }, count: { $sum: 1 } } },
+      { $sort: { _id: 1 } },
+    ]),
+    AnalyticsEvent.aggregate([
+      { $match: { event, createdAt: { $gte: since } } },
+      { $group: { _id: { day: { $dayOfWeek: '$createdAt' }, hour: { $hour: '$createdAt' } }, count: { $sum: 1 } } },
+    ]),
+    AnalyticsEvent.aggregate([
+      { $match: { event, createdAt: { $gte: since } } },
+      { $group: { _id: { refId: '$refId', refTitle: '$refTitle' }, count: { $sum: 1 } } },
+      { $sort: { count: -1 } }, { $limit: 5 },
+    ]),
+  ]);
+  let top = topAgg.map(t => ({ _id: t._id.refId, title: t._id.refTitle || 'بدون عنوان', count: t.count }));
+  if (withCovers && top.length) {
+    const ids = top.map(t => String(t._id)).filter(Boolean);
+    const pods = {};
+    if (ids.length) (await Podcast.find({ _id: { $in: ids } }).lean()).forEach(p => { pods[String(p._id)] = p; });
+    top = top.map(t => ({ ...t, cover: pods[String(t._id)]?.cover || '', subtitle: pods[String(t._id)]?.categories?.slice(0, 2).join(' • ') || '' }));
+  }
+return {
+      total, growth: pctChange(total, prev),
+      daily: daily.map(d => ({ date: d._id, count: d.count })),
+      hours: hours.map(h => ({ hour: h._id, count: h.count })),
+      heatmap: heatmap.map(h => ({ day: h._id.day, hour: h._id.hour, count: h.count })),
+      top,
+    };
+}
+
+router.get('/analytics/segments', async (req, res) => {
+  try {
+    const { period = '7d' } = req.query;
+    const { days, since } = periodRange(period);
+
+    const [audioPlays, videoViews] = await Promise.all([
+      segmentEventData('podcast_play', since, { withCovers: true }),
+      segmentEventData('video_view', since),
+    ]);
+
+    const [audioLikesTotal, audioLikesPrev, videoLikesTotal, videoLikesPrev] = await Promise.all([
+      AnalyticsEvent.countDocuments({ event: 'podcast_like', createdAt: { $gte: since } }),
+      AnalyticsEvent.countDocuments({ event: 'podcast_like', createdAt: { $gte: new Date(since.getTime() - (Date.now() - since.getTime())), $lt: since } }),
+      AnalyticsEvent.countDocuments({ event: 'video_like', createdAt: { $gte: since } }),
+      AnalyticsEvent.countDocuments({ event: 'video_like', createdAt: { $gte: new Date(since.getTime() - (Date.now() - since.getTime())), $lt: since } }),
+    ]);
+
+    const [newUsers, prevUsers, dailyUsers, newPosts, prevPosts, dailyPosts, newComments, prevComments, topAuthors, topVideos, postsWithMostComments, topCommenters] = await Promise.all([
+      User.countDocuments({ createdAt: { $gte: since } }),
+      User.countDocuments({ createdAt: { $gte: new Date(since.getTime() - (Date.now() - since.getTime())), $lt: since } }),
+      User.aggregate([
+        { $match: { createdAt: { $gte: since } } },
+        { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, count: { $sum: 1 } } },
+        { $sort: { _id: 1 } },
+      ]),
+      Post.countDocuments({ createdAt: { $gte: since } }),
+      Post.countDocuments({ createdAt: { $gte: new Date(since.getTime() - (Date.now() - since.getTime())), $lt: since } }),
+      Post.aggregate([
+        { $match: { createdAt: { $gte: since } } },
+        { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, count: { $sum: 1 } } },
+        { $sort: { _id: 1 } },
+      ]),
+      Comment.countDocuments({ createdAt: { $gte: since } }),
+      Comment.countDocuments({ createdAt: { $gte: new Date(since.getTime() - (Date.now() - since.getTime())), $lt: since } }),
+      Post.aggregate([
+        { $match: { createdAt: { $gte: since } } },
+        { $group: { _id: '$author', count: { $sum: 1 }, totalLikes: { $sum: { $ifNull: ['$likedBy', []] } } } },
+        { $sort: { count: -1 } }, { $limit: 5 },
+      ]),
+      AnalyticsEvent.aggregate([
+        { $match: { event: 'video_view', createdAt: { $gte: since } } },
+        { $group: { _id: { refId: '$refId', refTitle: '$refTitle' }, count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
+      Post.aggregate([
+        { $match: { createdAt: { $gte: since } } },
+        { $project: { title: 1, commentsCount: { $size: { $ifNull: ['$comments', []] } } } },
+        { $sort: { commentsCount: -1 } }, { $limit: 5 },
+      ]),
+      Comment.aggregate([
+        { $match: { createdAt: { $gte: since } } },
+        { $group: { _id: '$author', count: { $sum: 1 } } },
+        { $sort: { count: -1 } }, { $limit: 5 },
+      ]),
+    ]);
+
+    res.json({
+      period, days,
+      audio: {
+        plays: audioPlays.total,
+        playsGrowth: audioPlays.growth,
+        likes: audioLikesTotal,
+        likesGrowth: pctChange(audioLikesTotal, audioLikesPrev),
+        daily: audioPlays.daily,
+        hours: audioPlays.hours,
+        heatmap: audioPlays.heatmap,
+        top: audioPlays.top,
+      },
+      video: {
+        views: videoViews.total,
+        viewsGrowth: videoViews.growth,
+        likes: videoLikesTotal,
+        likesGrowth: pctChange(videoLikesTotal, videoLikesPrev),
+        daily: videoViews.daily,
+        hours: videoViews.hours,
+        heatmap: videoViews.heatmap,
+        top: videoViews.top,
+      },
+      community: {
+        newUsers, userGrowth: pctChange(newUsers, prevUsers),
+        newPosts, postGrowth: pctChange(newPosts, prevPosts),
+        newComments, commentGrowth: pctChange(newComments, prevComments),
+        dailyUsers: dailyUsers.map(d => ({ date: d._id, count: d.count })),
+        dailyPosts: dailyPosts.map(d => ({ date: d._id, count: d.count })),
+        topAuthors,
+        topVideos,
+        postsWithMostComments,
+        topCommenters,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'خطای سرور' });
+  }
+});
+
+function toFaDigits(n) {
+  return String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[d]);
+}
+
+router.get('/insights', async (req, res) => {
+  try {
+    const { period = '7d' } = req.query;
+    const key = `insights-${period}`;
+    const cached = insightsCache.get(key);
+    if (cached && Date.now() - cached.at < INSIGHTS_TTL) {
+      return res.json({ ...cached.payload, cached: true });
+    }
+    const { days, since, prevSince } = periodRange(period);
+    const [totalUsers, prevUsers, newUsers, newPosts, newComments, totalComments, totalPosts, prevPlays, playsToday] = await Promise.all([
+      User.countDocuments(),
+      User.countDocuments({ createdAt: { $gte: prevSince, $lt: since } }),
+      User.countDocuments({ createdAt: { $gte: since } }),
+      Post.countDocuments({ createdAt: { $gte: since } }),
+      Comment.countDocuments({ createdAt: { $gte: since } }),
+      Comment.countDocuments(),
+      Post.countDocuments(),
+      AnalyticsEvent.countDocuments({ event: { $in: ['podcast_play', 'video_view'] }, createdAt: { $gte: prevSince, $lt: since } }),
+      AnalyticsEvent.countDocuments({ event: { $in: ['podcast_play', 'video_view'] }, createdAt: { $gte: since } }),
+    ]);
+    const podcastPlays = await AnalyticsEvent.countDocuments({ event: 'podcast_play', createdAt: { $gte: since } });
+    const videoViews = await AnalyticsEvent.countDocuments({ event: 'video_view', createdAt: { $gte: since } });
+
+    const topByCount = await AnalyticsEvent.aggregate([
+      { $match: { event: { $in: ['podcast_play', 'video_view'] }, createdAt: { $gte: since } } },
+      { $group: { _id: { refId: '$refId', refTitle: '$refTitle' }, count: { $sum: 1 } } },
+      { $sort: { count: -1 } }, { $limit: 8 },
+    ]);
+    const idList = topByCount.map(t => String(t._id.refId)).filter(Boolean).slice(0, 20);
+    const podMap = {};
+    if (idList.length) {
+      (await Podcast.find({ _id: { $in: idList } }).select('title cover').lean()).forEach(p => { podMap[String(p._id)] = p; });
+    }
+
+    const hoursAgg = await AnalyticsEvent.aggregate([
+      { $match: { event: { $in: ['podcast_play', 'video_view'] }, createdAt: { $gte: since } } },
+      { $group: { _id: { $hour: '$createdAt' }, count: { $sum: 1 } } },
+      { $sort: { _id: 1 } },
+    ]);
+    const daysAgg = await AnalyticsEvent.aggregate([
+      { $match: { event: { $in: ['podcast_play', 'video_view'] }, createdAt: { $gte: since } } },
+      { $group: { _id: { $dayOfWeek: '$createdAt' }, count: { $sum: 1 } } },
+      { $sort: { _id: 1 } },
+    ]);
+    const peakHour = hoursAgg.reduce((m, h) => (h.count > m.count ? h : m), { count: 0, _id: -1 });
+    const weekdayNames = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
+    const busyDay = daysAgg.reduce((m, d) => (d.count > m.count ? d : m), { count: 0, _id: -1 });
+
+    const insights = [];
+    const playsGrowth = pctChange(playsToday, prevPlays);
+    const userGrowth = pctChange(newUsers, prevUsers);
+
+    if (playsGrowth >= 15) {
+      insights.push({ level: 'success', icon: 'fa-arrow-trend-up', title: 'رشد بازدید', detail: `بازدیدها در این بازه ${toFaDigits(Math.abs(playsGrowth))}٪ نسبت به بازه قبل رشد کرده است. روند صعودی است؛ با انتشار منظم محتوا این مسیر تثبیت می‌شود.` });
+    } else if (playsGrowth <= -15) {
+      insights.push({ level: 'danger', icon: 'fa-arrow-trend-down', title: 'ریزش بازدید', detail: `بازدیدها در این بازه ${toFaDigits(Math.abs(playsGrowth))}٪ کاهش یافته است. بررسی کیفیت محتوا، فرکانس انتشار و اطلاع‌رسانی به کاربران توصیه می‌شود.` });
+    } else {
+      insights.push({ level: 'info', icon: 'fa-equals', title: 'ثبات بازدید', detail: `بازدیدها در این بازه تقریباً ثابت مانده است (نوسان ${toFaDigits(Math.abs(playsGrowth))}٪). برای عبور از سطح فعلی، محتوای جدید یا چالش تعامل پیشنهاد می‌شود.` });
+    }
+
+    if (userGrowth > 0) {
+      insights.push({ level: 'success', icon: 'fa-user-plus', title: 'رشد کاربران', detail: `${toFaDigits(newUsers)} کاربر طی این بازه ثبت‌نام کردند (${toFaDigits(userGrowth)}٪ رشد نسبت به قبل). این روند نشان‌دهنده جذابیت پلتفرم است.` });
+    } else if (newUsers === 0) {
+      insights.push({ level: 'warning', icon: 'fa-user-slash', title: 'ثبت‌نام متوقف', detail: 'در این بازه کاربر جدیدی ثبت‌نام نکرده است. جستجو در کانال‌های جذب و کمپین‌های دعوت را بررسی کنید.' });
+    }
+
+    if (topByCount.length) {
+      const t = topByCount[0];
+      const title = podMap[String(t._id.refId)]?.title || t._id.refTitle || 'محتوای بالاترین';
+      insights.push({ level: 'success', icon: 'fa-fire', title: 'محتوای داغ', detail: `«${title}» با ${toFaDigits(t.count)} پخش، پربازدیدترین محتوای این بازه است. ایده‌آل است محتوای مشابه یا جلسات ادامه‌دهنده آن منتشر شود.` });
+    }
+
+    if (peakHour.count > 0) {
+      insights.push({ level: 'info', icon: 'fa-clock', title: 'ساعت طلایی', detail: `حجم‌ترین ساعت پخش، ساعت ${toFaDigits(peakHour._id)} است. انتشار اپیزودهای اصلی باز همین ساعت، بازدید بالاتری خواهد داشت.` });
+    }
+    if (busyDay.count > 0) {
+      insights.push({ level: 'info', icon: 'fa-calendar-day', title: 'روز پرترافیک', detail: `${weekdayNames[busyDay._id - 1] || ''} فعال‌ترین روز هفته است؛ بهترین روز برای انتشار مهم‌ترین محتواها است.` });
+    }
+
+    if (podcastPlays > 0 && videoViews === 0) {
+      insights.push({ level: 'warning', icon: 'fa-video', title: 'ویدیوها بدون پخش', detail: 'در این بازه هیچ ویدیویی پخش نشده. بررسی لینک ویدیوها و افزودن ویدیوی جدید با استقبال بهتر پیشنهاد می‌شود.' });
+    } else if (videoViews > podcastPlays) {
+      insights.push({ level: 'info', icon: 'fa-video', title: 'ویدیو پیشتاز', detail: `ویدیوها (${toFaDigits(videoViews)} بازدید) بیشتر از پادکست‌ها (${toFaDigits(podcastPlays)} پخش) استفاده شده‌اند. سرمایه‌گذاری بر محتوای ویدیو رشد سریع‌تری می‌آورد.` });
+    } else if (podcastPlays > videoViews) {
+      insights.push({ level: 'info', icon: 'fa-headphones', title: 'پادکست پیشتاز', detail: `پادکست‌ها با ${toFaDigits(podcastPlays)} پخش در برابر ${toFaDigits(videoViews)} بازدید ویدیو، موتور اصلی پلتفرم هستند.` });
+    }
+
+    const activeRefs = new Set(topByCount.map(t => String(t._id.refId)));
+    const recentPodcasts = await Podcast.find().sort({ createdAt: -1 }).limit(40).select('title').lean();
+    const dormant = recentPodcasts.filter(p => !activeRefs.has(String(p._id))).slice(0, 3);
+    if (dormant.length) {
+      insights.push({ level: 'warning', icon: 'fa-bed', title: 'محتوای راکد', detail: `${dormant.map(p => `«${p.title}»`).join('، ')} در این بازه هیچ پخشی نداشته‌اند؛ تازه‌سازی کاور، عنوان یا بازنشر می‌تواند آن را احیا کند.` });
+    }
+
+    if (totalUsers > 0 && totalComments > 0) {
+      insights.push({ level: 'info', icon: 'fa-comment-dots', title: 'تعامل کاربران', detail: `به‌ازای هر کاربر ${toFaDigits((totalComments / totalUsers).toFixed(1))} نظر ثبت شده است. نظرات بالاتر یعنی وفاداری بیشتر.` });
+    }
+
+    insights.push({ level: 'info', icon: 'fa-lightbulb', title: 'پیشنهاد اقدام امروز', detail: 'بر اساس الگوی بازدید، انتشار ۱ تا ۲ محتوای جدید در ساعت پیک و اطلاع‌رسانی به کاربران فعال بهترین تثبیت برای رشد پایدار است.' });
+
+    // Optional LLM narrative (non-fatal)
+    const statsSnapshot = {
+      period: { days }, totalUsers, newUsers, userGrowth: Number(userGrowth || 0), newPosts, newComments,
+      podcastPlays, videoViews, totalPlays: playsToday, playsGrowth: Number(playsGrowth || 0),
+      topContent: topByCount.slice(0, 5).map(t => ({ title: podMap[String(t._id.refId)]?.title || t._id.refTitle || '', count: t.count })),
+      peakHour: peakHour.count ? peakHour._id : null,
+      peakDay: busyDay.count ? weekdayNames[busyDay._id - 1] : null,
+    };
+    let narrative = '';
+    try {
+      const prompt = `بر اساس داده‌های زیر یک تحلیل هوشمند فارسی (حداکثر ۸۰ کلمه) برای مدیر یک پلتفرم محتوا بنویس؛ شامل وضعیت کلی، قوت‌ها، هشدارها و یک پیشنهاد عملی. فقط متن تحلیل را برگردان: ${JSON.stringify(statsSnapshot)}`;
+      const raw = await generateText(prompt, 'شما یک تحلیلگر داده و دیتاساینس فارسی هستید. فقط متن تحلیل فارسی برگردان، بدون توضیح اضافه.');
+      if (raw && raw.trim().length > 20) narrative = raw.trim();
+    } catch (aiErr) {
+      console.error('Insights LLM failed:', aiErr?.message);
+    }
+
+    const payload = {
+      period: { days },
+      summary: narrative,
+      insights: insights.slice(0, 10),
+      generatedAt: new Date().toISOString(),
+      usingLLM: Boolean(narrative),
+    };
+    insightsCache.set(key, { at: Date.now(), payload });
+    res.json({ ...payload, cached: false });
   } catch (error) {
     res.status(500).json({ error: 'خطای سرور' });
   }
@@ -104,7 +508,102 @@ router.put('/users/:id/role', async (req, res) => {
     if (!['user', 'author', 'admin'].includes(role)) return res.status(400).json({ error: 'نقش نامعتبر' });
     const user = await User.findByIdAndUpdate(req.params.id, { role }, { new: true }).select('-securityKey');
     if (!user) return res.status(404).json({ error: 'کاربر یافت نشد' });
+    broadcast('data-changed', { type: 'users', action: 'update', item: user.toObject() });
     res.json(user);
+  } catch (error) {
+    res.status(500).json({ error: 'خطای سرور' });
+  }
+});
+
+// ─── Admin: Notes (یادداشت‌ها) ────────────────────────────────────────────
+router.get('/notes', async (req, res) => {
+  try {
+    const { search, status, authorName, page = 1, limit = 20 } = req.query;
+    const filter = { type: 'note' };
+    if (status === 'draft') filter.isDraft = true;
+    else if (status === 'published') filter.isDraft = { $ne: true };
+    if (search) filter.$or = [{ title: { $regex: search, $options: 'i' } }, { description: { $regex: search, $options: 'i' } }];
+    if (authorName) filter.authorName = authorName;
+    const total = await PublishedBook.countDocuments(filter);
+    const notes = await PublishedBook.find(filter).sort('-createdAt').skip((page - 1) * limit).limit(parseInt(limit));
+    const userIds = notes.map(n => n.authorId).filter(Boolean);
+    const users = await User.find({ _id: { $in: userIds } }).select('name avatar role');
+    const userMap = Object.fromEntries(users.map(u => [String(u._id), u]));
+    res.json({
+      notes: notes.map(n => ({
+        ...n.toObject(),
+        user: n.authorId ? userMap[String(n.authorId)] || null : null,
+      })),
+      total,
+      page: parseInt(page),
+      pages: Math.ceil(total / limit),
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'خطای سرور' });
+  }
+});
+
+// Create note as admin (draft or published)
+router.post('/notes', async (req, res) => {
+  try {
+    const note = new PublishedBook({ ...req.body, type: 'note' });
+    if (!note.authorId) note.authorId = req.user._id;
+    await note.save();
+    broadcast('data-changed', { type: 'publishedBooks', action: 'create', item: note.toObject() });
+    res.status(201).json(note);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Update any note (admin overrides ownership)
+router.put('/notes/:id', async (req, res) => {
+  try {
+    const note = await PublishedBook.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    if (!note) return res.status(404).json({ error: 'یادداشت یافت نشد' });
+    broadcast('data-changed', { type: 'publishedBooks', action: 'update', item: note.toObject() });
+    res.json(note);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Delete any note
+router.delete('/notes/:id', async (req, res) => {
+  try {
+    const note = await PublishedBook.findByIdAndDelete(req.params.id);
+    if (!note) return res.status(404).json({ error: 'یادداشت یافت نشد' });
+    broadcast('data-changed', { type: 'publishedBooks', action: 'delete', id: req.params.id });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'خطای سرور' });
+  }
+});
+
+// ─── Admin: Authors management ─────────────────────────────────────────────
+router.get('/authors', async (req, res) => {
+  try {
+    // یک‌مرحله‌ای با $lookup — بدون دو کوئری جداگانه (خیلی سریع‌تر)
+    const rows = await User.aggregate([
+      { $match: { role: { $in: ['author', 'admin'] } } },
+      { $sort: { createdAt: -1 } },
+      { $lookup: {
+          from: 'publishedbooks',
+          let: { id: '$_id' },
+          pipeline: [
+            { $match: { $expr: { $and: [{ $eq: ['$authorId', '$$id'] }, { $eq: ['$type', 'note'] }] } } },
+            { $group: { _id: null,
+                published: { $sum: { $cond: [{ $ne: ['$isDraft', true] }, 1, 0] } },
+                drafts: { $sum: { $cond: [{ $eq: ['$isDraft', true] }, 1, 0] } } } },
+          ],
+          as: 'counts' } },
+      { $addFields: {
+          noteCount: { $ifNull: [{ $arrayElemAt: ['$counts.published', 0] }, 0] },
+          draftCount: { $ifNull: [{ $arrayElemAt: ['$counts.drafts', 0] }, 0] },
+      } },
+      { $project: { counts: 0, securityKey: 0, password: 0 } },
+    ]);
+    res.json(rows.map(r => ({ ...r, _id: String(r._id) })));
   } catch (error) {
     res.status(500).json({ error: 'خطای سرور' });
   }
@@ -119,6 +618,7 @@ router.put('/users/:id', async (req, res) => {
     if (role !== undefined) update.role = role;
     const user = await User.findByIdAndUpdate(req.params.id, update, { new: true }).select('-securityKey');
     if (!user) return res.status(404).json({ error: 'کاربر یافت نشد' });
+    broadcast('data-changed', { type: 'users', action: 'update', item: user.toObject() });
     res.json(user);
   } catch (error) {
     res.status(500).json({ error: 'خطای سرور' });
@@ -131,6 +631,9 @@ router.delete('/users/:id', async (req, res) => {
     if (!user) return res.status(404).json({ error: 'کاربر یافت نشد' });
     if (user.role === 'admin') return res.status(403).json({ error: 'حذف ادمین مجاز نیست' });
     await User.findByIdAndDelete(req.params.id);
+    // حذف کامل تمام پیام‌ها و محتوای کاربر
+    await deleteUserContent(req.params.id);
+    broadcast('data-changed', { type: 'users', action: 'delete', id: req.params.id });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'خطای سرور' });
@@ -142,11 +645,16 @@ router.post('/users/bulk', async (req, res) => {
     const { ids, action, value } = req.body;
     if (!ids || !Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'لیست کاربران خالی است' });
     if (action === 'delete') {
-      await User.deleteMany({ _id: { $in: ids }, role: { $ne: 'admin' } });
-      return res.json({ success: true, deleted: ids.length });
+      const targets = await User.find({ _id: { $in: ids }, role: { $ne: 'admin' } }).select('_id');
+      await User.deleteMany({ _id: { $in: targets.map(t => t._id) } });
+      // حذف کامل محتوای همهٔ کاربران حذف‌شده (به‌صورت موازی)
+      await Promise.all(targets.map(t => deleteUserContent(t._id)));
+      broadcast('data-changed', { type: 'users', action: 'ids-delete', ids: targets.map(t => String(t._id)) });
+      return res.json({ success: true, deleted: targets.length });
     }
     if (action === 'role' && ['user', 'author', 'admin'].includes(value)) {
       await User.updateMany({ _id: { $in: ids } }, { role: value });
+      broadcast('data-changed', { type: 'users', action: 'ids-update', ids });
       return res.json({ success: true, updated: ids.length });
     }
     res.status(400).json({ error: 'عملیات نامعتبر' });
@@ -195,6 +703,7 @@ router.delete('/posts/:id', async (req, res) => {
   try {
     const post = await Post.findByIdAndDelete(req.params.id);
     if (!post) return res.status(404).json({ error: 'پست یافت نشد' });
+    broadcast('data-changed', { type: 'posts', action: 'delete', id: req.params.id });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'خطای سرور' });
@@ -210,6 +719,7 @@ router.put('/posts/:id', async (req, res) => {
     update.isEdited = true;
     const post = await Post.findByIdAndUpdate(req.params.id, update, { new: true });
     if (!post) return res.status(404).json({ error: 'پست یافت نشد' });
+    broadcast('data-changed', { type: 'posts', action: 'update', item: post.toObject() });
     res.json(post);
   } catch (error) {
     res.status(500).json({ error: 'خطای سرور' });
@@ -222,14 +732,17 @@ router.post('/posts/bulk', async (req, res) => {
     if (!ids || !Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'لیست پست‌ها خالی است' });
     if (action === 'delete') {
       await Post.deleteMany({ _id: { $in: ids } });
+      broadcast('data-changed', { type: 'posts', action: 'ids-delete', ids });
       return res.json({ success: true, deleted: ids.length });
     }
     if (action === 'pin') {
       await Post.updateMany({ _id: { $in: ids } }, { isPinned: true });
+      broadcast('data-changed', { type: 'posts', action: 'ids-pin', ids });
       return res.json({ success: true, updated: ids.length });
     }
     if (action === 'unpin') {
       await Post.updateMany({ _id: { $in: ids } }, { isPinned: false });
+      broadcast('data-changed', { type: 'posts', action: 'ids-unpin', ids });
       return res.json({ success: true, updated: ids.length });
     }
     res.status(400).json({ error: 'عملیات نامعتبر' });
@@ -285,6 +798,7 @@ router.delete('/comments/:id', async (req, res) => {
     const comment = await Comment.findByIdAndDelete(req.params.id);
     if (!comment) return res.status(404).json({ error: 'نظر یافت نشد' });
     await Comment.deleteMany({ parentId: req.params.id });
+    broadcast('data-changed', { type: 'comments', action: 'delete', id: req.params.id });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'خطای سرور' });
@@ -299,6 +813,7 @@ router.put('/comments/:id', async (req, res) => {
     if (isFeatured !== undefined) update.isFeatured = isFeatured;
     const comment = await Comment.findByIdAndUpdate(req.params.id, update, { new: true });
     if (!comment) return res.status(404).json({ error: 'نظر یافت نشد' });
+    broadcast('data-changed', { type: 'comments', action: 'update', item: comment.toObject() });
     res.json(comment);
   } catch (error) {
     res.status(500).json({ error: 'خطای سرور' });
@@ -311,6 +826,7 @@ router.post('/comments/bulk', async (req, res) => {
     if (!ids || !Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'لیست نظرات خالی است' });
     if (action === 'delete') {
       await Comment.deleteMany({ _id: { $in: ids } });
+      broadcast('data-changed', { type: 'comments', action: 'ids-delete', ids });
       return res.json({ success: true, deleted: ids.length });
     }
     if (action === 'feature') {

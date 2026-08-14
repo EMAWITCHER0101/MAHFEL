@@ -3,6 +3,7 @@ export type UserRole = 'user' | 'author' | 'admin';
 
 export interface User {
   id?: string;
+  _id?: string;
   email?: string;
   phoneNumber: string;
   name: string;
@@ -185,6 +186,8 @@ export interface PublishedBook {
   type?: 'book' | 'pamphlet' | 'note'; 
   date?: string;
   relatedAudioIds?: number[]; 
+  authorId?: string;
+  isDraft?: boolean;
 }
 
-export type Page = 'mahfel' | 'sowt' | 'matn' | 'videos' | 'library' | 'nashr' | 'ai';
+export type Page = 'mahfel' | 'sowt' | 'matn' | 'videos' | 'library' | 'nashr';

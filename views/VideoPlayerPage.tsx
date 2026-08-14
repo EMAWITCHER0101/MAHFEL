@@ -5,6 +5,9 @@ import { toPersianDigits, formatTime } from '../utils/helpers';
 import CustomVideoPlayer from '../components/CustomVideoPlayer';
 
 import type { CustomVideoPlayerHandle } from '../components/CustomVideoPlayer';
+import { startVideoBackground, stopVideoBackground, isVideoBackgroundActive, registerVideoSource, updateBackgroundMeta, updateBackgroundState } from '../services/backgroundPlayback';
+import type { VideoBgSource } from '../services/backgroundPlayback';
+import { getVideoStream } from '../services/api';
 
 interface VideoPlayerPageProps {
   video: Video;
@@ -95,6 +98,10 @@ const VideoPlayerPage: React.FC<VideoPlayerPageProps> = (props) => {
   }, [allVideos, video.id]);
 
   useEffect(() => {
+    // قطع خودکار پخش پس‌زمینه ویدیو قبلی هنگام باز کردن ویدیو جدید
+    if (isVideoBackgroundActive()) {
+      stopVideoBackground();
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setCommentText('');
     setReplyTo(null);
@@ -455,6 +462,80 @@ const VideoPlayerPage: React.FC<VideoPlayerPageProps> = (props) => {
     />
   ), [video.id, video.embedId, video.title, video.thumbnailUrl, isMini, handleTimeUpdate, handlePlay, handlePause]);
 
+  // ── پخش پس‌زمینه مثل یوتیوب ──
+  const [bgActive, setBgActive] = useState(false);
+
+  useEffect(() => {
+    const onState = (e: any) => setBgActive(!!e?.detail);
+    window.addEventListener('mahfel-video-bg-state', onState);
+    return () => window.removeEventListener('mahfel-video-bg-state', onState);
+  }, []);
+
+  const resolveVideoUrl = async (v: any, el?: HTMLVideoElement | null): Promise<string | null> => {
+    if (el && el.currentSrc) return el.currentSrc;
+    try {
+      const data = await getVideoStream(String(v.id || v._id || ''));
+      if (data?.defaultUrl) return data.defaultUrl;
+      if (data?.qualities?.length) return data.qualities[0].url;
+    } catch { /* ignore */ }
+    return null;
+  };
+
+  const buildBgSource = async (): Promise<VideoBgSource | null> => {
+    const v = video as any;
+    const el = videoPlayerRef.current?.getVideo?.() ?? null;
+    const url = await resolveVideoUrl(v, el);
+    if (!url) return null;
+    return { url, title: v.title || 'ویدیو', thumbnail: v.thumbnailUrl || '' };
+  };
+
+  const handleBackgroundPlay = async () => {
+    if (isVideoBackgroundActive()) {
+      stopVideoBackground();
+      showToast('پخش پس‌زمینه متوقف شد');
+      return;
+    }
+    const src = await buildBgSource();
+    if (!src) {
+      showToast('آدرس ویدیو در دسترس نیست');
+      return;
+    }
+    registerVideoSource(src);
+    const el = videoPlayerRef.current?.getVideo?.() ?? null;
+    const res = await startVideoBackground(el, src, {
+      onStop: (positionMs) => {
+        const e = videoPlayerRef.current?.getVideo?.();
+        if (e) {
+          // ادامه از همان لحظه‌ای که در PiP بود
+          if (positionMs && positionMs > 0) {
+            try { e.currentTime = positionMs / 1000; } catch { /* ignore */ }
+          }
+          if (e.paused) {
+            try { e.play().catch(() => {}); } catch { /* ignore */ }
+          }
+        }
+      },
+    });
+    if (res === 'native') showToast('ویدیو در پنجره کوچک (PiP) ادامه دارد');
+    else if (res === 'pip') showToast('پخش در پنجره کوچک (PiP) ادامه دارد');
+    else showToast('پخش پس‌زمینه در این مرورگر پشتیبانی نمی‌شود');
+  };
+
+  // لاک‌اسکرین/نوتیفیکیشن: متادیتا و وضعیت پخش ویدیو
+  useEffect(() => {
+    const v = video as any;
+    updateBackgroundMeta({ title: v.title || 'ویدیو', artist: 'محفل', album: '', artwork: v.thumbnailUrl || '', duration: v.duration || 0 });
+  }, [video]);
+  useEffect(() => {
+    const t = setInterval(() => {
+      const el = videoPlayerRef.current?.getVideo?.();
+      if (el && !el.paused) {
+        updateBackgroundState(true, Math.round(el.currentTime * 1000), Math.round((el.duration || 0) * 1000));
+      }
+    }, 5000);
+    return () => clearInterval(t);
+  }, []);
+
   return (
     <>
       {/* ===== MINI PLAYER ===== */}
@@ -545,15 +626,15 @@ const VideoPlayerPage: React.FC<VideoPlayerPageProps> = (props) => {
               </button>
             </div>
             <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 50 }}>
-              <button onClick={() => { videoPlayerRef.current?.enterBackground().then(ok => { if (!ok && (window as any).AndroidBridge) { (window as any).AndroidBridge.enterPip?.(); } }).catch(() => {}); }}
+              <button onClick={handleBackgroundPlay}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: 44, borderRadius: 16,
                   background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(12px)', color: 'rgba(255,255,255,0.85)',
                   border: '1px solid rgba(255,255,255,0.12)', cursor: 'pointer', fontWeight: 700, fontSize: 12.5,
                 }}
                 title="پخش در پس‌زمینه">
-                <i className="fas fa-compact-disc" style={{ fontSize: 12, color: '#06b6d4' }} />
-                پخش در پس‌زمینه
+                <i className={bgActive ? 'fas fa-stop' : 'fas fa-compact-disc'} style={{ fontSize: 12, color: '#06b6d4' }} />
+                {bgActive ? 'توقف پس‌زمینه' : 'پخش در پس‌زمینه'}
               </button>
             </div>
             <div style={{ width: '100%', aspectRatio: '16/9', position: 'relative' }}>{videoPlayerElement}
@@ -769,11 +850,11 @@ const VideoPlayerPage: React.FC<VideoPlayerPageProps> = (props) => {
             </button>
           </div>
           <div className="absolute top-3 left-3 z-50 flex items-center gap-2">
-            <button onClick={() => { videoPlayerRef.current?.enterBackground().then(ok => { if (!ok && (window as any).AndroidBridge) { (window as any).AndroidBridge.enterPip?.(); } }).catch(() => {}); }}
+            <button onClick={handleBackgroundPlay}
               className="h-10 px-3.5 rounded-2xl bg-black/50 backdrop-blur-md flex items-center gap-1.5 text-white/85 hover:text-white hover:bg-black/70 transition-all border border-white/10 active:scale-95 font-bold text-[11px]"
               title="پخش در پس‌زمینه">
-              <i className="fas fa-compact-disc text-xs" style={{ color: '#06b6d4' }} />
-              پس‌زمینه
+              <i className={bgActive ? 'fas fa-stop' : 'fas fa-compact-disc'} style={{ color: '#06b6d4' }} />
+              {bgActive ? 'توقف پس‌زمینه' : 'پس‌زمینه'}
             </button>
           </div>
           <div className="w-full aspect-video relative">{videoPlayerElement}

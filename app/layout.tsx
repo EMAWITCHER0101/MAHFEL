@@ -11,6 +11,7 @@ const vazir = localFont({
   weight: '400',
 });
 
+// فونت نستعلیق — فقط برای متن‌های برند «سرای هنر و اندیشه»
 const iranNastaliq = localFont({
   src: [
     { path: '../fonts/DimaShekasteh.woff2' },
@@ -64,18 +65,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="fa" dir="rtl" className={`${vazir.variable} ${iranNastaliq.variable}`} suppressHydrationWarning>
       <head>
         <link rel="stylesheet" href="/font-awesome/all.min.css" />
-        <script dangerouslySetInnerHTML={{ __html: `
-          if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(function(regs) {
-              regs.forEach(function(r) { r.unregister(); });
-            });
-            if ('caches' in window) {
-              caches.keys().then(function(names) {
-                names.forEach(function(n) { caches.delete(n); });
-              });
-            }
-          }
-        `}} />
       </head>
       <body suppressHydrationWarning>
         <StructuredData />

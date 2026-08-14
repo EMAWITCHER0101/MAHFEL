@@ -1,35 +1,70 @@
 import express from 'express';
-const router = express.Router();
+import { chatCompletion } from '../utils/aiClient.js';
+import { retrieve, forceRefresh, getCorpusStats } from '../utils/corpus.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
 
-const OPENROUTER_API_KEY = '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';
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const router = express.Router();
 
 router.post('/chat', async (req, res) => {
   try {
-    const { messages, model = 'google/gemini-2.0-flash-001' } = req.body;
+    const { messages, model = 'google/gemini-2.0-flash-001', grounding = true, maxTokens } = req.body;
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: 'messages is required' });
     }
 
-    const response = await fetch(OPENROUTER_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-        'HTTP-Referer': 'https://mahfel.app',
-        'X-Title': 'MAHFEL AI'
-      },
-      body: JSON.stringify({ model, messages, max_tokens: 2048 })
-    });
+    let final = [...messages];
+    let sources = [];
 
-    const data = await response.json();
-    if (data.error) {
-      return res.status(400).json({ error: data.error.message || 'AI Error' });
+    if (grounding) {
+      const lastUser = [...messages].reverse().find(m => m.role === 'user');
+      if (lastUser && (lastUser.content || '').trim().length > 8) {
+        const hits = await retrieve(lastUser.content, 5);
+        if (hits.length) {
+          const context = hits
+            .map((h, i) => `[سند ${i + 1} — ${h.kind} «${h.title}»${h.author ? ` (${h.author})` : ''}]\n${h.snippet}`)
+            .join('\n\n---\n\n');
+          const existingSystem = final.find(m => m.role === 'system')?.content || '';
+          const groundedSystem = `تو دستیار هوشمند «سها سیما» هستی که روی کتاب‌ها، پادکست‌ها و ویدیوهای سها سیما آموزش دیده است.\n\nقوانین:\n- اگر سوال کاربر درباره محتوای سها سیماست، پاسخ را فقط بر اساس «مستندات سها سیما» بده و عنوان منبع را ذکر کن.\n- اگر مستندات مرتبطی وجود نداشت، با دانش خودت پاسخ بده و صادقانه بگو که مطلب مستقیمی در مستندات پیدا نشده.\n- پاسخ روان و مرتب فارسی بده.\n\nمستندات سها سیما (منابع یادگیری):\n${context}`;
+          final = [
+            { role: 'system', content: existingSystem ? `${groundedSystem}\n\n${existingSystem}` : groundedSystem },
+            ...final.filter(m => m.role !== 'system'),
+          ];
+          sources = hits.map(h => ({
+            type: h.kind,
+            title: h.title,
+            author: h.author,
+            id: h.id,
+            score: h.score,
+            snippet: h.snippet.slice(0, 200),
+          }));
+        }
+      }
     }
+
+    const data = await chatCompletion(final, model, maxTokens);
+    data.sources = sources;
+    data.grounded = sources.length > 0;
     res.json(data);
   } catch (e) {
     console.error('AI Proxy Error:', e.message);
     res.status(500).json({ error: e.message || 'خطا در ارتباط با هوش مصنوعی' });
+  }
+});
+
+router.get('/corpus', async (req, res) => {
+  try {
+    res.json(await getCorpusStats());
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'خطای سرور' });
+  }
+});
+
+router.post('/corpus/refresh', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const idx = await forceRefresh();
+    res.json({ success: true, chunks: idx.docs.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'خطای سرور' });
   }
 });
 

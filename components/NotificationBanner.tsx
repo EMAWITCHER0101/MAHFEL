@@ -3,21 +3,25 @@ import React, { useEffect, useRef, useState } from 'react';
 interface NotificationBannerProps {
   title: string;
   body: string;
+  link?: string;
   onClose: () => void;
+  onClick?: (link?: string) => void;
 }
 
-const NotificationBanner: React.FC<NotificationBannerProps> = ({ title, body, onClose }) => {
+const NotificationBanner: React.FC<NotificationBannerProps> = ({ title, body, link, onClose, onClick }) => {
   const [isVisible, setIsVisible] = useState(false);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
+  const dismiss = () => {
+    setIsVisible(false);
+    setTimeout(() => onCloseRef.current(), 300);
+  };
+
   useEffect(() => {
     if (title) {
       setIsVisible(true);
-      const timer = setTimeout(() => {
-        setIsVisible(false);
-        setTimeout(() => onCloseRef.current(), 300);
-      }, 10000);
+      const timer = setTimeout(dismiss, 10000);
       return () => clearTimeout(timer);
     }
   }, [title, body]);
@@ -39,17 +43,26 @@ const NotificationBanner: React.FC<NotificationBannerProps> = ({ title, body, on
             <p className="text-xs text-gray-300 leading-relaxed whitespace-pre-line">{body}</p>
           </div>
           <button
-            onClick={() => {
-              setIsVisible(false);
-              setTimeout(() => onCloseRef.current(), 300);
-            }}
+            onClick={dismiss}
             className="flex-shrink-0 w-7 h-7 rounded-full hover:bg-white/10 text-gray-400 hover:text-white flex items-center justify-center transition-all"
             aria-label="بستن"
           >
             <i className="fas fa-times text-xs"></i>
           </button>
         </div>
-        <div className="h-0.5 bg-primary/40 progress-notif"></div>
+        <div
+          className="h-0.5 bg-primary/40 progress-notif"
+          onClick={(e) => e.stopPropagation()}
+        ></div>
+        <button
+          onClick={() => {
+            onClick?.(link);
+            dismiss();
+          }}
+          className="w-full block text-center py-2 text-xs font-bold text-primary hover:bg-white/5 transition-all"
+        >
+          مشاهده
+        </button>
         <style>{`
           .progress-notif { animation: notifbar 10s linear forwards; transform-origin: right; }
           @keyframes notifbar { from { transform: scaleX(1); } to { transform: scaleX(0); } }

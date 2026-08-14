@@ -14,6 +14,7 @@ import connectDB from './config/db.js';
 import authRoutes from './routes/auth.js';
 import podcastRoutes from './routes/podcasts.js';
 import videoRoutes from './routes/videos.js';
+import playlistRoutes from './routes/playlists.js';
 import authorRoutes from './routes/authors.js';
 import bookRoutes from './routes/books.js';
 import publishedBookRoutes from './routes/publishedBooks.js';
@@ -35,7 +36,7 @@ app.use(compression({ level: 6, threshold: 1024, filter: (req, res) => {
   if (req.headers['x-no-compression']) return false;
   return compression.filter(req, res);
 }}));
-app.use(cors({ origin: ['http://localhost:3000', 'http://localhost:5173', 'http://87.107.165.104', 'https://87.107.165.104', 'http://87.248.145.44', 'https://87.248.145.44', 'http://soha-sima.ir', 'https://soha-sima.ir'], credentials: true }));
+app.use(cors({ origin: ['http://localhost:3000', 'http://localhost:5173', 'http://87.107.165.104', 'https://87.107.165.104', 'http://87.248.145.44', 'https://87.248.145.44', 'http://soha-sima.ir', 'https://soha-sima.ir', 'https://app.soha-sima.ir'], credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 
 app.use((err, req, res, next) => {
@@ -87,6 +88,7 @@ app.get('/api/check-ip', async (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/podcasts', podcastRoutes);
 app.use('/api/videos', videoRoutes);
+app.use('/api/playlists', playlistRoutes);
 app.use('/api/authors', authorRoutes);
 app.use('/api/books', bookRoutes);
 app.use('/api/published-books', publishedBookRoutes);

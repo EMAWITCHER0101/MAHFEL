@@ -110,8 +110,8 @@ const SowtPage: React.FC<SowtPageProps> = ({
                 <i className="fas fa-headphones text-white text-xs"></i>
               </div>
               <div className="hidden sm:block">
-                <p className="text-xs font-black leading-tight" style={{ color: '#0d9488' }}>صوت</p>
-                <p className="text-[8px] font-bold" style={{ color: '#0d9488' }}>{toPersianDigits(allAudio.length)} مجموعه صوتی</p>
+                <p className="text-xs font-black leading-tight " style={{ color: '#0d9488' }}>صوت</p>
+                <p className="text-[8px] font-bold " style={{ color: '#0d9488' }}>{toPersianDigits(allAudio.length)} مجموعه صوتی</p>
               </div>
             </div>
             <div className="relative flex-1">
@@ -138,7 +138,7 @@ const SowtPage: React.FC<SowtPageProps> = ({
         {/* New episodes */}
         {newEpisodes.length > 0 && (
           <section className="mb-6">
-            <h2 className="text-xs font-black mb-3 mt-4 text-gray-600 pr-2 border-r-4 border-primary">
+            <h2 className="text-xs font-black mb-3 mt-4 text-gray-600 pr-2 border-r-4 border-primary ">
               تازه‌های صوتی
             </h2>
             <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
@@ -194,9 +194,9 @@ const SowtPage: React.FC<SowtPageProps> = ({
         {filtered.length > 0 ? (
           groupedByYear.map(([year, group]) => (
             <section key={year} className="mb-8">
-              <h2 className="text-xs font-black mb-4 text-gray-500 pr-2 border-r-4 border-primary/60 flex items-center gap-2">
+              <h2 className="text-xs font-black mb-4 text-gray-500 pr-2 border-r-4 border-primary/60 flex items-center gap-2 ">
                 <span>{toPersianDigits(Number(year))}</span>
-                <span className="text-[10px] text-gray-300 font-normal">({toPersianDigits(group.length)} مجموعه)</span>
+                <span className="text-[10px] text-gray-300 font-normal ">({toPersianDigits(group.length)} مجموعه)</span>
               </h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
                 {group.map(p => {
@@ -220,7 +220,7 @@ const SowtPage: React.FC<SowtPageProps> = ({
         ) : (
           <div className="text-center py-24 text-gray-300">
             <i className="fas fa-microphone-slash text-5xl mb-4 opacity-10"></i>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em]">مجموعه‌ای یافت نشد</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] ">مجموعه‌ای یافت نشد</p>
           </div>
         )}
       </div>

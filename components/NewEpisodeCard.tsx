@@ -28,9 +28,9 @@ const NewEpisodeCard: React.FC<NewEpisodeCardProps> = ({ podcast, episode, episo
       </div>
       <div className="flex-1 min-w-0 flex items-center gap-2.5">
         <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-semibold text-text-primary mb-1 line-clamp-1 leading-snug">{podcast.title}</h3>
+          <h3 className="text-sm font-semibold text-text-primary mb-1 line-clamp-1 leading-snug ">{podcast.title}</h3>
           <div className="mt-1">
-            <div className="text-xs text-text-secondary flex items-center gap-2 opacity-90">
+            <div className="text-xs text-text-secondary flex items-center gap-2 opacity-90 ">
               <span className="text-xs text-primary font-medium whitespace-nowrap">{formatPersianDate(episode.date)}</span>
               <span className='truncate'>{episode.title}</span>
             </div>

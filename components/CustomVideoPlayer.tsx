@@ -29,6 +29,7 @@ export interface CustomVideoPlayerHandle {
   getCurrentTime: () => number;
   isPaused: () => boolean;
   enterBackground: () => Promise<boolean>;
+  getVideo: () => HTMLVideoElement | null;
 }
 
 const CustomVideoPlayer = forwardRef<CustomVideoPlayerHandle, CustomVideoPlayerProps>(({
@@ -62,6 +63,9 @@ const CustomVideoPlayer = forwardRef<CustomVideoPlayerHandle, CustomVideoPlayerP
     },
     enterBackground: () => {
       return enterBackgroundVideo(videoRef.current);
+    },
+    getVideo: () => {
+      return videoRef.current;
     }
   }));
 

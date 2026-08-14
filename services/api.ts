@@ -40,10 +40,10 @@ const apiFetch = async <T>(endpoint: string, options?: RequestInit): Promise<T |
 };
 
 // --- Auth ---
-export const register = async (name: string, email: string, password: string, phoneNumber: string): Promise<any> => {
+export const register = async (name: string, email: string, password: string, phoneNumber: string, otpToken?: string): Promise<any> => {
   return apiFetch('/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ name, email, password, phoneNumber }),
+    body: JSON.stringify({ name, email: email || undefined, password, phoneNumber, otpToken }),
   });
 };
 
@@ -54,17 +54,24 @@ export const login = async (email: string, phoneNumber: string, password: string
   });
 };
 
-export const sendOtp = async (phoneNumber: string): Promise<any> => {
+export const sendOtp = async (phoneNumber: string, purpose?: string, name?: string): Promise<any> => {
   return apiFetch('/auth/send-otp', {
     method: 'POST',
-    body: JSON.stringify({ phoneNumber }),
+    body: JSON.stringify({ phoneNumber, purpose, name }),
   });
 };
 
-export const verifyOtp = async (phoneNumber: string, otp: string): Promise<any> => {
+export const verifyOtp = async (phoneNumber: string, otp: string, purpose?: string): Promise<any> => {
   return apiFetch('/auth/verify-otp', {
     method: 'POST',
-    body: JSON.stringify({ phoneNumber, otp }),
+    body: JSON.stringify({ phoneNumber, otp, purpose }),
+  });
+};
+
+export const resetPassword = async (phoneNumber: string, otpToken: string, newPassword: string): Promise<any> => {
+  return apiFetch('/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ phoneNumber, otpToken, newPassword }),
   });
 };
 

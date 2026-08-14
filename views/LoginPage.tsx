@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { User, UserRole } from '../types';
 import { getRandomTailwindColor, getInitials } from '../utils/helpers';
-import { register, login, completeProfile } from '../services/api';
+import { register, login, completeProfile, sendOtp, verifyOtp, resetPassword } from '../services/api';
 import { SohaLogo } from '../components/SohaLogo';
 
 interface LoginPageProps {
@@ -24,7 +24,7 @@ interface ToastItem {
 let toastIdCounter = 0;
 
 const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -36,10 +36,16 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [securityKey, setSecurityKey] = useState('');
   const [adminUsername, setAdminUsername] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
-  const [step, setStep] = useState<'form' | 'profile' | 'admin' | 'author'>('form');
+  const [step, setStep] = useState<'form' | 'otp' | 'password' | 'newPassword' | 'profile' | 'admin' | 'author'>('form');
   const [error, setError] = useState('');
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [otpCode, setOtpCode] = useState('');
+  const [otpTimer, setOtpTimer] = useState(0);
+  const [otpProofToken, setOtpProofToken] = useState<string | null>(null);
+  const otpIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const otpInputRef = useRef<HTMLInputElement>(null);
 
   const [mutedWarning, setMutedWarning] = useState(false);
   const [mutedUntil, setMutedUntil] = useState<string | null>(null);
@@ -143,6 +149,148 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       }
     } catch (err: any) {
       showToast(err?.message || 'خطا در ثبت‌نام');
+    }
+    setIsSubmitting(false);
+  };
+
+  const startOtpTimer = useCallback(() => {
+    setOtpTimer(60);
+    if (otpIntervalRef.current) clearInterval(otpIntervalRef.current);
+    otpIntervalRef.current = setInterval(() => {
+      setOtpTimer(prev => {
+        if (prev <= 1) {
+          if (otpIntervalRef.current) clearInterval(otpIntervalRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
+  const handleSendOtp = async (phone: string, purpose: 'register' | 'forgot') => {
+    if (!phone || !/^09\d{9}$/.test(phone)) {
+      showToast('شماره موبایل نامعتبر است');
+      return;
+    }
+    if (purpose === 'register') {
+      if (!name.trim()) { showToast('نام خود را وارد کنید'); return; }
+      if (!password || password.length < 4) { showToast('رمز عبور باید حداقل ۴ کاراکتر باشد'); return; }
+      if (!confirmPassword) { showToast('تکرار رمز عبور را وارد کنید'); return; }
+      if (password !== confirmPassword) { showToast('رمز عبور و تکرار آن مطابقت ندارند'); return; }
+    }
+    setError('');
+    setIsSubmitting(true);
+    try {
+      const res = await sendOtp(phone, purpose, purpose === 'register' ? name.trim() : undefined);
+      if (res && res.success) {
+        showToast('کد تایید ارسال شد', 'success');
+        setStep('otp');
+        startOtpTimer();
+        setTimeout(() => otpInputRef.current?.focus(), 100);
+      } else {
+        showToast(res?.error || 'خطا در ارسال کد تایید');
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'خطا در ارسال کد تایید');
+    }
+    setIsSubmitting(false);
+  };
+
+  const handleVerifyOtp = async (phone: string, purpose: 'register' | 'forgot') => {
+    if (!otpCode || otpCode.length < 4) {
+      showToast('کد تایید را وارد کنید');
+      return;
+    }
+    setError('');
+    setIsSubmitting(true);
+    try {
+      const res = await verifyOtp(phone, otpCode, purpose);
+      if (res && res.success) {
+        showToast('کد تایید تأیید شد', 'success');
+        setOtpProofToken(res.proofToken);
+        if (purpose === 'forgot') {
+          setStep('newPassword');
+        }
+      } else {
+        showToast(res?.error || 'کد تایید اشتباه است');
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'خطا در تأیید کد');
+    }
+    setIsSubmitting(false);
+  };
+
+  const handleVerifyOtpAndRegister = async () => {
+    if (!otpCode || otpCode.length < 4) {
+      showToast('کد تایید را وارد کنید');
+      return;
+    }
+    setError('');
+    setIsSubmitting(true);
+    try {
+      const res = await verifyOtp(phoneNumber, otpCode, 'register');
+      if (res && res.success) {
+        setOtpProofToken(res.proofToken);
+        const regRes = await register(name, email, password, phoneNumber, res.proofToken);
+        if (regRes && regRes.success) {
+          if (regRes.token) localStorage.setItem('soha_token', regRes.token);
+          showToast('ثبت‌نام موفقیت‌آمیز!', 'success');
+          setStep('profile');
+        } else {
+          showToast(regRes?.error || 'خطا در ثبت‌نام');
+        }
+      } else {
+        showToast(res?.error || 'کد تایید اشتباه است');
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'خطا در ثبت‌نام');
+    }
+    setIsSubmitting(false);
+  };
+
+  const handleResetPasswordSubmit = async () => {
+    if (!password || password.length < 4) {
+      showToast('رمز عبور باید حداقل ۴ کاراکتر باشد');
+      return;
+    }
+    if (password !== confirmPassword) {
+      showToast('رمز عبور و تکرار آن مطابقت ندارند');
+      return;
+    }
+    if (!otpProofToken) {
+      showToast('کد تایید منقضی شده است. مجدداً کد بگیرید');
+      return;
+    }
+    setError('');
+    setIsSubmitting(true);
+    try {
+      const res = await resetPassword(phoneNumber, otpProofToken, password);
+      if (res && res.success) {
+        if (res.token) localStorage.setItem('soha_token', res.token);
+        showToast('رمز عبور با موفقیت تغییر کرد', 'success');
+        setMode('login');
+        setStep('form');
+        setPassword('');
+        setConfirmPassword('');
+        setOtpCode('');
+        setOtpProofToken(null);
+        if (res.user) {
+          onLoginSuccess({
+            id: res.user.id,
+            email: res.user.email,
+            phoneNumber: res.user.phoneNumber || '',
+            name: res.user.name,
+            avatar: res.user.avatar,
+            role: res.user.role as UserRole,
+            interests: res.user.interests || [],
+            library: res.user.library,
+          }, res.token);
+        }
+      } else {
+        showToast(res?.error || 'خطا در تغییر رمز عبور');
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'خطا در تغییر رمز عبور');
     }
     setIsSubmitting(false);
   };
@@ -340,7 +488,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               {mode === 'login' && (
                 <form onSubmit={handleLogin} className="space-y-3 sm:space-y-5 animate-fadeIn">
                   <div className="text-center">
-                    <h1 className="text-xl font-black text-gray-800 font-nastaliq">خوش آمدید</h1>
+                    <h1 className="text-xl font-black text-gray-800 ">خوش آمدید</h1>
                     <p className="text-xs text-gray-500 mt-1 font-bold">ایمیل یا شماره موبایل و رمز عبور خود را وارد کنید</p>
                   </div>
                   <input type="text" dir="ltr" value={loginField} onChange={(e) => setLoginField(e.target.value)} placeholder="example@email.com / 09123456789"
@@ -356,14 +504,17 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                   <button type="submit" disabled={isSubmitting} className="w-full bg-primary text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all disabled:opacity-50">
                     {isSubmitting ? <i className="fas fa-circle-notch fa-spin"></i> : 'ورود'}
                   </button>
+                  <div className="text-center">
+                    <button type="button" onClick={() => { setMode('forgot'); setStep('form'); setError(''); setPassword(''); setPhoneNumber(''); setOtpCode(''); setOtpProofToken(null); }} className="text-primary text-[11px] font-black hover:underline">فراموشی رمز عبور؟</button>
+                  </div>
                 </form>
               )}
 
               {/* Register Form */}
               {mode === 'register' && (
-                <form onSubmit={handleRegister} className="space-y-3 sm:space-y-4 animate-fadeIn">
+                <form onSubmit={(e) => { e.preventDefault(); handleSendOtp(phoneNumber, 'register'); }} className="space-y-3 sm:space-y-4 animate-fadeIn">
                   <div className="text-center">
-                    <h1 className="text-xl font-black text-gray-800 font-nastaliq">ایجاد حساب کاربری</h1>
+                    <h1 className="text-xl font-black text-gray-800 ">ایجاد حساب کاربری</h1>
                     <p className="text-xs text-gray-500 mt-1 font-bold">اطلاعات خود را وارد کنید</p>
                   </div>
                   <div>
@@ -382,7 +533,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                     {touched.email && fieldErrors.email && <p className="text-red-500 text-[10px] font-bold mt-1 text-center">{fieldErrors.email}</p>}
                   </div>
                   <div className="relative">
-                    <input type={showPassword ? 'text' : 'password'} dir="ltr" value={password} onChange={(e) => setPassword(e.target.value)} onBlur={() => setTouched(prev => ({ ...prev, password: true }))} placeholder="رمز عبور"
+                    <input type={showPassword ? 'text' : 'password'} dir="ltr" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="رمز عبور"
                       className={`w-full bg-gray-50 border-2 rounded-2xl px-3 sm:px-4 py-3 sm:py-4 pl-12 text-center text-sm font-bold transition-all outline-none ${touched.password && fieldErrors.password ? 'border-red-300 bg-red-50/50' : touched.password && !fieldErrors.password ? 'border-green-300' : 'border-gray-100 focus:border-primary'}`} />
                     <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary transition-colors">
                       <i className={`fas ${showPassword ? 'fa-eye-slash' : 'fa-eye'} text-sm`}></i>
@@ -390,17 +541,85 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                     {touched.password && fieldErrors.password && <p className="text-red-500 text-[10px] font-bold mt-1 text-center">{fieldErrors.password}</p>}
                   </div>
                   <div>
-                    <input type="password" dir="ltr" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} onBlur={() => setTouched(prev => ({ ...prev, confirmPassword: true }))} placeholder="تکرار رمز عبور"
+                    <input type="password" dir="ltr" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="تکرار رمز عبور"
                       className={`w-full bg-gray-50 border-2 rounded-2xl px-3 sm:px-4 py-3 sm:py-4 text-center text-sm font-bold transition-all outline-none ${touched.confirmPassword && fieldErrors.confirmPassword ? 'border-red-300 bg-red-50/50' : touched.confirmPassword && !fieldErrors.confirmPassword ? 'border-green-300' : 'border-gray-100 focus:border-primary'}`} />
                     {touched.confirmPassword && fieldErrors.confirmPassword && <p className="text-red-500 text-[10px] font-bold mt-1 text-center">{fieldErrors.confirmPassword}</p>}
                   </div>
                   {error && <p className="text-red-500 text-[11px] font-black text-center bg-red-50 py-2 rounded-xl">{error}</p>}
-                  <button type="submit" disabled={isSubmitting || (Object.keys(touched).length > 0 && !isFormValid)} className="w-full bg-primary text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all disabled:opacity-50">
-                    {isSubmitting ? <i className="fas fa-circle-notch fa-spin"></i> : 'ثبت‌نام'}
+                  <button type="submit" disabled={isSubmitting || !phoneNumber || !/^09\d{9}$/.test(phoneNumber)} className="w-full bg-primary text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all disabled:opacity-50">
+                    {isSubmitting ? <i className="fas fa-circle-notch fa-spin"></i> : 'دریافت کد تایید'}
                   </button>
                 </form>
               )}
             </>
+          )}
+
+          {step === 'otp' && (mode === 'register' || mode === 'forgot') && (
+            <div className="space-y-4 sm:space-y-5 animate-fadeIn">
+              <div className="text-center">
+                <button type="button" onClick={() => { setStep('form'); setOtpCode(''); }} className="text-primary text-[10px] font-black mb-4 flex items-center gap-1 mx-auto bg-primary/5 px-4 py-2 rounded-full active:scale-95 transition-all"><i className="fas fa-arrow-right"></i> بازگشت</button>
+                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center text-primary mx-auto mb-4 border-2 border-primary/20"><i className="fas fa-shield-alt text-2xl"></i></div>
+                <h1 className="text-lg font-black text-gray-800">تأیید شماره موبایل</h1>
+                <p className="text-[10px] text-gray-500 mt-1 font-bold">کد ۴ رقمی ارسال شده به <span className="text-primary">{phoneNumber}</span> را وارد کنید</p>
+              </div>
+              <div>
+                <input ref={otpInputRef} type="tel" dir="ltr" value={otpCode} onChange={(e) => { const val = e.target.value.replace(/\D/g, '').slice(0, 4); setOtpCode(val); if (val.length === 4 && mode === 'forgot') handleVerifyOtp(phoneNumber, 'forgot'); }} maxLength={4} placeholder="• • • •"
+                  className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-4 text-center text-2xl font-black tracking-[0.5em] text-gray-800 focus:border-primary transition-all outline-none" />
+              </div>
+              <button type="button" onClick={() => mode === 'register' ? handleVerifyOtpAndRegister() : handleVerifyOtp(phoneNumber, 'forgot')} disabled={isSubmitting || otpCode.length < 4} className="w-full bg-primary text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all disabled:opacity-50">
+                {isSubmitting ? <i className="fas fa-circle-notch fa-spin"></i> : 'ثبت‌نام نهایی'}
+              </button>
+              <div className="text-center">
+                <button type="button" onClick={() => handleSendOtp(phoneNumber, mode === 'forgot' ? 'forgot' : 'register')} disabled={otpTimer > 0 || isSubmitting} className="text-primary text-[11px] font-black disabled:text-gray-400 disabled:cursor-not-allowed hover:underline">
+                  {otpTimer > 0 ? `ارسال مجدد کد (${otpTimer} ثانیه)` : 'ارسال مجدد کد'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {mode === 'forgot' && step === 'form' && (
+            <form onSubmit={(e) => { e.preventDefault(); handleSendOtp(phoneNumber, 'forgot'); }} className="space-y-4 sm:space-y-5 animate-fadeIn">
+              <div className="text-center">
+                <button type="button" onClick={() => { setMode('login'); setStep('form'); setError(''); setPhoneNumber(''); }} className="text-primary text-[10px] font-black mb-4 flex items-center gap-1 mx-auto bg-primary/5 px-4 py-2 rounded-full active:scale-95 transition-all"><i className="fas fa-arrow-right"></i> بازگشت</button>
+                <div className="w-16 h-16 bg-orange-50 rounded-full flex items-center justify-center text-orange-500 mx-auto mb-4 border-2 border-orange-100"><i className="fas fa-key text-2xl"></i></div>
+                <h1 className="text-lg font-black text-gray-800">فراموشی رمز عبور</h1>
+                <p className="text-[10px] text-gray-500 mt-1 font-bold">شماره موبایل خود را وارد کنید تا کد تایید ارسال شود</p>
+              </div>
+              <div>
+                <input type="tel" dir="ltr" value={phoneNumber} onChange={(e) => { const val = e.target.value.replace(/\D/g, '').slice(0, 11); setPhoneNumber(val); }} maxLength={11} placeholder="09123456789"
+                  className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-4 text-center text-sm font-bold focus:border-primary transition-all outline-none" />
+              </div>
+              {error && <p className="text-red-500 text-[11px] font-black text-center bg-red-50 py-2 rounded-xl">{error}</p>}
+              <button type="submit" disabled={isSubmitting || !phoneNumber || !/^09\d{9}$/.test(phoneNumber)} className="w-full bg-primary text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all disabled:opacity-50">
+                {isSubmitting ? <i className="fas fa-circle-notch fa-spin"></i> : 'ارسال کد تایید'}
+              </button>
+            </form>
+          )}
+
+          {step === 'newPassword' && mode === 'forgot' && (
+            <div className="space-y-4 sm:space-y-5 animate-fadeIn">
+              <div className="text-center">
+                <button type="button" onClick={() => { setStep('otp'); setPassword(''); setConfirmPassword(''); setOtpCode(''); }} className="text-primary text-[10px] font-black mb-4 flex items-center gap-1 mx-auto bg-primary/5 px-4 py-2 rounded-full active:scale-95 transition-all"><i className="fas fa-arrow-right"></i> بازگشت</button>
+                <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center text-green-500 mx-auto mb-4 border-2 border-green-100"><i className="fas fa-check-circle text-2xl"></i></div>
+                <h1 className="text-lg font-black text-gray-800">تغییر رمز عبور</h1>
+                <p className="text-[10px] text-gray-500 mt-1 font-bold">شماره موبایل شما تأیید شد. رمز عبور جدید خود را وارد کنید</p>
+              </div>
+              <div className="relative">
+                <input type={showPassword ? 'text' : 'password'} dir="ltr" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="رمز عبور جدید (حداقل ۴ کاراکتر)"
+                  className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-4 pl-12 text-center text-sm font-bold focus:border-primary transition-all outline-none" />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary transition-colors">
+                  <i className={`fas ${showPassword ? 'fa-eye-slash' : 'fa-eye'} text-sm`}></i>
+                </button>
+              </div>
+              <div>
+                <input type="password" dir="ltr" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="تکرار رمز عبور جدید"
+                  className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-4 text-center text-sm font-bold focus:border-primary transition-all outline-none" />
+              </div>
+              {error && <p className="text-red-500 text-[11px] font-black text-center bg-red-50 py-2 rounded-xl">{error}</p>}
+              <button type="button" onClick={handleResetPasswordSubmit} disabled={isSubmitting} className="w-full bg-primary text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all disabled:opacity-50">
+                {isSubmitting ? <i className="fas fa-circle-notch fa-spin"></i> : 'تغییر رمز عبور'}
+              </button>
+            </div>
           )}
 
           {step === 'profile' && (

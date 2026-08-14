@@ -22,9 +22,9 @@ const BookCard: React.FC<BookCardProps> = ({ book, author, onClick }) => {
         />
       </div>
       <div className="mt-2 text-right px-1">
-        <h3 className="text-sm font-bold leading-tight line-clamp-2 text-text-primary group-hover:text-primary transition-colors h-10">{book.title}</h3>
+        <h3 className="text-sm font-bold leading-tight line-clamp-2 text-text-primary group-hover:text-primary transition-colors h-10 ">{book.title}</h3>
         {author && (
-          <p className="text-xs text-text-secondary mt-1 truncate">{author.name}</p>
+          <p className="text-xs text-text-secondary mt-1 truncate ">{author.name}</p>
         )}
       </div>
     </div>

@@ -24,7 +24,6 @@ interface BottomTabsProps {
 const TABS_LEFT: { page: Page; icon: string; label: string }[] = [
   { page: 'sowt', icon: 'fas fa-podcast', label: 'صوت' },
   { page: 'library', icon: 'fas fa-book-open', label: 'کتابخانه' },
-  { page: 'ai', icon: 'fas fa-robot', label: 'AI' },
 ];
 
 const TABS_RIGHT: { page: Page; icon: string; label: string }[] = [

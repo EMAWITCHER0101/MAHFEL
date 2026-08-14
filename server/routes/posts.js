@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import Post from '../models/Post.js';
 import User from '../models/User.js';
+import Notification from '../models/Notification.js';
 import { requireAuth, requireRole, auth } from '../middleware/auth.js';
 import { containsProfanity } from '../utils/profanityFilter.js';
+import { broadcast } from '../utils/broadcast.js';
 
 const router = Router();
 
@@ -100,6 +102,7 @@ router.post('/', requireAuth, async (req, res) => {
       date: 'همین الان',
     });
     await post.save();
+    broadcast('data-changed', { type: 'posts', action: 'create', item: post.toObject() });
     res.status(201).json(post);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -135,6 +138,7 @@ router.put('/:id', requireAuth, async (req, res) => {
     }
     Object.assign(post, req.body, { isEdited: true });
     await post.save();
+    broadcast('data-changed', { type: 'posts', action: 'update', item: post.toObject() });
     res.json(post);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -149,6 +153,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'دسترسی غیرمجاز' });
     }
     await Post.findByIdAndDelete(req.params.id);
+    broadcast('data-changed', { type: 'posts', action: 'delete', id: req.params.id });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'خطای سرور' });
@@ -288,6 +293,25 @@ router.post('/:id/comments', requireAuth, async (req, res) => {
 
     post.comments.push(comment);
     await post.save();
+    broadcast('data-changed', { type: 'posts', action: 'update', item: post.toObject() });
+
+    // نوتیفیکیشن پاسخ: اگر ریپلای باشد → برای صاحب نظر اصلی
+    try {
+      if (comment.replyTo && req.user) {
+        const parent = post.comments.find(c =>
+          c._id && (String(c._id) === String(comment.replyTo) || String(c.id || '') === String(comment.replyTo)));
+        if (parent && parent.userId && String(parent.userId) !== String(req.user._id)) {
+          await Notification.create({
+            title: '💬 پاسخ جدید',
+            body: `${req.user.name} به نظر شما پاسخ داد`,
+            userId: parent.userId,
+            link: `/mahfel/post/${req.params.id}`,
+            type: 'reply',
+          });
+        }
+      }
+    } catch (ignored) {}
+
     res.json(post);
   } catch (error) {
     res.status(400).json({ error: error.message });

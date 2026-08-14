@@ -1,0 +1,15 @@
+const url = 'https://soha-sima.ir/album/27141/';
+const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+const t = await res.text();
+const aiDiv = t.match(/<div[^>]*class="[^"]*audioigniter[^"]*"[^>]*>[\s\S]{0,4000}/i);
+console.log('AI DIV:', aiDiv ? aiDiv[0] : 'none');
+const tracks = [...t.matchAll(/track[^"'\s]*"?\s*[:=]\s*"([^"]+)"/gi)].map(m => m[1]);
+console.log('TRACKS:', [...new Set(tracks)].slice(0, 20));
+const playlistIds = [...t.matchAll(/playlist[^"'\s]*"?\s*[:=]\s*"?(\d+)"/gi)].map(m => m[1]);
+console.log('PLAYLIST IDS:', [...new Set(playlistIds)]);
+const imageSrc = t.match(/rel="image_src" href="([^"]+)"/);
+console.log('IMAGE_SRC:', imageSrc ? imageSrc[1] : 'none');
+const h1 = t.match(/<h1[^>]*>([\s\S]*?)<\/h1>/);
+console.log('H1:', h1 ? h1[1].replace(/<[^>]+>/g, '').trim() : 'none');
+const thumb = t.match(/class="[^"]*post-thumbnail[^"]*"[\s\S]{0,500}/i);
+console.log('THUMB:', thumb ? thumb[0].slice(0, 500) : 'none');

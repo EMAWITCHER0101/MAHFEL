@@ -28,10 +28,12 @@
   font-style: normal;
   font-display: swap;
 }
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* فونت نستعلیق — فقط برای متن‌های برند «سرای هنر و اندیشه» */
+.font-nastaliq { font-family: var(--font-nastaliq), Tahoma, serif; }
 
 *::-webkit-scrollbar {
   display: none;
@@ -107,8 +109,6 @@ body {
   overflow-x: hidden;
   max-width: 100vw;
 }
-
-.font-nastaliq { font-family: var(--font-nastaliq), Tahoma, serif; }
 
 /* ========== SCROLLBAR ========== */
 ::-webkit-scrollbar { width: 4px; }

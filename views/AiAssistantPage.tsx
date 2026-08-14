@@ -1,7 +1,14 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Podcast, Video, Post, PublishedBook, Author } from '../types';
-import { aiAssistant, smartSearch, summarizePodcast, summarizeVideo, summarizeBook } from '../services/ai';
+import { aiAssistant, smartSearch, summarizePodcast, summarizeVideo, summarizeBook, getLastRagSources } from '../services/ai';
+
+interface AiSource {
+  type?: string;
+  title?: string;
+  author?: string;
+  score?: number;
+}
 
 interface AiAssistantPageProps {
   podcasts: Podcast[];
@@ -20,6 +27,7 @@ interface Message {
   content: string;
   timestamp: number;
   copied?: boolean;
+  sources?: AiSource[];
 }
 
 interface ChatSession {
@@ -164,7 +172,7 @@ const AiAssistantPage: React.FC<AiAssistantPageProps> = ({ podcasts, videos, pos
 
     aiAssistant(`کاربر "${ctx.title}" رو انتخاب کرده و میخواد دربارش صحبت کنه. لطفاً معرفی کوتاهی بکن و بگو چطور میتونی کمکش کنی.\n\n${contextInfo}`, { podcasts, videos, posts, books, authors })
       .then(response => {
-        updateMessages(sessionId!, prev => [...prev, { id: generateId(), role: 'assistant', content: response, timestamp: Date.now() }]);
+        updateMessages(sessionId!, prev => [...prev, { id: generateId(), role: 'assistant', content: response, timestamp: Date.now(), sources: getLastRagSources() }]);
       })
       .catch((e: any) => {
         updateMessages(sessionId!, prev => [...prev, { id: generateId(), role: 'assistant', content: `❌ خطا: ${e.message}`, timestamp: Date.now() }]);
@@ -215,7 +223,7 @@ const AiAssistantPage: React.FC<AiAssistantPageProps> = ({ podcasts, videos, pos
         response = await aiAssistant(finalMsg, { podcasts, videos, posts, books, authors });
       }
 
-      updateMessages(sessionId, prev => [...prev, { id: generateId(), role: 'assistant', content: response, timestamp: Date.now() }]);
+      updateMessages(sessionId, prev => [...prev, { id: generateId(), role: 'assistant', content: response, timestamp: Date.now(), sources: getLastRagSources() }]);
     } catch (e: any) {
       updateMessages(sessionId, prev => [...prev, {
         id: generateId(),
@@ -616,6 +624,22 @@ const AiAssistantPage: React.FC<AiAssistantPageProps> = ({ podcasts, videos, pos
                         <div className="text-[13px] leading-relaxed" style={{ color: isDark ? '#e5e7eb' : '#1f2937' }}>
                           {renderMarkdown(msg.content)}
                         </div>
+                        {msg.sources && msg.sources.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mt-2">
+                            <span className="text-[8px] font-bold self-center" style={{ color: isDark ? '#9ca3af' : '#6b7280' }}>منابع سها سیما:</span>
+                            {msg.sources.map((s, si) => {
+                              const srcColor = s.type === 'کتاب' ? '#f59e0b' : s.type === 'پادکست' ? '#8b5cf6' : s.type === 'ویدیو' ? '#ec4899' : '#14b8a6';
+                              return (
+                                <span key={si} className="px-2 py-1 rounded-full text-[8px] font-black inline-flex items-center gap-1"
+                                  style={{ background: srcColor + '1a', color: srcColor, border: `1px solid ${srcColor}33` }}>
+                                  <i className="fas fa-book-open text-[7px]"></i>
+                                  {s.type}: «{s.title}»
+                                  {s.author ? <span style={{ opacity: 0.6 }}>— {s.author}</span> : null}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
                         <div className="flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <span className="text-[9px] opacity-40" style={{ color: isDark ? '#9ca3af' : '#6b7280' }}>{formatTime(msg.timestamp)}</span>
                           <button onClick={() => copyMessage(msg.content, msg.id)}

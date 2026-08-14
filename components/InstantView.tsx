@@ -134,7 +134,7 @@ const InstantView: React.FC<InstantViewProps> = ({ title, content, onClose, subt
       <div ref={contentRef} className="flex-1 overflow-y-auto no-scrollbar pt-10 pb-40 scroll-smooth px-8">
         <article className="max-w-3xl mx-auto">
           <header className="mb-12 border-r-4 border-primary pr-6">
-              <h1 className={`text-3xl font-black leading-tight mb-4 ${classes.title}`}>{title}</h1>
+              <h1 className={`text-3xl font-black leading-tight mb-4  ${classes.title}`}>{title}</h1>
               {subtitle && <p className="text-xs opacity-60 font-black uppercase tracking-wider bg-primary/10 inline-block px-3 py-1 rounded-lg">{subtitle}</p>}
           </header>
 

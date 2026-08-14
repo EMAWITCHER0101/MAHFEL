@@ -2,12 +2,21 @@ import { getPushPublicKey, subscribeToPush, unsubscribeFromPush } from './api';
 
 const PUSH_KEY = 'soha_push_enabled';
 
+/** در APK (WebView) سرویس‌ورکر/ذخیره‌سازی فعال نمی‌شود — فقط نمایش زندهٔ وب */
+const isNativeApp = (): boolean => {
+  try {
+    const b = (window as any).Capacitor;
+    return !!(b && b.isNativePlatform && b.isNativePlatform());
+  } catch { return false; }
+};
+
 export const isPushSecureContext = (): boolean => {
   if (typeof window === 'undefined') return false;
   return window.isSecureContext === true;
 };
 
 export const getPushEnabled = (): boolean => {
+  if (isNativeApp()) return false;
   try {
     return localStorage.getItem(PUSH_KEY) === '1';
   } catch { return false; }
@@ -33,15 +42,16 @@ const urlBase64ToUint8Array = (base64String: string): Uint8Array => {
 
 export const registerServiceWorker = async (): Promise<ServiceWorkerRegistration | null> => {
   try {
+    if (isNativeApp()) return null;
     if (!('serviceWorker' in navigator)) return null;
-    const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' });
     return reg;
   } catch { return null; }
 };
 
 export const enableWebPush = async (): Promise<boolean> => {
   try {
-    if (!isPushSecureContext() || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+    if (isNativeApp() || !isPushSecureContext() || !('serviceWorker' in navigator) || !('PushManager' in window)) {
       setPushEnabled(false);
       return false;
     }

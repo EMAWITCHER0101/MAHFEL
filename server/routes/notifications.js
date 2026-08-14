@@ -1,33 +1,15 @@
 import { Router } from 'express';
 import Notification from '../models/Notification.js';
-import PushSubscription from '../models/PushSubscription.js';
 import User from '../models/User.js';
 import { auth, requireAuth, requireRole } from '../middleware/auth.js';
-import webpush from 'web-push';
+import { broadcast } from '../utils/broadcast.js';
+import { sendWebPushToAll, getPublicKey } from '../utils/webpush.js';
 
 const router = Router();
 
-// VAPID keys — use env if present, else ephemeral (generated on first run and cached in process for the session)
-let vapidKeys = null;
-const getVapidKeys = () => {
-  if (vapidKeys) return vapidKeys;
-  const pub = process.env.VAPID_PUBLIC_KEY;
-  const priv = process.env.VAPID_PRIVATE_KEY;
-  const sub = process.env.VAPID_SUBJECT || 'mailto:admin@soha-sima.ir';
-  if (pub && priv) {
-    vapidKeys = { publicKey: pub, privateKey: priv, subject: sub };
-  } else {
-    const gen = webpush.generateVAPIDKeys();
-    vapidKeys = { publicKey: gen.publicKey, privateKey: gen.privateKey, subject: sub };
-  }
-  webpush.setVapidDetails(vapidKeys.subject, vapidKeys.publicKey, vapidKeys.privateKey);
-  return vapidKeys;
-};
-
 router.get('/public-key', async (req, res) => {
   try {
-    const keys = getVapidKeys();
-    res.json({ publicKey: keys.publicKey });
+    res.json({ publicKey: getPublicKey() });
   } catch (e) {
     res.status(500).json({ error: 'خطا' });
   }
@@ -69,9 +51,11 @@ router.post('/unsubscribe', requireAuth, async (req, res) => {
   }
 });
 
-router.get('/', async (req, res) => {
+router.get('/', auth, async (req, res) => {
   try {
-    const notifications = await Notification.find().sort({ createdAt: -1 }).limit(30);
+    // همگانی + اختصاصیِ کاربرِ لاگین‌شده (مثل پاسخ به نظر)
+    const filter = req.user ? { $or: [{ userId: null }, { userId: req.user._id }] } : { userId: null };
+    const notifications = await Notification.find(filter).sort({ createdAt: -1 }).limit(30);
     res.json(notifications);
   } catch (e) {
     res.status(500).json({ error: 'خطا در دریافت نوتیفیکیشن' });
@@ -80,7 +64,7 @@ router.get('/', async (req, res) => {
 
 router.post('/', auth, requireRole('admin'), async (req, res) => {
   try {
-    const { title, body, target } = req.body;
+    const { title, body, target, link, type } = req.body;
     if (!title || !body || !title.trim() || !body.trim()) {
       return res.status(400).json({ error: 'عنوان و متن نوتیفیکیشن الزامی است' });
     }
@@ -88,11 +72,19 @@ router.post('/', auth, requireRole('admin'), async (req, res) => {
       title: title.trim(),
       body: body.trim(),
       target: target || 'all',
+      link: link || '',
+      type: type || 'admin',
     });
 
     // Web-push delivery to subscribed devices (fire-and-forget)
+    broadcast('data-changed', { type: 'notifications', action: 'create', item: notification.toObject() });
     res.status(201).json(notification);
-    sendWebPush(notification);
+    sendWebPushToAll({
+      title: notification.title,
+      body: notification.body,
+      url: notification.link || '/',
+      id: String(notification._id || ''),
+    });
   } catch (e) {
     res.status(500).json({ error: 'خطا در ارسال نوتیفیکیشن' });
   }
@@ -101,6 +93,7 @@ router.post('/', auth, requireRole('admin'), async (req, res) => {
 router.delete('/:id', auth, requireRole('admin'), async (req, res) => {
   try {
     await Notification.findByIdAndDelete(req.params.id);
+    broadcast('data-changed', { type: 'notifications', action: 'delete', id: req.params.id });
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: 'خطا در حذف نوتیفیکیشن' });

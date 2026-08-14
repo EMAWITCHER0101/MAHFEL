@@ -7,7 +7,7 @@ import OnboardingGuide from './components/OnboardingGuide';
 import WelcomeVideo from './components/WelcomeVideo';
 import { ADMIN_STEPS, USER_STEPS, AUTHOR_STEPS } from './data/guideSteps';
 import ErrorBoundary from './components/ErrorBoundary';
-import { initBackgroundPlayback, isApp, sendNativeNotification, playInBackgroundAudio, stopBackgroundAudio } from './services/backgroundPlayback';
+import { initBackgroundPlayback, isApp, sendNativeNotification, playInBackgroundAudio, stopBackgroundAudio, updateAudioBackgroundMeta, updateAudioBackgroundState, stopPlaybackService, isNativeMode, setNativeModeActive, nativeCommand, getNativeSnapshot, isVideoBackgroundActive, stopVideoBackground } from './services/backgroundPlayback';
 import { getPushEnabled, syncWebPushSubscription } from './services/webPush';
 import { OfflineDetector, NetworkErrorPage, VPNBanner, useVPNDetection } from './components/ErrorPages';
 import SearchModal from './components/SearchModal';
@@ -53,6 +53,7 @@ const AppInner: React.FC = () => {
     const [books, setBooks] = useState<Book[]>([]);
     const [publishedBooks, setPublishedBooks] = useState<PublishedBook[]>([]);
     const [myNotes, setMyNotes] = useState<PublishedBook[]>([]);
+    const [usersVersion, setUsersVersion] = useState(0);
     const [isLoadingData, setIsLoadingData] = useState(true);
     const [networkError, setNetworkError] = useState(false);
     const [activeTab, setActiveTab] = useState<Page>('mahfel');
@@ -83,7 +84,7 @@ const AppInner: React.FC = () => {
     const [postMedia, setPostMedia] = useState<{ type: 'image' | 'video' | 'audio'; url: string }[]>([]);
     
     const [toast, setToast] = useState<{ id: number; message: string; image?: string; name?: string } | null>(null);
-    const [notif, setNotif] = useState<{ id: string; title: string; body: string } | null>(null);
+    const [notif, setNotif] = useState<{ id: string; title: string; body: string; link?: string } | null>(null);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [viewProfileAuthor, setViewProfileAuthor] = useState<{ name: string; avatar?: string; authorId?: string } | null>(null);
     const [authorPublicNotes, setAuthorPublicNotes] = useState<PublishedBook[]>([]);
@@ -109,6 +110,95 @@ const AppInner: React.FC = () => {
         try { return JSON.parse(localStorage.getItem('soha_video_library') || '[]'); } catch { return []; }
     });
     const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
+
+    // ══ System back (hardware/browser back) ══
+    const layerStackRef = useRef<string[]>([]);
+    const [vaultPlaylistOpen, setVaultPlaylistOpen] = useState(false);
+    const [vaultBackSignal, setVaultBackSignal] = useState(0);
+
+    const closeLayerRef = useRef<(tag: string) => void>(() => {});
+    closeLayerRef.current = (tag: string) => {
+        switch (tag) {
+            case 'admin': setAppState('ready'); break;
+            case 'writing': setIsWriting(false); setSelectedAttachment(null); setPostMedia([]); break;
+            case 'instant': setInstantView(null); break;
+            case 'profile': setIsProfileOpen(false); setViewProfileAuthor(null); break;
+            case 'search': setIsSearchOpen(false); break;
+            case 'msidebar': setMahfelSidebarOpen(false); break;
+            case 'sidebar': setIsSidebarOpen(false); break;
+case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
+            case 'video': {
+                // بعد از پخش در پس‌زمینه، دکمه برگشت مینی‌پلیر نمایش ندهد — PiP به پخش ادامه می‌دهد
+                if (isVideoBackgroundActive()) {
+                    setActiveVideo(null);
+                } else {
+                    setIsVideoMini(true);
+                }
+                break;
+            }
+            case 'post-comments': setSelectedPostForComments(null); setSelectedPostPodcast(null); break;
+            case 'video-comments': setSelectedVideoComment(null); break;
+            case 'note': setSelectedPublishedBook(null); break;
+            case 'book': setSelectedBook(null); break;
+            case 'author': setSelectedAuthor(null); break;
+            case 'podcast': setSelectedPodcast(null); setSelectedAuthor(null); break;
+            case 'player': setIsPlayerExpanded(false); break;
+            case 'chat': setShowChatInput(false); break;
+            case 'vault': setVaultBackSignal(s => s + 1); setVaultPlaylistOpen(false); break;
+        }
+    };
+
+    const openLayers: string[] = [];
+    if (appState === 'admin') openLayers.push('admin');
+    if (isWriting) openLayers.push('writing');
+    if (instantView) openLayers.push('instant');
+    if (isProfileOpen) openLayers.push('profile');
+    if (isSearchOpen) openLayers.push('search');
+    if (mahfelSidebarOpen) openLayers.push('msidebar');
+    if (isSidebarOpen) openLayers.push('sidebar');
+    if (activeVideo && isVideoMini) openLayers.push('video-mini');
+    if (activeVideo && !isVideoMini) openLayers.push('video');
+    if (selectedPostForComments) openLayers.push('post-comments');
+    if (selectedVideoComment) openLayers.push('video-comments');
+    if (selectedPublishedBook) openLayers.push('note');
+    if (selectedBook) openLayers.push('book');
+    if (selectedAuthor) openLayers.push('author');
+    if (selectedPodcast) openLayers.push('podcast');
+    if (isPlayerExpanded) openLayers.push('player');
+    if (showChatInput) openLayers.push('chat');
+    if (vaultPlaylistOpen) openLayers.push('vault');
+    const layersKey = openLayers.join('>');
+
+    // Registers one history entry per open layer so system back stays in-app
+    useEffect(() => {
+        const prevKey = layerStackRef.current.join('>');
+        if (layersKey === prevKey) return;
+        const prev = layerStackRef.current;
+        if (openLayers.length > prev.length) {
+            layerStackRef.current = openLayers;
+            history.pushState({ soha: openLayers[openLayers.length - 1] }, '');
+        } else {
+            layerStackRef.current = openLayers;
+            history.replaceState(openLayers.length ? { soha: openLayers[openLayers.length - 1] } : { soha: 'root' }, '');
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [layersKey]);
+
+    // System back: close the top layer, or stay in-app at root
+    useEffect(() => {
+        const onPopState = () => {
+            const stack = layerStackRef.current;
+            if (stack.length === 0) {
+                history.pushState({ soha: 'root' }, '');
+                return;
+            }
+            const tag = stack[stack.length - 1];
+            layerStackRef.current = stack.slice(0, -1);
+            closeLayerRef.current(tag);
+        };
+        window.addEventListener('popstate', onPopState);
+        return () => window.removeEventListener('popstate', onPopState);
+    }, []);
 
     const { isVPN, dismissVPN } = useVPNDetection();
     const prevVPNRef = useRef(isVPN);
@@ -199,7 +289,7 @@ const AppInner: React.FC = () => {
         loadInitialData();
         initBackgroundPlayback();
         const welcomeVideo = typeof window !== 'undefined' && window.innerWidth < 768
-            ? '/videopage/WELCOMEMOBILE.mp4'
+            ? '/videopage/welcomemobile.mp4'
             : '/videopage/welcomepage.mp4';
         if (typeof document !== 'undefined') {
             const existing = document.querySelector(`link[data-welcome-video]`);
@@ -222,8 +312,8 @@ const AppInner: React.FC = () => {
                 const latestId = String((latest as any)._id || '');
                 if (!latestId || latestId === lastSeen) return;
                 localStorage.setItem('mahfel_last_notif_id', latestId);
-                setNotif({ id: latestId, title: latest.title || 'محفل', body: latest.body || '' });
-                sendNativeNotification(latest.title || 'محفل', latest.body || '');
+                setNotif({ id: latestId, title: latest.title || 'محفل', body: latest.body || '', link: (latest as any).link || '' });
+                sendNativeNotification(latest.title || 'محفل', latest.body || '', (latest as any).link || '');
                 if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
                     try {
                         new Notification(latest.title || 'محفل', { body: latest.body || '', icon: '/logo.png' });
@@ -306,11 +396,171 @@ const AppInner: React.FC = () => {
                 return addReplies(roots);
             });
         } catch {}
+        try {
+            const freshPosts = await getPosts();
+            const deletedIds = recentlyDeletedIds.current;
+            const keptPosts = freshPosts.filter((p: any) => !deletedIds.has(String(p.id || p._id)));
+            setPosts(prev => {
+                const freshIds = new Set(keptPosts.map((p: any) => String(p.id || p._id)));
+                const isSame = prev.length === keptPosts.length && prev.every((p: any) => freshIds.has(String(p.id || p._id)) && (keptPosts.find((fp: any) => String(fp.id || fp._id) === String(p.id || p._id))?.text || '') === p.text);
+                if (isSame) return prev;
+                const merged = keptPosts.map((fp: any) => {
+                    const existing = prev.find((p: any) => String(p.id || p._id) === String(fp.id || fp._id));
+                    return { ...fp, comments: fp.comments && fp.comments.length > 0 ? fp.comments : (existing && existing.comments ? existing.comments : []) };
+                });
+                merged.sort((a: any, b: any) => new Date(b.isoDate).getTime() - new Date(a.isoDate).getTime());
+                return merged;
+            });
+        } catch {}
     }, []);
 
+    const refreshAllData = useCallback(async () => {
+        try {
+            const [p, b, a, v, pb] = await Promise.all([
+                getPodcasts(), getBooks(), getAuthors(), getVideos(), getPublishedBooks(),
+            ]);
+            setPodcasts(p); setBooks(b); setAuthors(a); setVideos(v); setPublishedBooks(pb);
+        } catch {}
+        refreshComments();
+    }, [refreshComments]);
+
+    const applyRealtimePayload = useCallback((type: string, payload: any) => {
+        const action = payload?.action;
+        if (!action) { refreshAllData(); return; }
+        const key = (x: any) => String((x as any)?._id ?? (x as any)?.id ?? '');
+        const sid = (v: any) => String(v);
+
+        if (type === 'posts') {
+            if (action === 'create' && payload.item) {
+                const item = payload.item;
+                setPosts(prev => prev.some(p => key(p) === key(item)) ? prev : [item, ...prev]);
+            } else if (action === 'update' && payload.item) {
+                const item = payload.item;
+                setPosts(prev => prev.map(p => key(p) === key(item) ? { ...p, ...item } : p));
+            } else if (action === 'delete') {
+                const id = sid(payload.id);
+                recentlyDeletedIds.current.add(id);
+                setPosts(prev => prev.filter(p => key(p) !== id));
+            } else if (action === 'ids-delete') {
+                const ids = ((payload.ids as any[]) || []).map(sid);
+                const set = new Set(ids);
+                set.forEach(id => recentlyDeletedIds.current.add(id));
+                setPosts(prev => prev.filter(p => !set.has(key(p))));
+            } else if (action === 'ids-pin' || action === 'ids-unpin') {
+                const set = new Set(((payload.ids as any[]) || []).map(sid));
+                const pinned = action === 'ids-pin';
+                setPosts(prev => prev.map(p => set.has(key(p)) ? { ...p, isPinned: pinned } : p));
+            } else refreshAllData();
+            return;
+        }
+
+        if (type === 'comments') {
+            if (action === 'create' && payload.item) {
+                const item = payload.item;
+                const hasInTree = (list: Comment[]): boolean =>
+                    list.some(c => key(c) === key(item) || (c.replies && hasInTree(c.replies)));
+                setComments(prev => hasInTree(prev) ? prev : insertCommentIntoTree(prev, item));
+            } else if (action === 'update' && payload.item) {
+                const item = payload.item;
+                const apply = (list: Comment[]): Comment[] =>
+                    list.map(c => key(c) === key(item)
+                        ? { ...c, ...item }
+                        : c.replies ? { ...c, replies: apply(c.replies) } : c);
+                setComments(prev => apply(prev));
+            } else if (action === 'delete') {
+                const id = sid(payload.id);
+                const remove = (list: Comment[]): Comment[] =>
+                    list.filter(c => key(c) !== id).map(c => c.replies ? { ...c, replies: remove(c.replies) } : c);
+                setComments(prev => remove(prev));
+                setPosts(prev => prev.map(p => ({ ...p, comments: (p.comments || []).filter((c: any) => key(c) !== id) })));
+            } else if (action === 'ids-delete') {
+                const set = new Set((payload.ids || []).map(sid));
+                const remove = (list: Comment[]): Comment[] =>
+                    list.filter(c => !set.has(key(c))).map(c => c.replies ? { ...c, replies: remove(c.replies) } : c);
+                setComments(prev => remove(prev));
+            } else refreshAllData();
+            return;
+        }
+
+        if (type === 'notifications') {
+            if (action === 'create' && payload.item) {
+                const item = payload.item;
+                const myId = String((user as any)?._id ?? (user as any)?.id ?? '');
+                if (item.userId && myId && String(item.userId) !== myId) return;
+                const id = String(item._id || '');
+                if (id && id !== localStorage.getItem('mahfel_last_notif_id')) {
+                    localStorage.setItem('mahfel_last_notif_id', id);
+                    setNotif({ id, title: item.title || 'محفل', body: item.body || '', link: item.link || '' });
+                    sendNativeNotification(item.title || 'محفل', item.body || '', item.link || '');
+                }
+            }
+            return;
+        }
+
+        const setters: Record<string, any> = {
+            videos: setVideos, podcasts: setPodcasts, books: setBooks,
+            authors: setAuthors, publishedBooks: setPublishedBooks,
+        };
+        if (type === 'users') { setUsersVersion(v => v + 1); return; }
+        const setter = setters[type];
+        if (!setter) { refreshAllData(); return; }
+        setter((prev: any[]) => {
+            if (action === 'create' && payload.item) {
+                if (prev.some(p => key(p) === key(payload.item))) return prev;
+                return [payload.item, ...prev];
+            }
+            if (action === 'update' && payload.item) {
+                return prev.map(p => key(p) === key(payload.item) ? { ...payload.item } : p);
+            }
+            if (action === 'delete') return prev.filter(p => key(p) !== sid(payload.id));
+            return prev;
+        });
+    }, [refreshAllData]);
+
     useEffect(() => {
-        const interval = setInterval(refreshComments, 5000);
+        let interval: ReturnType<typeof setInterval>;
+        let wasConnected: boolean | null = null;
+        const tick = async () => {
+            const m = await import('./services/realtime');
+            const connected = m.isRealtimeConnected();
+            refreshComments();
+            if (wasConnected === null) wasConnected = connected;
+            if (wasConnected !== connected) {
+                wasConnected = connected;
+                clearInterval(interval);
+                interval = setInterval(tick, connected ? 5000 : 1000);
+            }
+        };
+        interval = setInterval(tick, 1000);
         return () => clearInterval(interval);
+    }, [refreshComments]);
+
+    useEffect(() => {
+        let realtimeStarted = false;
+        const start = async () => {
+            const { startRealtime } = await import('./services/realtime');
+            startRealtime({ onDataChanged: (type: any, payload: any) => { applyRealtimePayload(type, payload); } });
+            realtimeStarted = true;
+        };
+        start();
+        const onVisible = () => {
+            if (!document.hidden) {
+                import('./services/realtime').then(m => m.reconnectNow()).catch(() => {});
+                refreshComments();
+            }
+        };
+        const onOnline = () => {
+            import('./services/realtime').then(m => m.reconnectNow()).catch(() => {});
+        };
+        document.addEventListener('visibilitychange', onVisible);
+        window.addEventListener('online', onOnline);
+        return () => {
+            if (realtimeStarted) {
+                import('./services/realtime').then(m => m.stopRealtime()).catch(() => {});
+            }
+            document.removeEventListener('visibilitychange', onVisible);
+            window.removeEventListener('online', onOnline);
+        };
     }, [refreshComments]);
 
     useEffect(() => {
@@ -350,20 +600,50 @@ const AppInner: React.FC = () => {
         audioRef.current.volume = volume;
     }, [repeatMode, isShuffle, volume]);
 
-    // Web Push: ثبت سرویس‌ورکر و همگام‌سازی اشتراک قبلی
+    // Web Push: ثبت سرویس‌ورکر و همگام‌سازی اشتراک قبلی (در APK هیچ سرویس‌ورکری ثبت نمی‌شود)
     useEffect(() => {
         if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+        if (isApp()) {
+            // APK = نمایش خالص وب: هر سرویس‌ورکر/کش قبلی را حذف کن تا هیچ داده‌ای ذخیره نماند
+            navigator.serviceWorker.getRegistrations()
+                .then(regs => regs.forEach(r => r.unregister()))
+                .catch(() => {});
+            try {
+                if ('caches' in window) {
+                    caches.keys().then(keys => keys.forEach(k => caches.delete(k))).catch(() => {});
+                }
+            } catch { /* ignore */ }
+            return;
+        }
         let cancelled = false;
         (async () => {
             try {
                 if (getPushEnabled()) {
-                    const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+                    const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' });
                     if (!cancelled && reg.active) await syncWebPushSubscription();
                 }
             } catch { /* ignore */ }
         })();
         return () => { cancelled = true; };
     }, []);
+
+    // بیدارشدن از push (تب پس‌زمینه) یا از پلر نیتیو اندروید → رفرش فوری
+    useEffect(() => {
+        const onSwMsg = (e: MessageEvent) => {
+            if (e.data && e.data.type === 'mahfel-refresh') refreshAllData();
+        };
+        const onNativeRefresh = () => refreshAllData();
+        if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('message', onSwMsg);
+        }
+        window.addEventListener('mahfel-native-refresh', onNativeRefresh);
+        return () => {
+            if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+                navigator.serviceWorker.removeEventListener('message', onSwMsg);
+            }
+            window.removeEventListener('mahfel-native-refresh', onNativeRefresh);
+        };
+    }, [refreshAllData]);
 
     // Close sidebar when image/video lightbox opens
     const prevCollapsedRef = useRef(desktopSidebarCollapsed);
@@ -428,11 +708,48 @@ const AppInner: React.FC = () => {
     const playEpisode = useCallback((podcast: Podcast, index: number) => {
         const episode = podcast.episodes[index];
         if (!episode || !episode.audioUrl) return;
+        // قطع خودکار پخش پس‌زمینه ویدیو هنگام پخش صوت جدید
+        if (isVideoBackgroundActive()) stopVideoBackground();
         setActiveVideo(null);
         setIsVideoMini(false);
         setCurrentTrack({ podcast, episode, episodeIndex: index });
         setIsPlayerExpanded(true);
+        const audioUrl = episode.audioUrl;
+        const proxyUrl = `/api/proxy/audio?url=${encodeURIComponent(audioUrl)}`;
+        recordPodcastPlay(String(podcast.id || (podcast as any)._id), index);
+        // APK: اگر پخش در پلیر نیتیو پس‌زمینه است → همانجا سوئیچ کن (مثل اسپاتیفای)
+        if (isApp() && isNativeMode()) {
+            const author = authors.find(a => a.id === podcast.speakerId);
+            updateAudioBackgroundMeta({
+                title: String(episode.title || ''),
+                artist: author?.name || String(podcast.title || ''),
+                album: String(podcast.title || 'محفل'),
+                artwork: String(episode.cover || podcast.cover || ''),
+                duration: 0,
+            });
+            // لیست کامل اپیزودها → دکمه‌های next/prev نیتیو (نوتیفیکیشن و لاک‌اسکرین) خودشان پخش را عوض کنند
+            const queue = podcast.episodes.map((ep: any, i: number) => ({
+                url: `${window.location.origin}/api/proxy/audio?url=${encodeURIComponent(ep.audioUrl || '')}`,
+                title: String(ep.title || ''),
+                artist: author?.name || String(podcast.title || ''),
+                artwork: String(ep.cover || podcast.cover || ''),
+                podcastId: String(podcast.id || (podcast as any)._id),
+            }));
+            nativeCommand({
+                cmd: 'play',
+                url: queue[index]?.url || `${window.location.origin}${proxyUrl}`,
+                positionMs: 0,
+                podcastId: String(podcast.id || (podcast as any)._id),
+                episodeIndex: index,
+                queueIndex: index,
+                queue,
+            });
+            setIsPlaying(true);
+            return;
+        }
         if (audioRef.current) {
+            (audioRef.current as any).dataset.podcastId = String(podcast.id || (podcast as any)._id);
+            (audioRef.current as any).dataset.episodeIndex = String(index);
             audioRef.current.pause();
             audioRef.current.removeAttribute('src');
         }
@@ -452,19 +769,22 @@ const AppInner: React.FC = () => {
             };
         }
         try {
-            const audioUrl = episode.audioUrl;
-            const proxyUrl = `/api/proxy/audio?url=${encodeURIComponent(audioUrl)}`;
             audioRef.current.src = proxyUrl;
             audioRef.current.load();
             audioRef.current.play().then(() => {
                 setIsPlaying(true);
             }).catch(() => {});
         } catch(e) {}
-        recordPodcastPlay(String(podcast.id || (podcast as any)._id), index);
-    }, []);
+    }, [authors]);
 
     const togglePlay = () => {
         if (!currentTrack) return;
+        // APK: در حالت نیتیو (پلیر پس‌زمینه) کنترل مستقیم روی پلیر نیتیو
+        if (isApp() && isNativeMode()) {
+            if (isPlaying) { nativeCommand({ cmd: 'pause' }); } else { nativeCommand({ cmd: 'resume' }); }
+            setIsPlaying(!isPlaying);
+            return;
+        }
         if (!audioRef.current) {
             audioRef.current = new Audio();
             audioRef.current.ontimeupdate = () => {
@@ -534,7 +854,12 @@ const AppInner: React.FC = () => {
     }, [sleepTimer]);
 
     const handleClosePlayer = useCallback(() => {
-        stopBackgroundAudio();
+        if (isApp() && isNativeMode()) {
+            nativeCommand({ cmd: 'stop' });
+        } else {
+            stopBackgroundAudio();
+            stopPlaybackService();
+        }
         if (audioRef.current) { audioRef.current.pause(); }
         setIsPlaying(false);
         setAudioProgress(0);
@@ -563,7 +888,100 @@ const AppInner: React.FC = () => {
         setToast({ id: Date.now(), message: 'پخش در پس‌زمینه فعال شد' });
     }, [currentTrack, authors, audioDuration, playNext, playPrev]);
 
+    // دستورهای اعلان/لاک‌اسکرین نیتیو (APK) → کنترل پلیر صوتی مثل وب
+    useEffect(() => {
+        const onCmd = (e: any) => {
+            const cmd: string = e?.detail;
+            if (typeof cmd !== 'string' || !cmd) return;
+            if (cmd.startsWith('track:')) {
+                // سرویس نیتیو خودش اپیزود را عوض کرده → فقط UI را همگام کن
+                if (!currentTrack) return;
+                const idx = parseInt(cmd.slice(6), 10);
+                const { podcast } = currentTrack;
+                if (isFinite(idx) && podcast.episodes[idx]) {
+                    setCurrentTrack({ podcast, episode: podcast.episodes[idx], episodeIndex: idx });
+                    setIsPlaying(true);
+                }
+                return;
+            }
+            if (!currentTrack) return;
+            if (cmd.startsWith('seekto:')) {
+                const ms = parseFloat(cmd.slice(7));
+                if (isFinite(ms) && audioRef.current && !isNativeMode()) {
+                    audioRef.current.currentTime = ms / 1000;
+                }
+                return;
+            }
+            switch (cmd) {
+                case 'play':
+                    if (isNativeMode()) { setIsPlaying(true); break; }
+                    if (audioRef.current) audioRef.current.play().catch(() => {});
+                    setIsPlaying(true); break;
+                case 'pause':
+                    if (isNativeMode()) { setIsPlaying(false); break; }
+                    if (audioRef.current) audioRef.current.pause();
+                    setIsPlaying(false); break;
+                case 'next': playNext(); break;
+                case 'prev': playPrev(); break;
+                case 'stop': handleClosePlayer(); break;
+            }
+        };
+        window.addEventListener('mahfel-media-command', onCmd);
+        return () => window.removeEventListener('mahfel-media-command', onCmd);
+    }, [currentTrack, playNext, playPrev, handleClosePlayer]);
+
+    // همگام‌سازی خودکار پلیر پس‌زمینه APK: متادیتا و وضعیت → سرویس نیتیو
+    useEffect(() => {
+        if (!isApp()) return;
+        if (isNativeMode()) return; // در حالت نیتیو، وضعیت را پلیر نیتیو کنترل می‌کند
+        if (!currentTrack || !audioRef.current) return;
+        const { podcast, episode } = currentTrack;
+        const author = authors.find(a => a.id === podcast.speakerId);
+        updateAudioBackgroundMeta({
+            title: String(episode.title || ''),
+            artist: author?.name || String(podcast.title || ''),
+            album: String(podcast.title || 'محفل'),
+            artwork: String(episode.cover || podcast.cover || ''),
+            duration: audioRef.current.duration || 0,
+        });
+        updateAudioBackgroundState(isPlaying, (audioRef.current.currentTime || 0) * 1000, (audioRef.current.duration || 0) * 1000);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isPlaying, currentTrack]);
+
+    // به‌روزرسانی دوره‌ای موقعیت پخش (نوار پیشرفت نوتیفیکیشن)
+    useEffect(() => {
+        if (!isApp() || isNativeMode() || !isPlaying || !audioRef.current || !currentTrack) return;
+        const id = setInterval(() => {
+            if (!audioRef.current || !currentTrack) return;
+            updateAudioBackgroundState(true, (audioRef.current.currentTime || 0) * 1000, (audioRef.current.duration || 0) * 1000);
+        }, 2000);
+        return () => clearInterval(id);
+    }, [isPlaying, currentTrack]);
+
+    // بازیابی پخش نیتیو پس از بازگشایی اپ (اگر سرویس از وضعیت قبلی ادامه می‌دهد — مثل اسپاتیفای)
+    const nativeRestoredRef = useRef(false);
+    useEffect(() => {
+        if (!isApp() || nativeRestoredRef.current || podcasts.length === 0) return;
+        nativeRestoredRef.current = true;
+        try {
+            const snap = getNativeSnapshot();
+            if (snap && snap.nativeMode && snap.playing && snap.podcastId) {
+                const p = podcasts.find(x => String(x.id || (x as any)._id) === String(snap.podcastId));
+                if (p && p.episodes[snap.episodeIndex]) {
+                    setNativeModeActive(true);
+                    setCurrentTrack({ podcast: p, episode: p.episodes[snap.episodeIndex], episodeIndex: snap.episodeIndex });
+                    setIsPlaying(true);
+                    setIsPlayerExpanded(true);
+                }
+            }
+        } catch { /* ignore */ }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [podcasts.length]);
+
     const handlePlayVideo = useCallback((v: Video | null) => {
+        // قطع خودکار پخش پس‌زمینه قبلی هنگام پخش ویدیو جدید
+        stopBackgroundAudio();
+        if (isVideoBackgroundActive()) stopVideoBackground();
         if (audioRef.current) { audioRef.current.pause(); }
         setIsPlaying(false);
         setAudioProgress(0);
@@ -572,6 +990,54 @@ const AppInner: React.FC = () => {
         setIsPlayerExpanded(false);
         setActiveVideo(v);
     }, []);
+
+    // باز کردن لینک نوتیفیکیشن (باز شدن اپ از نوتیفیکیشن یا کلیک روی بنر) — همگام با صفحه‌های اپ
+    const handleNotifOpen = useCallback((link?: string | null) => {
+        if (!link) return;
+        const l = String(link);
+        const openVideo = (v: any) => {
+            setActiveTab('mahfel');
+            setIsVideoMini(false);
+            handlePlayVideo(v);
+        };
+        const vm = l.match(/\/mahfel\/video\/([^/?#]+)/);
+        if (vm) {
+            const id = vm[1];
+            const v = videos.find(x => String((x as any).id || (x as any)._id) === id);
+            if (v) { openVideo(v); return; }
+            getVideos().then((list) => {
+                const v2 = (list || []).find(x => String((x as any).id || (x as any)._id) === id);
+                if (v2) openVideo(v2);
+            }).catch(() => {});
+            return;
+        }
+        const pm = l.match(/\/mahfel\/post\/([^/?#]+)/);
+        if (pm) {
+            const id = pm[1];
+            const p = posts.find(x => String((x as any).id || (x as any)._id) === id);
+            if (p) setSelectedPostForComments(p);
+            return;
+        }
+        const podm = l.match(/\/mahfel\/podcast\/([^/?#]+)/);
+        if (podm) {
+            const id = podm[1];
+            const p = podcasts.find(x => String((x as any).id || (x as any)._id) === id);
+            if (p) setSelectedPodcast(p);
+            return;
+        }
+        if (l === '/' || l === '/mahfel' || l === '/mahfel/videos') { setActiveTab('videos'); return; }
+        setActiveTab('mahfel');
+    }, [videos, posts, podcasts, handlePlayVideo]);
+
+    // رویداد نیتیو: باز شدن اپ از نوتیفیکیشن APK → همان صفحه/ویدیو باز شود
+    useEffect(() => {
+        const onOpenNotif = (e: Event) => {
+            const detail = (e as CustomEvent).detail;
+            if (typeof detail === 'string' && detail) handleNotifOpen(detail);
+        };
+        window.addEventListener('mahfel-open-notif', onOpenNotif);
+        return () => window.removeEventListener('mahfel-open-notif', onOpenNotif);
+    }, [handleNotifOpen]);
 
     const openWriteModalWithAttachment = (type: 'audio' | 'video' | 'book', data: any, timestamp?: number) => {
         setSelectedAttachment({ type, data, timestamp });
@@ -725,10 +1191,18 @@ const AppInner: React.FC = () => {
 
     // Author: Delete own post
     const handleDeletePost = async (postId: number) => {
-        const ok = await apiDeletePost(String(postId));
-        if (ok) {
-            setPosts(posts.filter(p => p.id !== postId));
-            setToast({ id: Date.now(), message: 'پست حذف شد' });
+        recentlyDeletedIds.current.add(String(postId));
+        setPosts(prev => prev.filter(p => String(p.id) !== String(postId)));
+        setToast({ id: Date.now(), message: 'پست حذف شد' });
+        try {
+            const ok = await apiDeletePost(String(postId));
+            if (!ok) {
+                recentlyDeletedIds.current.delete(String(postId));
+                refreshComments();
+            }
+        } catch {
+            recentlyDeletedIds.current.delete(String(postId));
+            refreshComments();
         }
     };
 
@@ -766,14 +1240,23 @@ const AppInner: React.FC = () => {
     };
 
     const handleDeletePostComment = async (postId: string, commentId: string) => {
+        recentlyDeletedIds.current.add(String(commentId));
         const removeFromLocal = (list: any[]): any[] =>
             list.filter(c => String((c as any)._id || c.id) !== String(commentId))
                 .map(c => ({ ...c, replies: (c as any).replies ? removeFromLocal((c as any).replies) : [] }));
         setPosts(prev => prev.map(p => String(p.id) === String(postId) ? { ...p, comments: removeFromLocal(p.comments || []) } : p));
         setSelectedPostForComments(prev => prev && String(prev.id) === String(postId) ? { ...prev, comments: removeFromLocal(prev.comments || []) } : prev);
-        const ok = await deletePostComment(postId, commentId);
-        if (ok) {
-            setToast({ id: Date.now(), message: 'نظر حذف شد' });
+        try {
+            const ok = await deletePostComment(postId, commentId);
+            if (!ok) {
+                recentlyDeletedIds.current.delete(String(commentId));
+                refreshComments();
+            } else {
+                setToast({ id: Date.now(), message: 'نظر حذف شد' });
+            }
+        } catch {
+            recentlyDeletedIds.current.delete(String(commentId));
+            refreshComments();
         }
     };
 
@@ -1047,7 +1530,14 @@ const AppInner: React.FC = () => {
         const renderVideoInitialTime = currentVideoId === activeVideoId ? videoCurrentTimeRef.current : 0;
 
         if (activeVideo && !isVideoMini) {
-            return <VideoPlayerPage video={activeVideo} allVideos={videos} comments={comments} authors={authors} isMini={false} initialTime={renderVideoInitialTime} onBack={() => { setIsVideoMini(true); }} onVideoSelect={handlePlayVideo} onAddComment={async (text, v, videoTimestamp, parentId, _audioTimestamp) => {
+            return <VideoPlayerPage video={activeVideo} allVideos={videos} comments={comments} authors={authors} isMini={false} initialTime={renderVideoInitialTime} onBack={() => {
+                // بعد از پخش در پس‌زمینه، دکمه برگشت مینی‌پلیر نمایش ندهد — PiP به پخش ادامه می‌دهد
+                if (isVideoBackgroundActive()) {
+                    setActiveVideo(null);
+                } else {
+                    setIsVideoMini(true);
+                }
+            }} onVideoSelect={handlePlayVideo} onAddComment={async (text, v, videoTimestamp, parentId, _audioTimestamp) => {
                 const newComment = await addComment({ type: 'video', videoId: v.id || (v as any)._id, author: user?.name || 'کاربر', text, videoTimestamp, parentId, authorAvatarUrl: user?.avatar });
                 if (newComment) {
                     setComments(prev => insertCommentIntoTree(prev, newComment));
@@ -1111,7 +1601,7 @@ const AppInner: React.FC = () => {
             />;
             case 'sowt': return <SowtPage podcasts={podcasts} authors={authors} liveStream={{ isLive: false, title: '', url: '' }} onPodcastSelect={setSelectedPodcast} onPlay={playEpisode} userInterests={user?.interests || []} isHeaderVisible={true} onAuthorSelect={setSelectedAuthor} userLibrary={user?.library?.podcasts || []} onToggleLibrary={(id: number) => {}} onShare={(t: string, s: string) => {}} onToggleSidebar={() => setDesktopSidebarCollapsed(v => !v)} theme={theme} onToggleTheme={toggleTheme} onOpenProfile={() => setIsProfileOpen(true)} user={user} />;
             case 'matn': return <MatnPage authors={authors} books={books} onBookSelect={setSelectedBook} onAuthorSelect={setSelectedAuthor} />;
-            case 'videos': return <VideoVaultPage videos={videos} onVideoSelect={(v) => { setIsVideoMini(false); handlePlayVideo(v); }} user={user} theme={theme} onToggleTheme={toggleTheme} onProfileClick={() => setIsProfileOpen(true)} onOpenSidebar={() => setDesktopSidebarCollapsed(v => !v)} />;
+            case 'videos': return <VideoVaultPage videos={videos} onVideoSelect={(v) => { setIsVideoMini(false); handlePlayVideo(v); }} user={user} theme={theme} onToggleTheme={toggleTheme} onProfileClick={() => setIsProfileOpen(true)} onOpenSidebar={() => setDesktopSidebarCollapsed(v => !v)} onPlaylistOpen={setVaultPlaylistOpen} vaultBackSignal={vaultBackSignal} />;
             case 'nashr': return <NashrPage publishedBooks={publishedBooks} allPodcasts={podcasts} comments={comments} onAddComment={(text, book) => openWriteModalWithAttachment('book', book)} user={user} onUpdateUser={(u) => { setUser(u); localStorage.setItem('user_data', JSON.stringify(u)); }} onDeleteComment={handleDeleteComment} onLikeComment={handleLikeComment} onUpdateComment={handleUpdateComment} onToggleSidebar={() => setDesktopSidebarCollapsed(v => !v)} myNotes={myNotes} onSaveNote={handleSaveNote} onUpdateNote={handleUpdateNote} onDeleteNote={handleDeleteNote} onRepostToMahfel={handleRepostNoteToMahfel} onOpenAuthorProfile={handleOpenAuthorProfile} />;
             case 'library': return <LibraryPage savedVideoIds={user?.library?.videos || localVideoLibrary} allVideos={videos} onPlayVideo={(v) => { setIsVideoMini(false); handlePlayVideo(v); }} onRemoveVideo={(id) => handleToggleLibrary(id)} savedPodcastIds={user?.library?.podcasts || []} savedEpisodes={user?.library?.episodes || []} allPodcasts={podcasts} authors={authors} onSelectPodcast={setSelectedPodcast} onRemovePodcast={(p) => togglePodcastLibrary(p)} onRemoveEpisode={(podcastId, episodeIndex) => toggleEpisodeLibrary(podcastId, episodeIndex)} onPlayPodcast={(podcast, idx) => playEpisode(podcast, idx)} theme={theme} onToggleTheme={toggleTheme} user={user} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} onToggleSidebar={() => setDesktopSidebarCollapsed(v => !v)} />;
             case 'ai': return <AiAssistantPage podcasts={podcasts} videos={videos} posts={posts} books={publishedBooks} authors={authors} onPlayPodcast={playEpisode} onPlayVideo={(v) => { setIsVideoMini(false); handlePlayVideo(v); }} onShowBook={(b) => { setSelectedPublishedBook(b); }} />;
@@ -1123,7 +1613,7 @@ const AppInner: React.FC = () => {
     if (networkError) return <NetworkErrorPage onRetry={() => { setNetworkError(false); window.location.reload(); }} />;
     if (appState === 'login') return <LoginPage onLoginSuccess={handleLogin} />;
     if (appState === 'interests') return <InterestsPage onInterestsSelected={(interests) => { if(user) { const u = {...user, interests}; setUser(u); handleLogin(u); } }} />;
-    if (appState === 'admin') return <AdminPage onClose={() => setAppState('ready')} currentPodcasts={podcasts} currentVideos={videos} currentPublishedBooks={publishedBooks} currentAuthors={authors} currentBooks={books} currentComments={comments} currentPosts={posts} onSave={(data: any) => { setPodcasts(data.podcasts); setVideos(data.videos); setPublishedBooks(data.publishedBooks); setAuthors(data.authors); setBooks(data.books); setPosts(data.posts); setComments(data.comments); }} />;
+    if (appState === 'admin') return <AdminPage onClose={() => setAppState('ready')} currentPodcasts={podcasts} currentVideos={videos} currentPublishedBooks={publishedBooks} currentAuthors={authors} currentBooks={books} currentComments={comments} currentPosts={posts} currentUsersVersion={usersVersion} onSave={(data: any) => { setPodcasts(data.podcasts); setVideos(data.videos); setPublishedBooks(data.publishedBooks); setAuthors(data.authors); setBooks(data.books); setPosts(data.posts); setComments(data.comments); }} />;
 
     const miniPlayerVideoId = activeVideo ? (activeVideo.id || (activeVideo as any)._id) : null;
     const miniPlayerInitialTime = miniPlayerVideoId === activeVideoId ? videoCurrentTimeRef.current : 0;
@@ -1135,7 +1625,7 @@ const AppInner: React.FC = () => {
              <div className="app-container bg-background flex-1 flex min-h-0">
              
              {/* Desktop Sidebar */}
-              <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); setSelectedPodcast(null); setSelectedAuthor(null); setSelectedBook(null); setSelectedPublishedBook(null); setSelectedPostForComments(null); setSelectedPostPodcast(null); setSelectedVideoComment(null); setIsPlayerExpanded(false); setActiveVideo(null); setIsVideoMini(false); }} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} theme={theme} onToggleTheme={toggleTheme} onOpenSearch={() => setIsSearchOpen(true)} onOpenAdmin={() => setAppState('admin')} onOpenProfile={() => setIsProfileOpen(true)} user={user} isAuthenticated={isAuthenticated} collapsed={desktopSidebarCollapsed} onToggleCollapsed={setDesktopSidebarCollapsed} />
+              <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); setSelectedPodcast(null); setSelectedAuthor(null); setSelectedBook(null); setSelectedPublishedBook(null); setSelectedPostForComments(null); setSelectedPostPodcast(null); setSelectedVideoComment(null); setIsPlayerExpanded(false); setIsVideoMini(true); }} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} theme={theme} onToggleTheme={toggleTheme} onOpenSearch={() => setIsSearchOpen(true)} onOpenAdmin={() => setAppState('admin')} onOpenProfile={() => setIsProfileOpen(true)} user={user} isAuthenticated={isAuthenticated} collapsed={desktopSidebarCollapsed} onToggleCollapsed={setDesktopSidebarCollapsed} />
 
               {/* Main Content */}
                <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
@@ -1355,7 +1845,7 @@ onPlayVideo={(v) => { setIsVideoMini(false); handlePlayVideo(v); }}
               )}
              
               {toast && <Toast key={toast.id} message={toast.message} image={toast.image} name={toast.name} onClose={() => setToast(null)} />}
-              {notif && <NotificationBanner key={notif.id} title={notif.title} body={notif.body} onClose={() => setNotif(null)} />}
+              {notif && <NotificationBanner key={notif.id} title={notif.title} body={notif.body} link={notif.link} onClose={() => setNotif(null)} onClick={handleNotifOpen} />}
               {showWelcomeVideo && (
                   <WelcomeVideo onComplete={handleWelcomeComplete} />
               )}

@@ -1,0 +1,11 @@
+const url = 'https://soha-sima.ir/album/' + encodeURIComponent('ما و حضور اربعینی پیش رو') + '/';
+const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+const t = await res.text();
+const imgs = [...t.matchAll(/<img[^>]+src="([^"]+)"[^>]*>/g)].map(m => m[1]);
+const css = [...t.matchAll(/background-image:\s*url\(['"]?([^'")]+)['"]?\)/g)].map(m => m[1]);
+console.log('IMAGES:');
+for (const i of imgs) console.log(' ', i);
+console.log('CSSBG:');
+for (const c of css) console.log(' ', c);
+const tw = t.match(/twitter:image[^>]*content="([^"]+)"/);
+console.log('TWITTER:', tw ? tw[1] : 'none');

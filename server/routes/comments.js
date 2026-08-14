@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import Comment from '../models/Comment.js';
 import User from '../models/User.js';
+import Notification from '../models/Notification.js';
 import { requireAuth, auth } from '../middleware/auth.js';
+import { broadcast } from '../utils/broadcast.js';
 
 const router = Router();
 
@@ -120,6 +122,27 @@ router.post('/', requireAuth, async (req, res) => {
     obj.id = obj._id;
     obj.replies = [];
 
+    broadcast('data-changed', { type: 'comments', action: 'create', item: obj });
+
+    // نوتیفیکیشن پاسخ: اگر ریپلای باشد → برای صاحب نظر اصلی
+    try {
+      if (comment.parentId && req.user) {
+        const parent = await Comment.findById(comment.parentId);
+        if (parent && parent.userId && String(parent.userId) !== String(req.user._id)) {
+          let link = '';
+          if (comment.podcastId) link = `/mahfel/podcast/${comment.podcastId}`;
+          else if (comment.videoId) link = `/mahfel/video/${comment.videoId}`;
+          else if (comment.bookId) link = `/mahfel/book/${comment.bookId}`;
+          await Notification.create({
+            title: '💬 پاسخ جدید',
+            body: `${req.user.name} به نظر شما پاسخ داد`,
+            userId: parent.userId,
+            link,
+            type: 'reply',
+          });
+        }
+      }
+    } catch (ignored) {}
 
     res.status(201).json(obj);
   } catch (error) {
@@ -162,6 +185,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
     };
     await deleteRecursive(req.params.id);
     await Comment.findByIdAndDelete(req.params.id);
+    broadcast('data-changed', { type: 'comments', action: 'delete', id: req.params.id });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'خطای سرور' });

@@ -51,5 +51,6 @@ postSchema.index({ isoDate: -1 });
 postSchema.index({ videoId: 1 });
 postSchema.index({ podcastId: 1 });
 postSchema.index({ bookId: 1 });
+postSchema.index({ userId: 1 });
 
 export default mongoose.model('Post', postSchema);

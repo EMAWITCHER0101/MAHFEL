@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mahfel-v1';
+const CACHE_NAME = 'mahfel-v2-nocache-api';
 const STATIC_ASSETS = [
   '/',
   '/logo.png',
@@ -24,6 +24,9 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  // API و WebSocket هرگز کش نشوند — همیشه مستقیم از شبکه (کش شدن دیتا = تاخیر آپدیت)
+  const reqUrl = event.request.url || '';
+  if (reqUrl.includes('/api/') || reqUrl.includes('/ws')) return;
 
   event.respondWith(
     caches.match(event.request).then((cached) => {
@@ -57,7 +60,16 @@ self.addEventListener('push', (event) => {
     data: { url: data.url || '/' },
     vibrate: [100, 50, 100],
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil((async () => {
+    // اگر صفحهٔ اپ باز است (حتی در تب پس‌زمینه) → به او بگو فوراً رفرش کند
+    try {
+      const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      for (const client of clients) {
+        client.postMessage({ type: 'mahfel-refresh' });
+      }
+    } catch { /* ignore */ }
+    return self.registration.showNotification(title, options);
+  })());
 });
 
 self.addEventListener('notificationclick', (event) => {

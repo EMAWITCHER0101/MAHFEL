@@ -46,11 +46,11 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onSelect, index = 0 }) => 
       {/* Info */}
       <div className="flex items-start gap-3 px-1">
         <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-extrabold leading-snug line-clamp-2 mb-1.5 group-hover:text-primary transition-colors duration-300"
+          <h3 className="text-sm font-extrabold leading-snug line-clamp-2 mb-1.5 group-hover:text-primary transition-colors duration-300 "
             style={{ color: 'var(--text)' }}>
             {video.title}
           </h3>
-          <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-3)' }}>
+          <div className="flex items-center gap-2 text-xs " style={{ color: 'var(--text-3)' }}>
             <span>{toPersianDigits(video.viewCount)} بازدید</span>
             <span className="w-1 h-1 rounded-full bg-current opacity-30" />
             <span>{video.uploadDate}</span>

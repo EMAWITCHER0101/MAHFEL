@@ -27,6 +27,7 @@ const podcastSchema = new mongoose.Schema({
   isSquare: { type: Boolean, default: false },
   likes: { type: Number, default: 0 },
   likedBy: [{ type: String }],
+  viewCount: { type: Number, default: 0 },
 }, { timestamps: true });
 
 podcastSchema.index({ title: 'text', description: 'text' });

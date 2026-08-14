@@ -2,9 +2,10 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import type { Podcast, Episode, Video, PublishedBook, Author, Book } from '../types';
 import { toPersianDigits } from '../utils/helpers';
-import { uploadFile, getAdminStats, getAdminUsers, updateUserRole, deleteUser, getAdminPosts, adminDeletePost, adminUpdatePost, getAdminComments, adminDeleteComment, adminUpdateComment, getPodcasts, getBooks, getAuthors, getVideos, getComments, getPosts, getPublishedBooks, getAdminAnalytics, getAdminActivity, adminExportData, adminSearchGlobal, adminBulkUsers, adminBulkPosts, adminBulkComments, muteUser, unmuteUser, unbanUser, resetUserWarnings, getNotifications, adminSendNotification, adminDeleteNotification } from '../services/api';
+import { uploadFile, getAdminStats, getAdminUsers, updateUserRole, deleteUser, getAdminPosts, adminDeletePost, adminUpdatePost, getAdminComments, adminDeleteComment, adminUpdateComment, getPodcasts, getBooks, getAuthors, getVideos, getComments, getPosts, getPublishedBooks, getAdminAnalytics, getAdminAnalyticsSegments, getAdminInsights, getAdminActivity, adminExportData, adminSearchGlobal, adminBulkUsers, adminBulkPosts, adminBulkComments, muteUser, unmuteUser, unbanUser, resetUserWarnings, getNotifications, adminSendNotification, adminDeleteNotification, getAICorpus, getAdminVideoPlaylists, createVideoPlaylist, updateVideoPlaylist, deleteVideoPlaylist, adminGetNotes, adminCreateNote, adminUpdateNote, adminDeleteNote, adminGetAuthors } from '../services/api';
 import { fetchAparatVideoDetails, extractAparatId } from '../utils/aparatApi';
 import { GoogleGenAI } from "@google/genai";
+import { AreaTrendChart, StackedDailyBars, RankBars } from '../components/AdminCharts';
 
 const FormField = ({ label, children }: any) => (
   <div className="mb-4">
@@ -277,11 +278,56 @@ const StatCard = ({ icon, label, value, color }: { icon: string; label: string; 
     </div>
 );
 
-type AdminTab = 'dashboard' | 'users' | 'posts' | 'comments' | 'sowt' | 'videos' | 'library' | 'nashr' | 'analytics' | 'notifications';
+type AdminTab = 'dashboard' | 'users' | 'posts' | 'comments' | 'sowt' | 'videos' | 'library' | 'nashr' | 'notes' | 'authors' | 'analytics' | 'notifications';
 
-const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBooks, currentAuthors, currentBooks, currentComments, currentPosts, onSave }: any) => {
+const MiniBarChart = ({ data, height = 56, color = '#8b5cf6' }: { data: { label: string; value: number }[]; height?: number; color?: string }) => {
+  const max = Math.max(1, ...data.map(d => d.value));
+  return (
+    <div className="flex items-end gap-[3px] h-16" style={{ height }}>
+      {data.length === 0 && <div className="w-full flex items-center justify-center text-[8px] text-gray-300 font-bold">داده‌ای وجود ندارد</div>}
+      {data.map((d, i) => (
+        <div key={i} className="flex-1 flex flex-col items-center justify-end h-full group relative" title={`${d.label}: ${toPersianDigits(d.value)}`}>
+          <div className="w-full rounded-t-[4px] transition-all duration-500 group-hover:opacity-80"
+            style={{ height: `${Math.max(4, (d.value / max) * 100)}%`, background: d.value === max && d.value > 0 ? color : `${color}66` }} />
+          <span className="text-[6px] text-gray-300 font-black mt-0.5">{d.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const GrowthBadge = ({ value, suffix = '٪' }: { value?: number; suffix?: string }) => {
+  const v = Number(value || 0);
+  const up = v > 0, down = v < 0;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-black ${up ? 'bg-green-50 text-green-600' : down ? 'bg-red-50 text-red-500' : 'bg-gray-50 text-gray-400'}`}>
+      <i className={`fas ${up ? 'fa-arrow-up' : down ? 'fa-arrow-down' : 'fa-minus'} text-[6px]`}></i>
+      {up ? '+' : ''}{toPersianDigits(Math.abs(v))}{suffix}
+    </span>
+  );
+};
+
+const buildDailyByType = (rows: any[]) => {
+    const byDate: Record<string, { podcast: number; video: number }> = {};
+    rows.forEach((r: any) => {
+        const d = r._id?.date || '';
+        if (!byDate[d]) byDate[d] = { podcast: 0, video: 0 };
+        if (r._id?.event === 'podcast_play') byDate[d].podcast += r.count;
+        else byDate[d].video += r.count;
+    });
+    return Object.entries(byDate).map(([date, v]) => ({ label: date.slice(5), podcast: v.podcast, video: v.video }));
+};
+
+const InsightLevelStyles: Record<string, { bg: string; text: string; icon: string }> = {  success: { bg: 'bg-green-50 border-green-100', text: 'text-green-700', icon: 'text-green-500' },
+  info: { bg: 'bg-blue-50 border-blue-100', text: 'text-blue-700', icon: 'text-blue-500' },
+  warning: { bg: 'bg-amber-50 border-amber-100', text: 'text-amber-700', icon: 'text-amber-500' },
+  danger: { bg: 'bg-red-50 border-red-100', text: 'text-red-700', icon: 'text-red-500' },
+};
+
+const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBooks, currentAuthors, currentBooks, currentComments, currentPosts, currentUsersVersion, onSave }: any) => {
     const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
     const [librarySubTab, setLibrarySubTab] = useState<'podcasts' | 'books'>('podcasts');
+    const [videoSubTab, setVideoSubTab] = useState<'videos' | 'playlists'>('videos');
     const [communitySubTab, setCommunitySubTab] = useState<'comments' | 'posts'>('comments');
 
     const [localData, setLocalData] = useState({
@@ -293,6 +339,22 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
         posts: JSON.parse(JSON.stringify(currentPosts)),
         comments: JSON.parse(JSON.stringify(currentComments))
     });
+
+    // همگام‌سازی لحظه‌ای با state اصلی اپ (realtime از Go Change Streams) — همهٔ تب‌ها بدون fetch
+    useEffect(() => {
+        setLocalData(prev => {
+            const next = {
+                podcasts: JSON.parse(JSON.stringify(currentPodcasts)),
+                videos: JSON.parse(JSON.stringify(currentVideos)),
+                publishedBooks: JSON.parse(JSON.stringify(currentPublishedBooks)),
+                authors: JSON.parse(JSON.stringify(currentAuthors)),
+                books: JSON.parse(JSON.stringify(currentBooks)),
+                posts: JSON.parse(JSON.stringify(currentPosts)),
+                comments: JSON.parse(JSON.stringify(currentComments))
+            };
+            return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+        });
+    }, [currentPodcasts, currentVideos, currentPublishedBooks, currentAuthors, currentBooks, currentPosts, currentComments]);
 
     const [editingItem, setEditingItem] = useState<{ type: string, id: any } | null>(null);
     const [pickerConfig, setPickerConfig] = useState<any>(null);
@@ -307,10 +369,51 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
     const [notifTarget, setNotifTarget] = useState('all');
     const [notifSending, setNotifSending] = useState(false);
 
+    const [adminPlaylists, setAdminPlaylists] = useState<any[]>([]);
+    const [playlistSearch, setPlaylistSearch] = useState('');
+    const [editingPlaylist, setEditingPlaylist] = useState<any | null>(null);
+    const [playlistSaving, setPlaylistSaving] = useState(false);
+
     const loadNotifications = useCallback(async () => {
         const list = await getNotifications();
         if (list) setNotifList(list);
     }, []);
+
+    const [adminNotes, setAdminNotes] = useState<any[]>([]);
+    const [adminNotesPage, setAdminNotesPage] = useState(1);
+    const [adminNotesTotal, setAdminNotesTotal] = useState(0);
+    const [adminNotesPages, setAdminNotesPages] = useState(1);
+    const [adminNotesSearch, setAdminNotesSearch] = useState('');
+    const [adminNotesStatus, setAdminNotesStatus] = useState('');
+    const [editingNote, setEditingNote] = useState<any | null>(null);
+    const [noteComposer, setNoteComposer] = useState<{ open: boolean; note?: any }>({ open: false });
+    const [noteTitle, setNoteTitle] = useState('');
+    const [noteContent, setNoteContent] = useState('');
+    const [noteAuthorName, setNoteAuthorName] = useState('');
+    const [noteIsDraft, setNoteIsDraft] = useState(false);
+    const [noteSaving, setNoteSaving] = useState(false);
+    const [adminAuthors, setAdminAuthors] = useState<any[]>([]);
+    const [authorsLoading, setAuthorsLoading] = useState(false);
+
+    const loadAdminAuthors = useCallback(async () => {
+        setAuthorsLoading(true);
+        try {
+            const list = await adminGetAuthors();
+            if (list) setAdminAuthors(list);
+        } finally {
+            setAuthorsLoading(false);
+        }
+    }, []);
+
+    const loadAdminNotes = useCallback(async (page = 1, search = adminNotesSearch, status = adminNotesStatus) => {
+        const res = await adminGetNotes({ search: search || undefined, status: status || undefined, page });
+        if (res) {
+            setAdminNotes(res.notes || []);
+            setAdminNotesTotal(res.total || 0);
+            setAdminNotesPages(res.pages || 1);
+            setAdminNotesPage(res.page || 1);
+        }
+    }, [adminNotesSearch, adminNotesStatus]);
 
     const [stats, setStats] = useState<any>(null);
     const [users, setUsers] = useState<any[]>([]);
@@ -339,6 +442,11 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
     const [selectedComments, setSelectedComments] = useState<string[]>([]);
     const [analytics, setAnalytics] = useState<any>(null);
     const [analyticsPeriod, setAnalyticsPeriod] = useState('7d');
+    const [analyticsTab, setAnalyticsTab] = useState<'audio' | 'video' | 'community'>('audio');
+    const [segments, setSegments] = useState<any>(null);
+    const [insights, setInsights] = useState<any>(null);
+    const [insightsLoading, setInsightsLoading] = useState(false);
+    const [aiCorpus, setAiCorpus] = useState<any>(null);
     const [activity, setActivity] = useState<any[]>([]);
     const [adminToast, setAdminToast] = useState<{ message: string; type: 'error' | 'success' | 'warning' } | null>(null);
     const [confirmToast, setConfirmToast] = useState<{ message: string; onConfirm: () => void; type?: 'danger' | 'warning' } | null>(null);
@@ -381,11 +489,26 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
     const loadAnalytics = useCallback(async () => {
         const a = await getAdminAnalytics({ period: analyticsPeriod });
         if (a) setAnalytics(a);
+        const s = await getAdminAnalyticsSegments({ period: analyticsPeriod });
+        if (s) setSegments(s);
+    }, [analyticsPeriod]);
+
+    const loadInsights = useCallback(async (period?: string) => {
+        setInsightsLoading(true);
+        const p = period || analyticsPeriod;
+        const i = await getAdminInsights({ period: p });
+        if (i) setInsights(i);
+        setInsightsLoading(false);
     }, [analyticsPeriod]);
 
     const loadActivity = useCallback(async () => {
         const act = await getAdminActivity({ limit: 50 });
         if (act) setActivity(act);
+    }, []);
+
+    const loadAICorpus = useCallback(async () => {
+        const c = await getAICorpus();
+        if (c) setAiCorpus(c);
     }, []);
 
     const handleGlobalSearch = useCallback(async () => {
@@ -398,13 +521,24 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
 
     useEffect(() => {
         if (activeTab === 'dashboard') loadStats();
+        if (activeTab === 'dashboard') loadAICorpus();
         if (activeTab === 'users') loadUsers(1);
         if (activeTab === 'posts') loadPosts(1);
         if (activeTab === 'comments') loadComments(1);
         if (activeTab === 'analytics') loadAnalytics();
         if (activeTab === 'analytics') loadActivity();
+        if (activeTab === 'dashboard' || activeTab === 'analytics') loadInsights();
         if (activeTab === 'notifications') loadNotifications();
-    }, [activeTab, loadStats, loadUsers, loadPosts, loadComments, loadAnalytics, loadActivity]);
+        if (activeTab === 'notes') loadAdminNotes(1);
+        if (activeTab === 'authors') loadAdminAuthors();
+    }, [activeTab, loadStats, loadUsers, loadPosts, loadComments, loadAnalytics, loadActivity, loadInsights, loadAICorpus, loadNotifications, loadAdminNotes, loadAdminAuthors]);
+
+    // ریل‌تایم مدیریت کاربران: هر تغییر کاربر (ثبت‌نام/نقش/حذف) → ری‌فچ لحظه‌ای صفحهٔ فعلی بدون رفرش
+    useEffect(() => {
+        if (activeTab !== 'users' || currentUsersVersion <= 0) return;
+        const t = setTimeout(() => loadUsers(usersPage), 250);
+        return () => clearTimeout(t);
+    }, [currentUsersVersion, activeTab, usersPage, loadUsers]);
 
     const sortedPodcasts = useMemo(() => {
         let list = [...localData.podcasts].filter(p => p.title.includes(podcastSearch));
@@ -430,6 +564,40 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                 <StatCard icon="fa-book" label="کتاب‌ها" value={stats?.books || 0} color="#8b5cf6" />
                 <StatCard icon="fa-user-tie" label="اساتید" value={stats?.authors || 0} color="#ec4899" />
                 <StatCard icon="fa-shopping-cart" label="نشر" value={stats?.publishedBooks || 0} color="#2563eb" />
+                <StatCard icon="fa-eye" label="کل پخش‌ها" value={stats?.totalPlays || 0} color="#7c3aed" />
+                <StatCard icon="fa-headphones" label="بازدید صوتی (پلی‌لیست)" value={stats?.podcastViews || 0} color="#1ab394" />
+                <StatCard icon="fa-play-circle" label="بازدید ویدیو" value={stats?.videoViews || 0} color="#2e86c1" />
+                <StatCard icon="fa-heart" label="لایک پادکست‌ها" value={stats?.podcastLikes || 0} color="#f43f5e" />
+                <StatCard icon="fa-heart" label="لایک ویدیوها" value={stats?.videoLikes || 0} color="#ec4899" />
+            </div>
+
+            <div className="bg-gradient-to-br from-indigo-50/80 to-purple-50/80 rounded-2xl border p-4 shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                        <i className="fas fa-robot text-purple-500"></i> تحلیل خودکار هوشمند
+                    </h3>
+                    {insightsLoading && <i className="fas fa-spinner fa-spin text-purple-400 text-xs"></i>}
+                    {insights?.usingLLM && <span className="text-[7px] font-black text-purple-400 bg-purple-50 px-2 py-0.5 rounded-full">🎯 توسط هوش مصنوعی</span>}
+                </div>
+                {insights?.summary ? (
+                    <p className="text-[11px] leading-relaxed font-bold text-gray-700 bg-white/80 rounded-xl p-3 border border-purple-100 mb-3">{insights.summary}</p>
+                ) : (
+                    <p className="text-[9px] text-gray-400 mb-2">تحلیل خودکار بر اساس رویدادهای اخیر در حال آماده‌سازی است…</p>
+                )}
+                <div className="grid gap-2">
+                    {(insights?.insights || []).slice(0, 3).map((ins: any, i: number) => {
+                        const st = InsightLevelStyles[ins.level] || InsightLevelStyles.info;
+                        return (
+                            <div key={i} className={`flex items-start gap-2.5 p-2.5 rounded-xl border ${st.bg}`}>
+                                <i className={`fas ${ins.icon} ${st.icon} text-[10px] mt-0.5`}></i>
+                                <div className="min-w-0">
+                                    <p className={`text-[9px] font-black ${st.text}`}>{ins.title}</p>
+                                    <p className="text-[8px] text-gray-500 leading-relaxed mt-0.5 line-clamp-2">{ins.detail}</p>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
             </div>
 
             <div className="bg-white rounded-2xl border shadow-sm p-4">
@@ -451,18 +619,85 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
             </div>
 
             <div className="bg-white rounded-2xl border shadow-sm p-4">
-                <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">محبوب‌ترین پادکست‌ها</h3>
+                <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">فعالیت پخش (۱۴ روز اخیر)</h3>
+                    <div className="flex items-center gap-2 text-[8px] font-black">
+                        <span className="flex items-center gap-1 text-emerald-600"><i className="fas fa-circle text-[6px]"></i> صوتی</span>
+                        <span className="flex items-center gap-1 text-blue-500"><i className="fas fa-circle text-[6px]"></i> ویدیو</span>
+                    </div>
+                </div>
+                <StackedDailyBars
+                    data={buildDailyByType(stats?.dailyPlaysByType || [])}
+                    colors={['#10b981', '#2e86c1']}
+                    height={140}
+                />
+            </div>
+
+            <div className="bg-white rounded-2xl border shadow-sm p-4">
+                <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">محبوب‌ترین پادکست‌ها (بر اساس بازدید واقعی)</h3>
+                <RankBars
+                    color="#10b981"
+                    barColor2="#34d399"
+                    valueSuffix="بازدید"
+                    data={(stats?.popularPodcasts || []).slice(0, 5).map((p: any) => ({
+                        title: p.title,
+                        cover: p.cover,
+                        value: p.totalViews || 0,
+                        subtitle: `${toPersianDigits(p.likes || 0)} لایک • ${toPersianDigits(p.episodes?.length || 0)} جلسه`,
+                    }))}
+                />
+            </div>
+
+            <div className="bg-white rounded-2xl border shadow-sm p-4">
+                <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">محبوب‌ترین ویدیوها (بر اساس بازدید واقعی)</h3>
                 <div className="space-y-2">
-                    {(stats?.popularPodcasts || []).slice(0, 3).map((p: any) => (
-                        <div key={p._id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-xl">
-                            <img src={p.cover || 'https://via.placeholder.com/40'} className="w-10 h-10 rounded-lg object-cover" />
+                    {(stats?.popularVideos || []).map((v: any, i: number) => (
+                        <div key={v._id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-xl">
+                            <span className={`text-[10px] font-black w-6 text-center ${i === 0 ? 'text-amber-500' : 'text-gray-400'}`}>{i === 0 ? <i className="fas fa-crown"></i> : toPersianDigits(i + 1)}</span>
+                            <img src={v.thumbnailUrl || 'https://via.placeholder.com/64x40'} className="w-12 h-9 rounded-lg object-cover" />
                             <div className="flex-1 min-w-0">
-                                <p className="text-[10px] font-black text-gray-700 truncate">{p.title}</p>
-                                <p className="text-[8px] text-gray-400">{toPersianDigits(p.viewCount || 0)} بازدید • {toPersianDigits(p.episodes?.length || 0)} جلسه</p>
+                                <p className="text-[10px] font-black text-gray-700 truncate">{v.title}</p>
+                                <p className="text-[9px] text-gray-400 flex items-center gap-2">
+                                    <span><i className="fas fa-play ml-0.5 text-blue-500"></i>{toPersianDigits(v.viewCount || 0)} بازدید</span>
+                                    <span><i className="fas fa-heart ml-0.5 text-rose-400"></i>{toPersianDigits(v.likes || 0)} لایک</span>
+                                </p>
+                            </div>
+                            <div className="w-24">
+                                <div className="bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                                    <div className="bg-blue-500 h-full rounded-full" style={{ width: `${Math.min(100, ((v.viewCount || 0) / Math.max(1, stats?.popularVideos?.[0]?.viewCount || 1)) * 100)}%` }}></div>
+                                </div>
                             </div>
                         </div>
                     ))}
+                    {(stats?.popularVideos || []).length === 0 && <p className="text-center text-[9px] text-gray-300 py-4">هنوز آماری ثبت نشده است</p>}
                 </div>
+            </div>
+
+            <div className="bg-gradient-to-br from-emerald-50/80 to-teal-50/80 rounded-2xl border p-4 shadow-sm">
+                <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2 mb-3">
+                    <i className="fas fa-brain text-emerald-500"></i> موتور یادگیری هوشمند (کتاب‌ها و متن‌های سها سیما)
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                    <div className="bg-white/80 rounded-xl p-3 text-center border border-emerald-100">
+                        <p className="text-lg font-black text-emerald-600">{toPersianDigits(aiCorpus?.byKind?.کتاب || 0)}</p>
+                        <p className="text-[8px] font-black text-emerald-400">بخش کتاب‌ها</p>
+                    </div>
+                    <div className="bg-white/80 rounded-xl p-3 text-center border border-emerald-100">
+                        <p className="text-lg font-black text-purple-600">{toPersianDigits(aiCorpus?.byKind?.پادکست || 0)}</p>
+                        <p className="text-[8px] font-black text-purple-400">بخش پادکست‌ها</p>
+                    </div>
+                    <div className="bg-white/80 rounded-xl p-3 text-center border border-emerald-100">
+                        <p className="text-lg font-black text-pink-600">{toPersianDigits(aiCorpus?.byKind?.ویدیو || 0)}</p>
+                        <p className="text-[8px] font-black text-pink-400">بخش ویدیوها</p>
+                    </div>
+                    <div className="bg-white/80 rounded-xl p-3 text-center border border-emerald-100">
+                        <p className="text-lg font-black text-teal-600">{toPersianDigits(aiCorpus?.chunks || 0)}</p>
+                        <p className="text-[8px] font-black text-teal-500">بخش‌های دانش (chunk)</p>
+                    </div>
+                </div>
+                {aiCorpus?.indexedAt && (
+                    <p className="text-[7px] text-gray-400 mt-2 text-center">آخرین به‌روزرسانی دانش: {toPersianDigits(new Date(aiCorpus.indexedAt).toLocaleString('fa-IR'))} • تازه‌سازی خودکار هر ۳۰ دقیقه</p>
+                )}
             </div>
 
             <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
@@ -879,6 +1114,165 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
         </div>
     );
 
+    const renderAdminNotesPanel = () => {
+        if (noteComposer.open) {
+            return (
+                <div className="p-4 space-y-4 animate-fadeIn pb-40">
+                    <button onClick={() => { setNoteComposer({ open: false }); setEditingNote(null); }} className="text-violet-600 font-black text-[10px]">&larr; بازگشت به لیست یادداشت‌ها</button>
+                    <div className="bg-white p-6 rounded-[2.5rem] border shadow-sm space-y-4">
+                        <h4 className="font-black text-gray-700 text-sm mb-2">{editingNote ? 'ویرایش یادداشت' : 'یادداشت جدید'}</h4>
+                        <FormField label="عنوان یادداشت"><TextInput value={noteTitle} onChange={(e: any) => setNoteTitle(e.target.value)} placeholder="عنوان..." /></FormField>
+                        <FormField label="متن یادداشت"><TextArea value={noteContent} onChange={(e: any) => setNoteContent(e.target.value)} placeholder="متن فکری / فرهنگی..." /></FormField>
+                        <FormField label="نویسنده‌ی اصلی"><TextInput value={noteAuthorName} onChange={(e: any) => setNoteAuthorName(e.target.value)} placeholder="مثلاً: استاد طاهرزاده / سیمای هنر و اندیشه / ..." /></FormField>
+                        <label className="flex items-center gap-2 text-[10px] font-black text-gray-500 mb-4 cursor-pointer">
+                            <input type="checkbox" checked={noteIsDraft} onChange={(e) => setNoteIsDraft(e.target.checked)} className="w-4 h-4 accent-violet-600" />
+                            ذخیره به‌صورت پیش‌نویس {noteIsDraft === false ? '(انتشار در صفحه نشر)' : '(فقط در پنل مدیریت و نویسنده)'}
+                        </label>
+                        <div className="flex gap-2 pt-2 border-t">
+                            <button disabled={noteSaving} onClick={async () => {
+                                if (!noteTitle.trim()) { showAdminToast('عنوان یادداشت را بنویسید', 'warning'); return; }
+                                setNoteSaving(true);
+                                try {
+                                    const payload = { title: noteTitle.trim(), description: noteContent.trim().replace(/<[^>]*>/g, '').slice(0, 140), contentHtml: noteContent.trim().split('\n').map(p => `<p>${p}</p>`).join(''), authorName: noteAuthorName.trim() || 'سیمای هنر و اندیشه', isDraft: noteIsDraft, type: 'note' };
+                                    if (editingNote) {
+                                        const r = await adminUpdateNote(editingNote._id, payload);
+                                        if (r) { showAdminToast('یادداشت به‌روزرسانی شد', 'success'); setNoteComposer({ open: false }); setEditingNote(null); loadAdminNotes(adminNotesPage); }
+                                    } else {
+                                        const r = await adminCreateNote(payload);
+                                        if (r) { showAdminToast('یادداشت منتشر شد', 'success'); setNoteComposer({ open: false }); loadAdminNotes(1); }
+                                    }
+                                } finally { setNoteSaving(false); }
+                            }} className="flex-1 py-3 bg-violet-600 text-white rounded-2xl text-[11px] font-black shadow-lg shadow-violet-100 active:scale-95 transition-all disabled:opacity-50">
+                                {noteSaving ? 'در حال ذخیره...' : editingNote ? 'ذخیره تغییرات' : 'ثبت یادداشت'}
+                            </button>
+                            <button onClick={() => { setNoteComposer({ open: false }); setEditingNote(null); }} className="px-6 py-3 bg-gray-50 text-gray-500 rounded-2xl text-[11px] font-black">انصراف</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+        return (
+            <div className="p-4 space-y-4 animate-fadeIn pb-40">
+                <div className="bg-white p-3 rounded-2xl border shadow-sm space-y-2">
+                    <div className="relative">
+                        <TextInput placeholder="جستجو در یادداشت‌ها..." value={adminNotesSearch} onChange={(e: any) => setAdminNotesSearch(e.target.value)} onKeyDown={(e: any) => e.key === 'Enter' && loadAdminNotes(1)} />
+                        <i className="fas fa-search absolute left-3 top-3.5 text-gray-300"></i>
+                    </div>
+                    <div className="flex gap-2">
+                        {[{ v: '', l: 'همه', icon: 'fa-feather-alt' }, { v: 'published', l: 'منتشر شده', icon: 'fa-globe' }, { v: 'draft', l: 'پیش‌نویس‌ها', icon: 'fa-pen-alt' }].map(t => (
+                            <button key={t.v} onClick={() => { setAdminNotesStatus(t.v); loadAdminNotes(1, adminNotesSearch, t.v); }}
+                                className={`flex-1 py-2 rounded-xl text-[9px] font-black transition-all flex items-center justify-center gap-1 ${adminNotesStatus === t.v ? 'bg-violet-600 text-white' : 'bg-gray-50 text-gray-400'}`}>
+                                <i className={`fas ${t.icon}`}></i>{t.l}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <button onClick={() => { setNoteComposer({ open: true }); setEditingNote(null); setNoteTitle(''); setNoteContent(''); setNoteAuthorName(''); setNoteIsDraft(false); }} className="w-full py-4 bg-violet-600 text-white rounded-[2rem] font-black text-sm shadow-xl shadow-violet-100 active:scale-95 transition-all">+ یادداشت جدید</button>
+
+                <p className="text-[9px] font-black text-gray-400">{toPersianDigits(adminNotesTotal)} یادداشت یافت شد</p>
+
+                <div className="space-y-2">
+                    {adminNotes.map((n: any) => (
+                        <div key={n._id} className="bg-white p-3 sm:p-4 rounded-3xl border shadow-sm group hover:border-violet-300/60 transition-all">
+                            <div className="flex items-start gap-3">
+                                <div className="w-9 h-9 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center flex-shrink-0 shadow-sm ring-2 ring-white text-[13px]"><i className="fas fa-feather-alt"></i></div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                                        <span className="text-[11px] font-black text-gray-800">{n.title || 'بی‌عنوان'}</span>
+                                        {n.isDraft ? (
+                                            <span className="text-[7px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-600 font-black whitespace-nowrap"><i className="fas fa-pen-alt"></i> پیش‌نویس</span>
+                                        ) : (
+                                            <span className="text-[7px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-600 font-black whitespace-nowrap"><i className="fas fa-globe"></i> منتشر شده</span>
+                                        )}
+                                    </div>
+                                    <p className="text-[10px] font-bold text-gray-500 mb-1">✍️ {n.authorName || n.user?.name || 'سیمای هنر و اندیشه'}</p>
+                                    <p className="text-[9px] text-gray-400 leading-relaxed line-clamp-2 text-right">{String(n.description || '').replace(/<[^>]*>/g, '') || n.title}</p>
+                                </div>
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                    <button onClick={() => { setEditingNote(n); setNoteTitle(n.title || ''); setNoteContent((n.contentHtml || n.description || '').replace(/<[^>]*>/g, '')); setNoteAuthorName(n.authorName || n.user?.name || ''); setNoteIsDraft(!!n.isDraft); setNoteComposer({ open: true }); }} className="w-8 h-8 rounded-xl bg-blue-50 text-blue-500 hover:bg-blue-100 transition-all flex items-center justify-center"><i className="fas fa-pen text-[9px]"></i></button>
+                                    <button onClick={async () => {
+                                        const r = await adminUpdateNote(n._id, { isDraft: !n.isDraft });
+                                        if (r) { showAdminToast(n.isDraft ? 'یادداشت منتشر شد' : 'به پیش‌نویس تبدیل شد', 'success'); loadAdminNotes(adminNotesPage); }
+                                    }} className="w-8 h-8 rounded-xl bg-green-50 text-green-600 hover:bg-green-100 transition-all flex items-center justify-center" title="انتشار / پیش‌نویس">
+                                        <i className={`fas ${n.isDraft ? 'fa-globe' : 'fa-pen-alt'} text-[9px]`}></i>
+                                    </button>
+                                    <button onClick={() => {
+                                        showConfirmToast('آیا از حذف این یادداشت اطمینان دارید؟', async () => {
+                                            const r = await adminDeleteNote(n._id);
+                                            if (r) { setAdminNotes(prev => prev.filter(x => x._id !== n._id)); showAdminToast('یادداشت حذف شد', 'success'); }
+                                        });
+                                    }} className="w-8 h-8 rounded-xl bg-red-500 text-white hover:bg-red-600 shadow-md transition-all flex items-center justify-center"><i className="fas fa-trash text-[9px]"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                {adminNotesTotal > 20 && (
+                    <div className="flex justify-center gap-2">
+                        <button onClick={() => loadAdminNotes(adminNotesPage - 1)} disabled={adminNotesPage <= 1} className="px-4 py-2 bg-white border rounded-xl text-[10px] font-black disabled:opacity-30">قبلی</button>
+                        <span className="px-4 py-2 text-[10px] font-black text-gray-400">{toPersianDigits(adminNotesPage)} / {toPersianDigits(adminNotesPages)}</span>
+                        <button onClick={() => loadAdminNotes(adminNotesPage + 1)} disabled={adminNotesPage >= adminNotesPages} className="px-4 py-2 bg-white border rounded-xl text-[10px] font-black disabled:opacity-30">بعدی</button>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    const renderAdminAuthorsPanel = () => (
+        <div className="p-4 space-y-4 animate-fadeIn pb-40">
+            <div className="flex justify-between items-center">
+                <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">نویسندگان و مدیران سرای هنر و اندیشه</h3>
+                <span className="text-[9px] font-black text-pink-600 bg-pink-50 px-3 py-1 rounded-full">{toPersianDigits(adminAuthors.length)} نفر</span>
+            </div>
+            {authorsLoading ? (
+                <div className="text-center py-16 text-pink-300"><i className="fas fa-circle-notch fa-spin text-2xl"></i></div>
+            ) : (
+                <div className="space-y-2">
+                    {adminAuthors.map((a: any) => (
+                        <div key={a._id} className="bg-white p-3 sm:p-4 rounded-3xl border shadow-sm group hover:border-pink-300/60 transition-all">
+                            <div className="flex items-center gap-3">
+                                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-pink-500 to-rose-400 flex items-center justify-center text-white font-black text-sm flex-shrink-0 shadow-md overflow-hidden">
+                                    {a.avatar ? <img src={a.avatar} className="w-full h-full object-cover" /> : (a.name || '؟').charAt(0)}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[11px] font-black text-gray-800">{a.name}</p>
+                                    <p className="text-[9px] text-gray-400 font-bold mt-0.5" dir="ltr">{a.phoneNumber || a.email || ''}</p>
+                                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                                        {a.role === 'admin' ? (
+                                            <span className="text-[7px] px-1.5 py-0.5 rounded-full bg-gray-900 text-white font-black">🛡️ مدیر سیستم</span>
+                                        ) : (
+                                            <span className="text-[7px] px-1.5 py-0.5 rounded-full bg-pink-100 text-pink-600 font-black">✍️ نویسنده</span>
+                                        )}
+                                        <span className="text-[7px] px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-500 font-bold whitespace-nowrap"><i className="fas fa-feather-alt"></i> {toPersianDigits(a.noteCount || 0)} یادداشت</span>
+                                        {(a.draftCount || 0) > 0 && <span className="text-[7px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 font-bold whitespace-nowrap"><i className="fas fa-pen-alt"></i> {toPersianDigits(a.draftCount)} پیش‌نویس</span>}
+                                        {a.banned && <span className="text-[7px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 font-black">🚫 مسدود</span>}
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                    {a.role === 'author' ? (
+                                        <button onClick={async () => {
+                                            const r = await updateUserRole(a._id, 'user');
+                                            if (r) { showAdminToast('نقش به مخاطب تغییر کرد', 'success'); loadAdminAuthors(); }
+                                        }} className="px-3 py-2 bg-gray-50 text-gray-500 rounded-xl text-[9px] font-black hover:bg-gray-100 transition-colors whitespace-nowrap">حذف از نویسندگی</button>
+                                    ) : (
+                                        a.role === 'admin' ? (
+                                            <button onClick={async () => {
+                                                const r = await updateUserRole(a._id, 'author');
+                                                if (r) { showAdminToast('به نویسنده تغییر کرد', 'success'); loadAdminAuthors(); }
+                                            }} className="px-3 py-2 bg-gray-50 text-gray-500 rounded-xl text-[9px] font-black hover:bg-gray-100 transition-colors whitespace-nowrap">نویسنده کند</button>
+                                        ) : null
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+
     const renderSowtPanel = () => {
         if (editingItem?.type === 'Podcast') {
             const p = localData.podcasts.find((x: any) => x.id === editingItem.id);
@@ -1056,23 +1450,159 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
         }
         return (
             <div className="p-4 space-y-4 pb-40">
-                <div className="flex gap-2">
-                    <div className="flex-1 bg-secondary/5 p-4 rounded-[2.5rem] border border-secondary/10 flex gap-2 shadow-inner">
-                        <TextInput placeholder="لینک آپارات..." value={aparatUrl} onChange={(e: any) => setAparatUrl(e.target.value)} />
-                        <button onClick={async () => {
-                            const id = extractAparatId(aparatUrl); if (!id) return showAdminToast("لینک نامعتبر", "error");
-                            try { const { details } = await fetchAparatVideoDetails(id); const nv: Video = { id: details.uid, embedId: details.uid, title: details.title, description: details.description, thumbnailUrl: details.big_poster, viewCount: details.visit_cnt, uploadDate: details.sdate, duration: details.duration, categories: ["ویدیو"] }; updateTable('videos', [nv, ...localData.videos]); setAparatUrl(''); setEditingItem({ type: 'Video', id: nv.id }); } catch { showAdminToast("خطا در دریافت ویدیو", "error"); }
-                        }} className="bg-secondary text-white px-6 rounded-xl font-black text-xs shadow-lg active:scale-95 transition-all">دریافت</button>
-                    </div>
-                    <button onClick={() => { const id = String(Date.now()); const nv: Video = { id, title: '', description: '', thumbnailUrl: '', embedId: '', viewCount: 0, uploadDate: '', duration: 0, categories: ["ویدیو"] }; updateTable('videos', [nv, ...localData.videos]); setEditingItem({ type: 'Video', id }); }} className="bg-gray-100 text-gray-600 px-4 rounded-2xl font-black text-[10px] transition-all hover:bg-gray-200 active:scale-95 shadow-sm flex items-center gap-1"><i className="fas fa-plus"></i> جدید</button>
+                <div className="flex p-1 bg-gray-100 rounded-2xl gap-1 overflow-x-auto no-scrollbar">
+                    {[{ id: 'videos' as const, label: 'ویدیوها', icon: 'fa-video' }, { id: 'playlists' as const, label: 'پلی‌لیست‌ها', icon: 'fa-list-ul' }].map(sub => (
+                        <button key={sub.id} onClick={() => setVideoSubTab(sub.id)} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[10px] font-black transition-all ${videoSubTab === sub.id ? 'bg-white text-sky-600 shadow-sm' : 'text-gray-400'}`}><i className={`fas ${sub.icon} text-[10px]`}></i>{sub.label}</button>
+                    ))}
                 </div>
-                {localData.videos.map((v: any) => (
-                    <div key={v.id} className="bg-white p-2 rounded-2xl border shadow-sm flex items-center justify-between group hover:border-secondary transition-all">
-                        <div className="flex items-center gap-3"><img src={v.thumbnailUrl || 'https://via.placeholder.com/120x68?text=Video'} className="w-16 h-10 rounded-lg object-cover shadow-sm"/><p className="text-[10px] font-black text-gray-700 truncate max-w-[150px]">{v.title}</p></div>
-                        <div className="flex items-center gap-2">
-                            <button onClick={async () => { const { shareToMahfel } = await import('../services/api'); const ok = await shareToMahfel('video', v.id); if (ok) showAdminToast('در محفل شیر شد!', 'success'); }} className="text-green-500 font-black text-[9px] bg-green-50 px-4 py-2 rounded-xl hover:bg-green-100 transition-colors whitespace-nowrap"><i className="fas fa-share-alt ml-1"></i>محفل</button>
-                            <button onClick={() => setEditingItem({ type: 'Video', id: v.id })} className="text-blue-500 font-black text-[9px] bg-blue-50 px-5 py-2 rounded-xl hover:bg-blue-100 transition-colors">ویرایش</button>
-                            <button onClick={() => handleDelete('videos', v.id)} className="w-8 h-8 rounded-xl bg-red-500 text-white hover:bg-red-600 shadow-md transition-all flex items-center justify-center"><i className="fas fa-trash text-[10px]"></i></button>
+                {videoSubTab === 'playlists' ? (
+                    renderPlaylistsContent()
+                ) : (
+                    <>
+                        <div className="flex gap-2">
+                            <div className="flex-1 bg-secondary/5 p-4 rounded-[2.5rem] border border-secondary/10 flex gap-2 shadow-inner">
+                                <TextInput placeholder="لینک آپارات..." value={aparatUrl} onChange={(e: any) => setAparatUrl(e.target.value)} />
+                                <button onClick={async () => {
+                                    const id = extractAparatId(aparatUrl); if (!id) return showAdminToast("لینک نامعتبر", "error");
+                                    try { const { details } = await fetchAparatVideoDetails(id); const nv: Video = { id: details.uid, embedId: details.uid, title: details.title, description: details.description, thumbnailUrl: details.big_poster, viewCount: details.visit_cnt, uploadDate: details.sdate, duration: details.duration, categories: ["ویدیو"] }; updateTable('videos', [nv, ...localData.videos]); setAparatUrl(''); setEditingItem({ type: 'Video', id: nv.id }); } catch { showAdminToast("خطا در دریافت ویدیو", "error"); }
+                                }} className="bg-secondary text-white px-6 rounded-xl font-black text-xs shadow-lg active:scale-95 transition-all">دریافت</button>
+                            </div>
+                            <button onClick={() => { const id = String(Date.now()); const nv: Video = { id, title: '', description: '', thumbnailUrl: '', embedId: '', viewCount: 0, uploadDate: '', duration: 0, categories: ["ویدیو"] }; updateTable('videos', [nv, ...localData.videos]); setEditingItem({ type: 'Video', id }); }} className="bg-gray-100 text-gray-600 px-4 rounded-2xl font-black text-[10px] transition-all hover:bg-gray-200 active:scale-95 shadow-sm flex items-center gap-1"><i className="fas fa-plus"></i> جدید</button>
+                        </div>
+                        {localData.videos.map((v: any) => (
+                            <div key={v.id} className="bg-white p-2 rounded-2xl border shadow-sm flex items-center justify-between group hover:border-secondary transition-all">
+                                <div className="flex items-center gap-3"><img src={v.thumbnailUrl || 'https://via.placeholder.com/120x68?text=Video'} className="w-16 h-10 rounded-lg object-cover shadow-sm"/><p className="text-[10px] font-black text-gray-700 truncate max-w-[150px]">{v.title}</p></div>
+                                <div className="flex items-center gap-2">
+                                    <button onClick={async () => { const { shareToMahfel } = await import('../services/api'); const ok = await shareToMahfel('video', v.id); if (ok) showAdminToast('در محفل شیر شد!', 'success'); }} className="text-green-500 font-black text-[9px] bg-green-50 px-4 py-2 rounded-xl hover:bg-green-100 transition-colors whitespace-nowrap"><i className="fas fa-share-alt ml-1"></i>محفل</button>
+                                    <button onClick={() => setEditingItem({ type: 'Video', id: v.id })} className="text-blue-500 font-black text-[9px] bg-blue-50 px-5 py-2 rounded-xl hover:bg-blue-100 transition-colors">ویرایش</button>
+                                    <button onClick={() => handleDelete('videos', v.id)} className="w-8 h-8 rounded-xl bg-red-500 text-white hover:bg-red-600 shadow-md transition-all flex items-center justify-center"><i className="fas fa-trash text-[10px]"></i></button>
+                                </div>
+                            </div>
+                        ))}
+                    </>
+                )}
+            </div>
+        );
+    };
+
+    const loadAdminPlaylists = useCallback(async () => {
+        const list = await getAdminVideoPlaylists();
+        if (list) setAdminPlaylists(list);
+    }, []);
+
+    useEffect(() => { loadAdminPlaylists(); }, [loadAdminPlaylists]);
+
+    const savePlaylist = async () => {
+        if (!editingPlaylist) return;
+        setPlaylistSaving(true);
+        try {
+            const payload: any = {
+                name: editingPlaylist.name,
+                slug: editingPlaylist.slug || undefined,
+                description: editingPlaylist.description || '',
+                cover: editingPlaylist.cover || '',
+                videoIds: editingPlaylist.videoIds || [],
+                order: Number(editingPlaylist.order) || 0,
+                visible: editingPlaylist.visible !== false,
+                autoFill: editingPlaylist.autoFill === true,
+            };
+            let res;
+            if (editingPlaylist.isNew) {
+                res = await createVideoPlaylist({ ...payload, autoFill: undefined });
+            } else {
+                res = await updateVideoPlaylist(editingPlaylist.id, payload);
+            }
+            if (res) {
+                showAdminToast('پلی‌لیست ذخیره شد!', 'success');
+                setEditingPlaylist(null);
+                loadAdminPlaylists();
+            } else {
+                showAdminToast('خطا در ذخیره پلی‌لیست', 'error');
+            }
+        } finally {
+            setPlaylistSaving(false);
+        }
+    };
+
+    const movePlaylist = async (index: number, dir: -1 | 1) => {
+        const target = index + dir;
+        if (target < 0 || target >= adminPlaylists.length) return;
+        const a = adminPlaylists[index];
+        const b = adminPlaylists[target];
+        const okA = await updateVideoPlaylist(a.id, { order: b.order, autoFill: false });
+        const okB = await updateVideoPlaylist(b.id, { order: a.order, autoFill: false });
+        if (okA && okB) loadAdminPlaylists();
+    };
+
+    const renderPlaylistsContent = () => {
+        if (editingPlaylist) {
+            const p = editingPlaylist;
+            const setEdit = (f: string, v: any) => setEditingPlaylist((prev: any) => ({ ...prev, [f]: v }));
+            return (
+                <div className="space-y-4 animate-fadeIn">
+                    <button onClick={() => setEditingPlaylist(null)} className="text-secondary font-black text-[10px]">&larr; بازگشت</button>
+                    <div className="bg-white p-6 rounded-[2.5rem] border shadow-sm space-y-4">
+                        <h3 className="text-xs font-black text-gray-700 flex items-center gap-2"><i className="fas fa-list-ul text-pink-500"></i>{p.isNew ? 'ایجاد پلی‌لیست جدید' : 'ویرایش پلی‌لیست'} <span className="text-[9px] text-gray-400 font-bold">({toPersianDigits(p.videoIds?.length || 0)} ویدیو)</span></h3>
+                        <FormField label="نام پلی‌لیست"><TextInput value={p.name || ''} placeholder="مثلا: ضیافتح" onChange={(e: any) => setEdit('name', e.target.value)} /></FormField>
+                        <FormField label="توضیحات"><TextArea value={p.description || ''} onChange={(e: any) => setEdit('description', e.target.value)} rows={2} /></FormField>
+                        <FormField label="کاور (اختیاری — در صورت خالی بودن از اولین ویدیو استفاده می‌شود)"><div className="flex gap-2"><TextInput value={p.cover || ''} onChange={(e: any) => setEdit('cover', e.target.value)} /><UploadButton onUpload={(url: string) => setEdit('cover', url)} /></div></FormField>
+                        <div className="grid grid-cols-2 gap-3">
+                            <FormField label="ترتیب (order)"><TextInput type="number" value={p.order ?? 0} onChange={(e: any) => setEdit('order', Number(e.target.value))} /></FormField>
+                            <FormField label="وضعیت">
+                                <select className="w-full bg-white border border-gray-200 rounded-xl h-11 px-3 text-xs text-gray-700 outline-none shadow-sm" value={p.visible === false ? 'hidden' : 'visible'} onChange={(e: any) => setEdit('visible', e.target.value !== 'hidden')}>
+                                    <option value="visible">نمایش داده شود</option>
+                                    <option value="hidden">مخفی</option>
+                                </select>
+                            </FormField>
+                        </div>
+                        <FormField label="اعمال خودکار ویدیوها بر اساس نام (با کلیدواژه)">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" checked={p.autoFill !== false} onChange={(e: any) => setEdit('autoFill', e.target.checked)} className="w-4 h-4 accent-pink-500" />
+                                <span className="text-[10px] font-bold text-gray-500">ویدیوهایی که عنوانشان شامل نام پلی‌لیست است به‌صورت خودکار افزوده شوند</span>
+                            </label>
+                        </FormField>
+                        <div className="flex gap-2 pt-2">
+                            <button onClick={savePlaylist} disabled={playlistSaving} className="flex-1 py-3.5 bg-pink-500 text-white rounded-2xl text-[10px] font-black shadow-xl shadow-pink-200 active:scale-95 transition-all disabled:opacity-50">
+                                {playlistSaving ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-save ml-1"></i>} ذخیره پلی‌لیست
+                            </button>
+                            <button onClick={() => setEditingPlaylist(null)} className="px-6 py-3.5 bg-gray-50 text-gray-400 rounded-2xl text-[10px] font-black hover:bg-gray-100 transition-all">انصراف</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+        const filtered = playlistSearch.trim() ? adminPlaylists.filter((pl: any) => String(pl.name || '').includes(playlistSearch.trim())) : adminPlaylists;
+        return (
+            <div className="space-y-4">
+                <div className="flex gap-2 items-center">
+                    <div className="flex-1 bg-pink-500/5 p-2 rounded-[2rem] border border-pink-500/10 flex gap-2 shadow-inner">
+                        <TextInput placeholder="جستجوی پلی‌لیست..." value={playlistSearch} onChange={(e: any) => setPlaylistSearch(e.target.value)} />
+                    </div>
+                    <button onClick={() => setEditingPlaylist({ name: '', description: '', cover: '', videoIds: [], order: adminPlaylists.length, visible: true, autoFill: true, isNew: true })} className="bg-pink-500 text-white px-5 py-3 rounded-2xl font-black text-[10px] shadow-lg shadow-pink-200 active:scale-95 transition-all flex items-center gap-1.5"><i className="fas fa-plus"></i> پلی‌لیست جدید</button>
+                </div>
+                <div className="flex items-center justify-between px-1">
+                    <p className="text-[9px] font-black text-gray-400"><i className="fas fa-list-ul text-pink-400 ml-1"></i>{toPersianDigits(adminPlaylists.length)} پلی‌لیست</p>
+                    <p className="text-[8px] text-gray-300">برای جابه‌جایی از فلش‌های کنار هر ردیف استفاده کنید</p>
+                </div>
+                {adminPlaylists.map((pl: any, i: number) => (
+                    <div key={pl.id} className="bg-white p-2 rounded-2xl border shadow-sm flex items-center justify-between group hover:border-pink-300 transition-all">
+                        <div className="flex items-center gap-3">
+                            <img src={pl.cover || 'https://via.placeholder.com/120x68?text=Playlist'} className="w-16 h-12 rounded-xl object-cover shadow-sm" />
+                            <div>
+                                <p className="text-[10px] font-black text-gray-700 truncate max-w-[160px]">{pl.name || 'بی‌نام'}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-[8px] font-black text-gray-400">{toPersianDigits(pl.count)} ویدیو</span>
+                                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${pl.visible === false ? 'bg-gray-100 text-gray-400' : 'bg-green-50 text-green-500'}`}>{pl.visible === false ? 'مخفی' : 'نمایش'}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <div className="flex flex-col mr-1">
+                                <button onClick={() => movePlaylist(i, -1)} disabled={i === 0} className="w-6 h-5 rounded-md bg-gray-50 text-gray-400 hover:bg-gray-100 disabled:opacity-30 flex items-center justify-center text-[8px]"><i className="fas fa-chevron-up"></i></button>
+                                <button onClick={() => movePlaylist(i, 1)} disabled={i === adminPlaylists.length - 1} className="w-6 h-5 rounded-md bg-gray-50 text-gray-400 hover:bg-gray-100 disabled:opacity-30 flex items-center justify-center text-[8px]"><i className="fas fa-chevron-down"></i></button>
+                            </div>
+                            <button onClick={() => setEditingPlaylist({ ...pl, autoFill: true })} className="text-blue-500 font-black text-[9px] bg-blue-50 px-4 py-2 rounded-xl hover:bg-blue-100 transition-colors">ویرایش</button>
+                            <button onClick={() => showConfirmToast('آیا از حذف این پلی‌لیست اطمینان دارید؟', async () => { const ok = await deleteVideoPlaylist(pl.id); if (ok) { showAdminToast('پلی‌لیست حذف شد', 'success'); loadAdminPlaylists(); } })} className="w-8 h-8 rounded-xl bg-red-500 text-white hover:bg-red-600 shadow-md transition-all flex items-center justify-center"><i className="fas fa-trash text-[10px]"></i></button>
                         </div>
                     </div>
                 ))}
@@ -1080,11 +1610,64 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
         );
     };
 
-    const renderAnalytics = () => (
+    const renderAnalytics = () => {
+        const seg = segments || {};
+        const audio = seg.audio || {};
+        const video = seg.video || {};
+        const community = seg.community || {};
+        const segPeriodLabel = analyticsPeriod === '7d' ? '۷ روز' : analyticsPeriod === '30d' ? '۳۰ روز' : '۹۰ روز';
+        const segTabs = [
+            { id: 'audio', label: 'آمار صوتی', icon: 'fa-microphone-alt', color: '#10b981' },
+            { id: 'video', label: 'آمار ویدیو', icon: 'fa-video', color: '#2e86c1' },
+            { id: 'community', label: 'آمار محفل', icon: 'fa-users', color: '#f97316' },
+        ] as const;
+        const segSummary = (tab: 'audio' | 'video' | 'community') => {
+            if (tab === 'audio') return (
+                <div className="grid grid-cols-2 gap-3">
+                    <div className="text-center p-3 bg-emerald-50 rounded-xl">
+                        <p className="text-lg font-black text-emerald-600">{toPersianDigits(audio.plays || 0)}</p>
+                        <p className="text-[8px] font-black text-emerald-400">کل پخش صوتی</p>
+                    </div>
+                    <div className="text-center p-3 bg-green-50 rounded-xl">
+                        <p className="text-lg font-black text-green-600">{toPersianDigits(audio.likes || 0)}</p>
+                        <p className="text-[8px] font-black text-green-400">لایک پادکست‌ها</p>
+                    </div>
+                </div>
+            );
+            if (tab === 'video') return (
+                <div className="grid grid-cols-2 gap-3">
+                    <div className="text-center p-3 bg-blue-50 rounded-xl">
+                        <p className="text-lg font-black text-blue-600">{toPersianDigits(video.views || 0)}</p>
+                        <p className="text-[8px] font-black text-blue-400">کل بازدید ویدیو</p>
+                    </div>
+                    <div className="text-center p-3 bg-sky-50 rounded-xl">
+                        <p className="text-lg font-black text-sky-600">{toPersianDigits(video.likes || 0)}</p>
+                        <p className="text-[8px] font-black text-sky-400">لایک ویدیوها</p>
+                    </div>
+                </div>
+            );
+            return (
+                <div className="grid grid-cols-3 gap-3">
+                    <div className="text-center p-3 bg-orange-50 rounded-xl">
+                        <p className="text-lg font-black text-orange-600">{toPersianDigits(community.newUsers || 0)}</p>
+                        <p className="text-[8px] font-black text-orange-400">کاربر جدید</p>
+                    </div>
+                    <div className="text-center p-3 bg-purple-50 rounded-xl">
+                        <p className="text-lg font-black text-purple-600">{toPersianDigits(community.newPosts || 0)}</p>
+                        <p className="text-[8px] font-black text-purple-400">پست جدید</p>
+                    </div>
+                    <div className="text-center p-3 bg-teal-50 rounded-xl">
+                        <p className="text-lg font-black text-teal-600">{toPersianDigits(community.newComments || 0)}</p>
+                        <p className="text-[8px] font-black text-teal-400">نظر جدید</p>
+                    </div>
+                </div>
+            );
+        };
+        return (
         <div className="p-4 space-y-6 animate-fadeIn">
             <div className="bg-white p-4 rounded-2xl border shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">آمار و تحلیل</h3>
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">آمار و تحلیل دقیق</h3>
                     <div className="flex gap-2">
                         {['7d', '30d', '90d'].map(p => (
                             <button key={p} onClick={() => { setAnalyticsPeriod(p); }}
@@ -1094,49 +1677,183 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                         ))}
                     </div>
                 </div>
-                <div className="grid grid-cols-3 gap-3">
-                    <div className="text-center p-3 bg-purple-50 rounded-xl">
-                        <p className="text-lg font-black text-purple-600">{toPersianDigits(analytics?.newUsers || 0)}</p>
-                        <p className="text-[8px] font-black text-purple-400">کاربر جدید</p>
-                    </div>
-                    <div className="text-center p-3 bg-orange-50 rounded-xl">
-                        <p className="text-lg font-black text-orange-600">{toPersianDigits(analytics?.newPosts || 0)}</p>
-                        <p className="text-[8px] font-black text-orange-400">پست جدید</p>
-                    </div>
-                    <div className="text-center p-3 bg-teal-50 rounded-xl">
-                        <p className="text-lg font-black text-teal-600">{toPersianDigits(analytics?.newComments || 0)}</p>
-                        <p className="text-[8px] font-black text-teal-400">نظر جدید</p>
-                    </div>
-                </div>
-            </div>
-
-            <div className="bg-white p-4 rounded-2xl border shadow-sm">
-                <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">نویسندگان برتر</h3>
-                <div className="space-y-2">
-                    {(analytics?.topAuthors || []).slice(0, 5).map((a: any, i: number) => (
-                        <div key={i} className="flex items-center gap-3 p-2 bg-gray-50 rounded-xl">
-                            <span className="text-[10px] font-black text-gray-400 w-5">{toPersianDigits(i + 1)}</span>
-                            <div className="flex-1">
-                                <p className="text-[10px] font-black text-gray-700">{a._id}</p>
-                                <p className="text-[8px] text-gray-400">{toPersianDigits(a.count)} پست • {toPersianDigits(a.totalLikes)} لایک</p>
-                            </div>
-                        </div>
+                <div className="flex gap-2 mb-4">
+                    {segTabs.map(t => (
+                        <button key={t.id} onClick={() => setAnalyticsTab(t.id)}
+                            className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black transition-all flex-1 ${analyticsTab === t.id ? 'text-white shadow-lg' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}
+                            style={analyticsTab === t.id ? { background: t.color } : undefined}>
+                            <i className={`fas ${t.icon}`}></i>{t.label}
+                        </button>
                     ))}
                 </div>
+                {segSummary(analyticsTab)}
             </div>
 
-            <div className="bg-white p-4 rounded-2xl border shadow-sm">
-                <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">نظردهندگان برتر</h3>
-                <div className="space-y-2">
-                    {(analytics?.topCommenters || []).slice(0, 5).map((c: any, i: number) => (
-                        <div key={i} className="flex items-center gap-3 p-2 bg-gray-50 rounded-xl">
-                            <span className="text-[10px] font-black text-gray-400 w-5">{toPersianDigits(i + 1)}</span>
-                            <div className="flex-1">
-                                <p className="text-[10px] font-black text-gray-700">{c._id}</p>
-                                <p className="text-[8px] text-gray-400">{toPersianDigits(c.count)} نظر</p>
+            {analyticsTab === 'audio' && (
+                <>
+                    <div className="bg-white p-4 rounded-2xl border shadow-sm">
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">روند پخش صوتی روزانه ({segPeriodLabel})</h3>
+                        <AreaTrendChart
+                            data={(audio.daily || []).map((d: any) => ({ label: (d.date || '').slice(5), value: d.count }))}
+                            height={170}
+                            color="#10b981"
+                            suffix=" پخش"
+                            showPoints={(audio.daily || []).length <= 30}
+                        />
+                    </div>
+                    <div className="bg-white p-4 rounded-2xl border shadow-sm">
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">ساعت‌های اوج پخش صوتی</h3>
+                        <AreaTrendChart
+                            data={(audio.hours || []).map((h: any) => ({ label: String(h.hour), value: h.count }))}
+                            height={130}
+                            color="#34d399"
+                            suffix=" پخش"
+                            showPoints={false}
+                        />
+                    </div>
+                    <div className="bg-white p-4 rounded-2xl border shadow-sm">
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">محبوب‌ترین پادکست‌ها ({segPeriodLabel})</h3>
+                        <RankBars
+                            color="#10b981"
+                            barColor2="#34d399"
+                            valueSuffix="پخش"
+                            data={(audio.top || []).slice(0, 5).map((p: any) => ({
+                                title: p.title,
+                                cover: p.cover,
+                                value: p.count,
+                                subtitle: p.subtitle,
+                            }))}
+                        />
+                    </div>
+                </>
+            )}
+
+            {analyticsTab === 'video' && (
+                <>
+                    <div className="bg-white p-4 rounded-2xl border shadow-sm">
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">روند بازدید ویدیو روزانه ({segPeriodLabel})</h3>
+                        <AreaTrendChart
+                            data={(video.daily || []).map((d: any) => ({ label: (d.date || '').slice(5), value: d.count }))}
+                            height={170}
+                            color="#2e86c1"
+                            suffix=" بازدید"
+                            showPoints={(video.daily || []).length <= 30}
+                        />
+                    </div>
+                    <div className="bg-white p-4 rounded-2xl border shadow-sm">
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">ساعت‌های اوج بازدید ویدیو</h3>
+                        <AreaTrendChart
+                            data={(video.hours || []).map((h: any) => ({ label: String(h.hour), value: h.count }))}
+                            height={130}
+                            color="#5dade2"
+                            suffix=" بازدید"
+                            showPoints={false}
+                        />
+                    </div>
+                    <div className="bg-white p-4 rounded-2xl border shadow-sm">
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">محبوب‌ترین ویدیوها ({segPeriodLabel})</h3>
+                        <RankBars
+                            color="#2e86c1"
+                            barColor2="#5dade2"
+                            valueSuffix="بازدید"
+                            data={(video.top || []).slice(0, 5).map((v: any) => ({
+                                title: v.title,
+                                value: v.count,
+                            }))}
+                        />
+                    </div>
+                </>
+            )}
+
+            {analyticsTab === 'community' && (
+                <>
+                    <div className="bg-white p-4 rounded-2xl border shadow-sm">
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">روند کاربران جدید ({segPeriodLabel})</h3>
+                        <AreaTrendChart
+                            data={(community.dailyUsers || []).map((d: any) => ({ label: (d.date || '').slice(5), value: d.count }))}
+                            height={150}
+                            color="#f97316"
+                            suffix=" کاربر"
+                            showPoints={(community.dailyUsers || []).length <= 30}
+                        />
+                    </div>
+                    <div className="bg-white p-4 rounded-2xl border shadow-sm">
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">روند پست‌های جدید ({segPeriodLabel})</h3>
+                        <AreaTrendChart
+                            data={(community.dailyPosts || []).map((d: any) => ({ label: (d.date || '').slice(5), value: d.count }))}
+                            height={150}
+                            color="#8b5cf6"
+                            suffix=" پست"
+                            showPoints={(community.dailyPosts || []).length <= 30}
+                        />
+                    </div>
+                    <div className="bg-white p-4 rounded-2xl border shadow-sm">
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">نویسندگان برتر</h3>
+                        <RankBars
+                            color="#f97316"
+                            barColor2="#fb923c"
+                            valueSuffix="پست"
+                            data={(community.topAuthors || []).slice(0, 5).map((a: any) => ({
+                                title: a._id,
+                                value: a.count,
+                                subtitle: `${toPersianDigits(a.totalLikes)} لایک`,
+                            }))}
+                        />
+                    </div>
+                    <div className="bg-white p-4 rounded-2xl border shadow-sm">
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">پست‌های پر بحث</h3>
+                        <RankBars
+                            color="#8b5cf6"
+                            barColor2="#a78bfa"
+                            valueSuffix="نظر"
+                            data={(community.postsWithMostComments || []).slice(0, 5).map((p: any) => ({
+                                title: p.title,
+                                value: p.commentsCount,
+                            }))}
+                        />
+                    </div>
+                    <div className="bg-white p-4 rounded-2xl border shadow-sm">
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">نظردهندگان برتر</h3>
+                        <RankBars
+                            color="#0d9488"
+                            barColor2="#2dd4bf"
+                            valueSuffix="نظر"
+                            data={(community.topCommenters || []).slice(0, 5).map((c: any) => ({
+                                title: c._id,
+                                value: c.count,
+                            }))}
+                        />
+                    </div>
+                </>
+            )}
+
+            <div className="bg-gradient-to-br from-indigo-50/80 to-purple-50/80 rounded-2xl border p-4 shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                        <i className="fas fa-brain text-purple-500"></i> تحلیل خودکار هوشمند
+                    </h3>
+                    {insightsLoading ? <i className="fas fa-spinner fa-spin text-purple-400 text-xs"></i>
+                        : <span className="text-[7px] font-black text-purple-400 bg-white/70 px-2 py-0.5 rounded-full">{insights?.usingLLM ? '🎯 هوش مصنوعی' : '⚙️ موتور داده'} • {insights?.cached ? 'کش' : 'بروز'}</span>}
+                </div>
+                {insights?.summary && (
+                    <p className="text-[11px] leading-relaxed font-bold text-gray-700 bg-white/80 rounded-xl p-3 border border-purple-100 mb-3">{insights.summary}</p>
+                )}
+                <div className="grid gap-2">
+                    {(insights?.insights || []).map((ins: any, i: number) => {
+                        const st = InsightLevelStyles[ins.level] || InsightLevelStyles.info;
+                        return (
+                            <div key={i} className={`flex items-start gap-2.5 p-2.5 rounded-xl border ${st.bg}`}>
+                                <i className={`fas ${ins.icon} ${st.icon} text-[10px] mt-0.5`}></i>
+                                <div className="min-w-0">
+                                    <p className={`text-[9px] font-black ${st.text}`}>{ins.title}</p>
+                                    <p className="text-[8px] text-gray-500 leading-relaxed mt-0.5">{ins.detail}</p>
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
+                    {(!insights?.insights || insights.insights.length === 0) && (
+                        <p className="text-[9px] text-gray-400 text-center py-3">در حال تحلیل داده‌ها…</p>
+                    )}
                 </div>
             </div>
 
@@ -1172,6 +1889,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
             </div>
         </div>
     );
+};
 
     const isEditing = editingItem !== null;
     const renderNotificationsPanel = () => (
@@ -1261,6 +1979,8 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
         { id: 'sowt', label: 'صوت', icon: 'fa-microphone-alt', color: '#1ab394' },
         { id: 'library', label: 'کتابخانه', icon: 'fa-book-open', color: '#f97316' },
         { id: 'nashr', label: 'نشر', icon: 'fa-shopping-cart', color: '#2563eb' },
+        { id: 'notes', label: 'یادداشت‌ها', icon: 'fa-feather-alt', color: '#7c3aed' },
+        { id: 'authors', label: 'نویسندگان', icon: 'fa-pen-fancy', color: '#db2777' },
         { id: 'videos', label: 'ویدیو', icon: 'fa-video', color: '#2e86c1' },
         { id: 'notifications', label: 'نوتیفیکیشن', icon: 'fa-bell', color: '#f59e0b' },
     ];
@@ -1281,7 +2001,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                     <div className="flex items-center gap-4">
                         <div className="w-11 h-11 bg-gray-900 rounded-[1.25rem] flex items-center justify-center text-white rotate-3 shadow-xl"><i className="fas fa-sliders-h"></i></div>
                         <div>
-                            <h2 className="font-black text-gray-800 text-base sm:text-lg font-nastaliq">پنل مدیریت</h2>
+                            <h2 className="font-black text-gray-800 text-base sm:text-lg ">پنل مدیریت</h2>
                             <p className="text-[9px] text-gray-400 font-black uppercase mt-0.5 tracking-widest">Soha Admin Panel</p>
                         </div>
                     </div>
@@ -1366,6 +2086,8 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
                         {activeTab === 'videos' && renderVideoPanel()}
                         {activeTab === 'library' && renderLibraryPanel()}
                         {activeTab === 'nashr' && renderNashrPanel()}
+                        {activeTab === 'notes' && renderAdminNotesPanel()}
+                        {activeTab === 'authors' && renderAdminAuthorsPanel()}
                         {activeTab === 'notifications' && renderNotificationsPanel()}
                     </div>
                 </div>

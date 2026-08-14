@@ -58,7 +58,7 @@ const MatnPage: React.FC<MatnPageProps> = ({ authors, books, onBookSelect, onAut
       </section>
 
       <section className="mb-8">
-        <h2 className="text-lg font-black mb-4 text-gray-800 pr-4 border-r-4 border-primary mx-4 font-nastaliq">کتابخانه سرای هنر و اندیشه</h2>
+        <h2 className="text-lg font-black mb-4 text-gray-800 pr-4 border-r-4 border-primary mx-4 ">کتابخانه سرای هنر و اندیشه</h2>
         <div className="flex overflow-x-auto gap-2 pb-4 no-scrollbar px-4 sticky top-0 bg-gray-50/90 backdrop-blur-md z-10 py-3 border-b border-gray-100">
           {['همه', ...bookCategories].map(cat => (
             <button key={cat} onClick={() => setSelectedCategory(cat)} className={`py-1.5 px-4 rounded-full text-[11px] font-black whitespace-nowrap transition-all duration-200 flex-shrink-0 active:scale-95 ${selectedCategory === cat ? 'bg-primary text-white shadow-lg' : 'bg-white text-gray-400 hover:bg-gray-100 border border-gray-200 shadow-sm'}`}>

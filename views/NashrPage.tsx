@@ -338,23 +338,23 @@ export const NoteDetailView: React.FC<{
         <div className="fixed inset-0 bg-[#121212] z-[5000] overflow-y-auto animate-fadeIn flex flex-col no-scrollbar text-gray-300">
             <header className="sticky top-0 bg-[#1a1a1a]/90 backdrop-blur-md border-b border-white/5 p-4 flex justify-between items-center z-10">
                 <button onClick={onClose} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 active:scale-90 transition-transform"><i className="fas fa-times"></i></button>
-                <div className="text-center"><p className="text-[10px] font-black text-primary uppercase tracking-widest">مطالعه یادداشت</p></div>
+                <div className="text-center"><p className="text-[10px] font-black text-primary uppercase tracking-widest ">مطالعه یادداشت</p></div>
                 <div className="w-10"></div>
             </header>
             <main className="max-w-2xl mx-auto w-full px-6 py-10 pb-32">
-                <h1 className="text-2xl font-black text-white mb-2 leading-tight text-right">{note.title}</h1>
+                <h1 className="text-2xl font-black text-white mb-2 leading-tight text-right ">{note.title}</h1>
                 <div className="flex items-center gap-3 text-gray-500 text-xs font-bold mb-10 pb-6 border-b border-white/5 flex-row-reverse">
-                    <span>{note.authorName}</span><span className="w-1 h-1 rounded-full bg-gray-700"></span><span>{note.date || 'بی‌تاریخ'}</span>
+                    <span className="">{note.authorName}</span><span className="w-1 h-1 rounded-full bg-gray-700"></span><span className="">{note.date || 'بی‌تاریخ'}</span>
                 </div>
-                <div className="prose prose-invert prose-lg prose-primary max-w-none text-justify leading-[2.4] text-gray-300 font-medium mb-16 text-right" dangerouslySetInnerHTML={{ __html: note.contentHtml || note.description }} />
+                <div className="prose prose-invert prose-lg prose-primary max-w-none text-justify leading-[2.4] text-gray-300 font-medium mb-16 text-right " dangerouslySetInnerHTML={{ __html: note.contentHtml || note.description }} />
                 {relatedPodcasts.length > 0 && (
                     <section className="mt-16 pt-10 border-t-4 border-primary/10">
-                        <h3 className="text-base font-black text-white mb-6 flex items-center gap-2 justify-end">صوت‌های مرتبط<i className="fas fa-headphones text-primary"></i></h3>
+                        <h3 className="text-base font-black text-white mb-6 flex items-center gap-2 justify-end ">صوت‌های مرتبط<i className="fas fa-headphones text-primary"></i></h3>
                         <div className="space-y-3">
                             {relatedPodcasts.map(p => (
                                 <div key={p.id} className="bg-white/5 p-4 rounded-2xl border border-white/5 flex items-center gap-4 flex-row-reverse">
                                     <img src={p.cover} className="w-14 h-14 rounded-xl object-cover shadow-sm" alt={p.title}/>
-                                    <div className="flex-1 min-w-0 text-right"><h4 className="text-white text-sm font-bold truncate">{p.title}</h4><p className="text-gray-500 text-[10px] mt-1 font-bold">{toPersianDigits(p.episodes.length)} اپیزود</p></div>
+                                    <div className="flex-1 min-w-0 text-right"><h4 className="text-white text-sm font-bold truncate ">{p.title}</h4><p className="text-gray-500 text-[10px] mt-1 font-bold ">{toPersianDigits(p.episodes.length)} اپیزود</p></div>
                                     <button className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform"><i className="fas fa-play text-xs"></i></button>
                                 </div>
                             ))}
@@ -362,9 +362,9 @@ export const NoteDetailView: React.FC<{
                     </section>
                 )}
                 <section className="mt-16 pt-10 border-t border-white/5">
-                    <h3 className="text-base font-black text-white mb-6 text-right">گفتگو در مورد یادداشت</h3>
+                    <h3 className="text-base font-black text-white mb-6 text-right ">گفتگو در مورد یادداشت</h3>
                     <button onClick={() => onAddComment('', note)} className="w-full bg-white/5 border border-white/10 rounded-3xl p-5 text-right text-sm text-gray-400 font-black flex items-center justify-between group active:scale-95 transition-all mb-8">
-                        <div className="flex items-center gap-3"><i className="fas fa-pen-nib text-primary"></i><span>نوشتن اندیشه یا نکته...</span></div>
+                        <div className="flex items-center gap-3"><i className="fas fa-pen-nib text-primary"></i><span className="">نوشتن اندیشه یا نکته...</span></div>
                         <i className="fas fa-chevron-left text-gray-600"></i>
                     </button>
                     <div className="space-y-4">
@@ -389,7 +389,7 @@ export const NoteDetailView: React.FC<{
                                         </div>
                                     </div>
                                 ) : (
-                                <p className="text-gray-400 text-sm leading-relaxed whitespace-pre-wrap">{c.text}</p>
+                                <p className="text-gray-400 text-sm leading-relaxed whitespace-pre-wrap ">{c.text}</p>
                                 )}
                                 <div className="flex items-center gap-4 mt-2.5">
                                     {onLikeComment && (
@@ -436,7 +436,7 @@ export const NoteDetailView: React.FC<{
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                <p className="text-gray-400 text-xs leading-relaxed whitespace-pre-wrap">{r.text}</p>
+                                                <p className="text-gray-400 text-xs leading-relaxed whitespace-pre-wrap ">{r.text}</p>
                                                 )}
                                                 <div className="flex items-center gap-3 mt-2">
                                                     {onLikeComment && (
@@ -467,7 +467,7 @@ export const NoteDetailView: React.FC<{
                                 )}
                             </div>
                             );
-                        }) : <div className="py-10 text-center text-gray-600 italic text-sm">اولین کسی باشید که گفتگو می‌کند.</div>}
+                        }) : <div className="py-10 text-center text-gray-600 italic text-sm ">اولین کسی باشید که گفتگو می‌کند.</div>}
                     </div>
                 </section>
             </main>
@@ -506,7 +506,7 @@ export const BookDetailView: React.FC<{
                     <button onClick={onClose} className="w-10 h-10 rounded-2xl flex items-center justify-center transition-all active:scale-90" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
                         <i className="fas fa-arrow-right text-sm" style={{ color: 'var(--text-2)' }} />
                     </button>
-                    <span className="text-[10px] font-black px-3 py-1 rounded-full" style={{ background: 'color-mix(in srgb, var(--primary) 12%, transparent)', color: 'var(--primary)' }}>نشر سُها</span>
+                    <span className="text-[10px] font-black px-3 py-1 rounded-full " style={{ background: 'color-mix(in srgb, var(--primary) 12%, transparent)', color: 'var(--primary)' }}>نشر سُها</span>
                     <div className="w-10" />
                 </div>
             </div>
@@ -529,7 +529,7 @@ export const BookDetailView: React.FC<{
                                 ) : (
                                     <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center" style={{ background: 'linear-gradient(135deg, #10b981, #6366f1)' }}>
                                         <i className="fas fa-book text-white/30 text-4xl mb-3" />
-                                        <span className="text-lg text-white font-black">{book.title.slice(0, 15)}</span>
+                                        <span className="text-lg text-white font-black ">{book.title.slice(0, 15)}</span>
                                     </div>
                                 )}
                                 {/* Spine */}
@@ -551,21 +551,21 @@ export const BookDetailView: React.FC<{
                         {/* Category pill */}
                         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full mb-4" style={{ background: 'color-mix(in srgb, var(--primary) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--primary) 15%, transparent)' }}>
                             <div className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--primary)' }} />
-                            <span className="text-[10px] font-black" style={{ color: 'var(--primary)' }}>نشر سُها</span>
+                            <span className="text-[10px] font-black " style={{ color: 'var(--primary)' }}>نشر سُها</span>
                         </div>
 
-                        <h1 className="text-2xl md:text-4xl font-black leading-tight mb-2" style={{ color: 'var(--text)' }}>{book.title}</h1>
-                        {book.subtitle && <p className="text-sm md:text-base font-bold mb-3" style={{ color: 'var(--primary)' }}>{book.subtitle}</p>}
+                        <h1 className="text-2xl md:text-4xl font-black leading-tight mb-2 " style={{ color: 'var(--text)' }}>{book.title}</h1>
+                        {book.subtitle && <p className="text-sm md:text-base font-bold mb-3 " style={{ color: 'var(--primary)' }}>{book.subtitle}</p>}
 
                         {/* Author & Meta */}
                         <div className="flex items-center gap-3 mb-6 flex-wrap">
                             <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
                                 <i className="fas fa-pen-fountain text-[10px]" style={{ color: 'var(--primary)' }} />
-                                <span className="text-xs font-bold" style={{ color: 'var(--text)' }}>{book.authorName}</span>
+                                <span className="text-xs font-bold " style={{ color: 'var(--text)' }}>{book.authorName}</span>
                             </div>
                             <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
                                 <i className="fas fa-building text-[10px]" style={{ color: 'var(--text-3)' }} />
-                                <span className="text-xs font-bold" style={{ color: 'var(--text-2)' }}>نشر سُها</span>
+                                <span className="text-xs font-bold " style={{ color: 'var(--text-2)' }}>نشر سُها</span>
                             </div>
                             <div className="flex items-center gap-1">
                                 {[1,2,3,4,5].map(s => <i key={s} className="fas fa-star text-[10px]" style={{ color: s <= 4 ? 'var(--accent)' : 'var(--text-3)', opacity: s <= 4 ? 1 : 0.3 }} />)}
@@ -577,7 +577,7 @@ export const BookDetailView: React.FC<{
                         <div className="p-5 rounded-2xl mb-6" style={{ background: 'linear-gradient(135deg, color-mix(in srgb, var(--primary) 6%, var(--surface-2)), color-mix(in srgb, var(--secondary) 4%, var(--surface-2)))', border: '1px solid var(--border)' }}>
                             <div className="flex items-end justify-between">
                                 <div>
-                                    <p className="text-[10px] font-bold mb-1" style={{ color: 'var(--text-3)' }}>قیمت</p>
+                                    <p className="text-[10px] font-bold mb-1 " style={{ color: 'var(--text-3)' }}>قیمت</p>
                                     <p className="text-2xl md:text-3xl font-black" style={{ color: 'var(--primary)' }}>
                                         {book.price && book.price !== '۰' ? toPersianDigits(book.price) : 'رایگان'}
                                         {book.price && book.price !== '۰' && <span className="text-sm font-bold mr-1">تومان</span>}
@@ -585,7 +585,7 @@ export const BookDetailView: React.FC<{
                                 </div>
                                 <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg" style={{ background: 'color-mix(in srgb, #22c55e 12%, transparent)' }}>
                                     <i className="fas fa-check-circle text-[10px]" style={{ color: '#22c55e' }} />
-                                    <span className="text-[10px] font-black" style={{ color: '#22c55e' }}>موجود</span>
+                                    <span className="text-[10px] font-black " style={{ color: '#22c55e' }}>موجود</span>
                                 </div>
                             </div>
                         </div>
@@ -614,7 +614,7 @@ export const BookDetailView: React.FC<{
                                 ...(relatedPodcasts.length > 0 ? [{ key: 'audio' as const, icon: 'fa-headphones', label: 'صوت‌ها' }] : []),
                                 { key: 'comments' as const, icon: 'fa-comments', label: 'گفتگوها' },
                             ].map(t => (
-                                <button key={t.key} onClick={() => setActiveTab(t.key)} className="flex-1 py-2.5 text-[11px] font-black rounded-xl transition-all" style={{ background: activeTab === t.key ? 'var(--surface)' : 'transparent', color: activeTab === t.key ? 'var(--primary)' : 'var(--text-3)', boxShadow: activeTab === t.key ? '0 2px 8px rgba(0,0,0,0.06)' : 'none' }}>
+                                <button key={t.key} onClick={() => setActiveTab(t.key)} className="flex-1 py-2.5 text-[11px] font-black rounded-xl transition-all " style={{ background: activeTab === t.key ? 'var(--surface)' : 'transparent', color: activeTab === t.key ? 'var(--primary)' : 'var(--text-3)', boxShadow: activeTab === t.key ? '0 2px 8px rgba(0,0,0,0.06)' : 'none' }}>
                                     <i className={`fas ${t.icon} ml-1`} /> {t.label}
                                 </button>
                             ))}
@@ -624,19 +624,19 @@ export const BookDetailView: React.FC<{
                         {activeTab === 'info' && (
                             <div className="space-y-4 animate-fadeIn">
                                 <div className="p-5 rounded-2xl" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                                    <h4 className="text-[10px] font-black mb-3 flex items-center gap-2" style={{ color: 'var(--text-3)' }}>
+                                    <h4 className="text-[10px] font-black mb-3 flex items-center gap-2 " style={{ color: 'var(--text-3)' }}>
                                         <i className="fas fa-book-open text-primary" /> درباره کتاب
                                     </h4>
-                                    <p className="text-sm leading-[2.2] text-justify" style={{ color: 'var(--text-2)' }}>{book.description}</p>
+                                    <p className="text-sm leading-[2.2] text-justify " style={{ color: 'var(--text-2)' }}>{book.description}</p>
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="p-4 rounded-2xl" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                                        <p className="text-[9px] font-black mb-1" style={{ color: 'var(--text-3)' }}>نویسنده</p>
-                                        <p className="text-xs font-bold" style={{ color: 'var(--text)' }}>{book.authorName}</p>
+                                        <p className="text-[9px] font-black mb-1 " style={{ color: 'var(--text-3)' }}>نویسنده</p>
+                                        <p className="text-xs font-bold " style={{ color: 'var(--text)' }}>{book.authorName}</p>
                                     </div>
                                     <div className="p-4 rounded-2xl" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                                        <p className="text-[9px] font-black mb-1" style={{ color: 'var(--text-3)' }}>ناشر</p>
-                                        <p className="text-xs font-bold" style={{ color: 'var(--text)' }}>نشر سُها</p>
+                                        <p className="text-[9px] font-black mb-1 " style={{ color: 'var(--text-3)' }}>ناشر</p>
+                                        <p className="text-xs font-bold " style={{ color: 'var(--text)' }}>نشر سُها</p>
                                     </div>
                                 </div>
                             </div>
@@ -647,8 +647,8 @@ export const BookDetailView: React.FC<{
                                     <div key={p.id} className="p-4 rounded-2xl flex items-center gap-4 transition-all hover:scale-[1.01]" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
                                         <img src={p.cover} className="w-12 h-12 rounded-xl object-cover shadow-md" alt={p.title}/>
                                         <div className="flex-1 min-w-0 text-right">
-                                            <h4 className="text-sm font-bold truncate" style={{ color: 'var(--text)' }}>{p.title}</h4>
-                                            <p className="text-[10px] mt-1" style={{ color: 'var(--text-3)' }}>{toPersianDigits(p.episodes.length)} جلسه</p>
+                                            <h4 className="text-sm font-bold truncate " style={{ color: 'var(--text)' }}>{p.title}</h4>
+                                            <p className="text-[10px] mt-1 " style={{ color: 'var(--text-3)' }}>{toPersianDigits(p.episodes.length)} جلسه</p>
                                         </div>
                                         <button className="w-10 h-10 rounded-full flex items-center justify-center active:scale-90 transition-transform" style={{ background: 'color-mix(in srgb, var(--primary) 15%, transparent)', color: 'var(--primary)' }}>
                                             <i className="fas fa-play text-xs" />
@@ -660,7 +660,7 @@ export const BookDetailView: React.FC<{
                         {activeTab === 'comments' && (
                             <div className="space-y-3 animate-fadeIn">
                                 <button onClick={() => onAddComment('', book)} className="w-full p-4 rounded-2xl text-right text-xs font-black flex items-center justify-between active:scale-[0.98] transition-all" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-3)' }}>
-                                    <div className="flex items-center gap-3"><i className="fas fa-pen-nib text-primary" /><span>نوشتن یادداشت...</span></div>
+                                    <div className="flex items-center gap-3"><i className="fas fa-pen-nib text-primary" /><span className="">نوشتن یادداشت...</span></div>
                                     <i className="fas fa-chevron-left opacity-50" />
                                 </button>
                                 {bookComments.length > 0 ? bookComments.map(c => {
@@ -687,7 +687,7 @@ export const BookDetailView: React.FC<{
                                                 </div>
                                             </div>
                                         ) : (
-                                        <p className="text-sm leading-relaxed whitespace-pre-wrap text-justify" style={{ color: 'var(--text-2)' }}>{c.text}</p>
+                                        <p className="text-sm leading-relaxed whitespace-pre-wrap text-justify " style={{ color: 'var(--text-2)' }}>{c.text}</p>
                                         )}
                                         <div className="flex items-center gap-4 mt-2.5">
                                             {onLikeComment && (
@@ -737,7 +737,7 @@ export const BookDetailView: React.FC<{
                                                                 </div>
                                                             </div>
                                                         ) : (
-                                                        <p className="text-xs leading-relaxed whitespace-pre-wrap text-justify" style={{ color: 'var(--text-2)' }}>{r.text}</p>
+                                                        <p className="text-xs leading-relaxed whitespace-pre-wrap text-justify " style={{ color: 'var(--text-2)' }}>{r.text}</p>
                                                         )}
                                                         <div className="flex items-center gap-3 mt-2">
                                                             {onLikeComment && (
@@ -768,7 +768,7 @@ export const BookDetailView: React.FC<{
                                         )}
                                     </div>
                                     );
-                                }) : <p className="text-center text-sm py-8" style={{ color: 'var(--text-3)' }}>هنوز گفتگویی ثبت نشده.</p>}
+                                }) : <p className="text-center text-sm py-8 " style={{ color: 'var(--text-3)' }}>هنوز گفتگویی ثبت نشده.</p>}
                             </div>
                         )}
                     </div>
@@ -788,13 +788,25 @@ interface NashrPageProps {
   onLikeComment?: (commentId: string) => void;
   onUpdateComment?: (commentId: string, newText: string) => void;
   onToggleSidebar?: () => void;
+  myNotes?: PublishedBook[];
+  onSaveNote?: (data: { title: string; content: string; isDraft: boolean }) => Promise<PublishedBook | null>;
+  onUpdateNote?: (id: string, data: { title: string; content: string; isDraft?: boolean }) => Promise<PublishedBook | null>;
+  onDeleteNote?: (id: string) => Promise<boolean>;
+  onRepostToMahfel?: (note: PublishedBook) => Promise<void> | void;
+  onOpenAuthorProfile?: (author: { name: string; avatar?: string; authorId?: string }) => void;
 }
 
-const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comments, onAddComment, user, onUpdateUser, onDeleteComment, onLikeComment, onUpdateComment, onToggleSidebar }) => {
+const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comments, onAddComment, user, onUpdateUser, onDeleteComment, onLikeComment, onUpdateComment, onToggleSidebar, myNotes, onSaveNote, onUpdateNote, onDeleteNote, onRepostToMahfel, onOpenAuthorProfile }) => {
   const [selectedItem, setSelectedItem] = useState<PublishedBook | null>(null);
+  const [isNoteComposerOpen, setIsNoteComposerOpen] = useState(false);
+  const [editingNote, setEditingNote] = useState<PublishedBook | null>(null);
+  const [noteTitle, setNoteTitle] = useState('');
+  const [noteContent, setNoteContent] = useState('');
+  const [noteSaving, setNoteSaving] = useState(false);
   const [sortBy, setSortBy] = useState<'newest' | 'price-low' | 'price-high'>('newest');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('all');
+  const [selectedNoteAuthor, setSelectedNoteAuthor] = useState<string>('all');
   const [isScrolled, setIsScrolled] = useState(false);
   const [slideIndex, setSlideIndex] = useState(0);
   const slideTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -802,6 +814,19 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
 
   const books = useMemo(() => publishedBooks.filter(b => b.buyUrl && (b.type === 'book' || (!b.type && b.cover))), [publishedBooks]);
   const notes = useMemo(() => publishedBooks.filter(b => b.type === 'note'), [publishedBooks]);
+
+  // Unique author categories for the notes list
+  const noteAuthors = useMemo(() => {
+    const set = new Set<string>();
+    notes.forEach(n => { if (n.authorName) set.add(n.authorName); });
+    return Array.from(set);
+  }, [notes]);
+
+  // Notes filtered by the selected author category
+  const filteredNotes = useMemo(() => {
+    if (selectedNoteAuthor === 'all') return notes;
+    return notes.filter(n => n.authorName === selectedNoteAuthor);
+  }, [notes, selectedNoteAuthor]);
 
   // Pick featured books (up to 3)
   const featuredBooks = useMemo(() => {
@@ -1029,8 +1054,8 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
                   <i className="fas fa-feather-alt text-white text-xs"></i>
                 </div>
                 <div className="hidden sm:block">
-                  <p className="text-xs font-black leading-tight" style={{ color: 'var(--text)' }}>نشر سُها</p>
-                  <p className="text-[8px] font-bold" style={{ color: 'var(--text-3)' }}>سرای هنر و اندیشه</p>
+                  <p className="text-xs font-black leading-tight " style={{ color: 'var(--text)' }}>نشر سُها</p>
+                  <p className="text-[8px] font-bold " style={{ color: 'var(--text-3)' }}>سرای هنر و اندیشه</p>
                 </div>
               </div>
               <div className="relative flex-1">
@@ -1063,10 +1088,10 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
         <div className="absolute top-0 right-0 w-[400px] h-[400px] rounded-full opacity-20 blur-[100px]" style={{ background: '#5eead4' }} />
         <div className="absolute bottom-0 left-0 w-[350px] h-[350px] rounded-full opacity-15 blur-[80px]" style={{ background: '#2dd4bf' }} />
         <div className="relative max-w-6xl mx-auto px-5 pt-8 pb-12 text-center">
-          <h1 className="text-3xl md:text-5xl font-black mb-3 leading-tight" style={{ color: '#0d9488' }}>
+          <h1 className="text-3xl md:text-5xl font-black mb-3 leading-tight " style={{ color: '#0d9488' }}>
             کتاب‌های نشر سُها
           </h1>
-          <p className="text-sm md:text-base mb-6 leading-relaxed max-w-lg mx-auto whitespace-nowrap overflow-hidden text-ellipsis px-4" style={{ color: '#0f766e' }}>
+          <p className="text-sm md:text-base mb-6 leading-relaxed max-w-lg mx-auto whitespace-nowrap overflow-hidden text-ellipsis px-4 " style={{ color: '#0f766e' }}>
             مجموعه‌ای از بهترین آثار تخصصی در حوزه فلسفه، عرفان و تفکر معاصر ایران
           </p>
         </div>
@@ -1106,9 +1131,9 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
                         <i className={`fas ${book.isNew ? 'fa-fire' : 'fa-star'} text-[9px]`} style={{ color: book.isNew ? '#fbbf24' : '#818cf8' }} />
                         <span className="text-[10px] font-black" style={{ color: book.isNew ? '#fbbf24' : '#818cf8' }}>{book.isNew ? 'کتاب ویژه' : 'پیشنهاد ویژه'}</span>
                       </div>
-                      <h2 className="text-xl md:text-3xl font-black text-white mb-2 leading-tight">{book.title}</h2>
-                      {book.subtitle && <p className="text-xs text-emerald-400 font-bold mb-2">{book.subtitle}</p>}
-                      <p className="text-xs text-gray-400 mb-4 line-clamp-2 max-w-md mx-auto md:mx-0">{book.description}</p>
+                      <h2 className="text-xl md:text-3xl font-black text-white mb-2 leading-tight ">{book.title}</h2>
+                      {book.subtitle && <p className="text-xs text-emerald-400 font-bold mb-2 ">{book.subtitle}</p>}
+                      <p className="text-xs text-gray-400 mb-4 line-clamp-2 max-w-md mx-auto md:mx-0 ">{book.description}</p>
                       <div className="flex items-center gap-4 justify-center md:justify-start mb-5">
                         <span className="text-2xl font-black text-emerald-400">{book.price ? toPersianDigits(book.price) : 'رایگان'} <span className="text-xs">تومان</span></span>
                       </div>
@@ -1160,8 +1185,8 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
           <div className="flex items-center gap-3">
             <div className="w-1 h-8 rounded-full" style={{ background: 'linear-gradient(to bottom, var(--primary), var(--secondary))' }} />
             <div>
-              <h2 className="text-lg font-black" style={{ color: 'var(--text)' }}>همه کتاب‌ها</h2>
-              <p className="text-[10px] font-bold" style={{ color: 'var(--text-3)' }}>{toPersianDigits(String(filteredBooks.length))} عنوان</p>
+              <h2 className="text-lg font-black " style={{ color: 'var(--text)' }}>همه کتاب‌ها</h2>
+              <p className="text-[10px] font-bold " style={{ color: 'var(--text-3)' }}>{toPersianDigits(String(filteredBooks.length))} عنوان</p>
             </div>
            </div>
         </div>
@@ -1175,8 +1200,8 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
             <div className="w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-4" style={{ background: 'var(--surface-2)', border: '2px dashed var(--border)' }}>
               <i className="fas fa-book-open text-2xl" style={{ color: 'var(--text-3)' }} />
             </div>
-            <p className="text-sm font-black mb-1" style={{ color: 'var(--text)' }}>کتابی یافت نشد</p>
-            <p className="text-xs" style={{ color: 'var(--text-3)' }}>فیلترها را تغییر دهید</p>
+            <p className="text-sm font-black mb-1 " style={{ color: 'var(--text)' }}>کتابی یافت نشد</p>
+            <p className="text-xs " style={{ color: 'var(--text-3)' }}>فیلترها را تغییر دهید</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-5">
@@ -1192,7 +1217,7 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center p-3 text-center" style={{ background: 'linear-gradient(135deg, var(--primary), var(--secondary))' }}>
                       <i className="fas fa-book text-white/30 text-2xl mb-2" />
-                      <span className="text-[11px] text-white font-black">{book.title.slice(0, 12)}</span>
+                      <span className="text-[11px] text-white font-black ">{book.title.slice(0, 12)}</span>
                     </div>
                   )}
                   {/* Spine */}
@@ -1214,9 +1239,9 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
                 </div>
 
                 {/* Info */}
-                <h3 className="text-[13px] font-black line-clamp-2 text-right leading-snug mb-1" style={{ color: 'var(--text)' }}>{book.title}</h3>
+                <h3 className="text-[13px] font-black line-clamp-2 text-right leading-snug mb-1 " style={{ color: 'var(--text)' }}>{book.title}</h3>
                 <div className="flex items-center justify-between mt-auto mb-2">
-                  <span className="text-[10px] font-bold truncate" style={{ color: 'var(--text-3)' }}>{book.authorName}</span>
+                  <span className="text-[10px] font-bold truncate " style={{ color: 'var(--text-3)' }}>{book.authorName}</span>
                   {book.price && book.price !== '۰' && (
                     <span className="text-[11px] font-black tabular-nums" style={{ color: 'var(--primary)' }}>{toPersianDigits(book.price)}</span>
                   )}
@@ -1262,18 +1287,48 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
                 <i className="fas fa-feather-alt text-white text-lg"></i>
               </div>
               <div>
-                <h2 className="text-lg font-black" style={{ color: 'var(--text)' }}>یادداشت‌ها و مقالات</h2>
-                <p className="text-[11px] font-bold mt-0.5" style={{ color: 'var(--text-3)' }}>مجموعه نوشته‌های تخصصی و الهام‌بخش</p>
+                <h2 className="text-lg font-black " style={{ color: 'var(--text)' }}>یادداشت‌ها و مقالات</h2>
+                <p className="text-[11px] font-bold mt-0.5 " style={{ color: 'var(--text-3)' }}>مجموعه نوشته‌های تخصصی و الهام‌بخش</p>
               </div>
-              <div className="mr-auto px-3 py-1 rounded-full text-[10px] font-black" style={{ background: 'color-mix(in srgb, var(--accent) 15%, transparent)', color: 'var(--accent)' }}>
-                {toPersianDigits(notes.length)} مقاله
+              <div className="mr-auto flex items-center gap-2">
+                {(user?.role === 'author' || user?.role === 'admin') && (
+                  <button onClick={() => { setEditingNote(null); setNoteTitle(''); setNoteContent(''); setIsNoteComposerOpen(true); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black text-white transition-all active:scale-95 shadow-lg" style={{ background: 'linear-gradient(135deg, var(--primary), var(--secondary))' }}>
+                    <i className="fas fa-pen-nib text-[8px]" />
+                    نوشتن یادداشت
+                  </button>
+                )}
+                <div className="px-3 py-1 rounded-full text-[10px] font-black" style={{ background: 'color-mix(in srgb, var(--accent) 15%, transparent)', color: 'var(--accent)' }}>
+                  {toPersianDigits(filteredNotes.length)} مقاله
+                </div>
               </div>
             </div>
           </div>
 
+          {/* Author category chips */}
+          {noteAuthors.length > 1 && (
+            <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar mb-4" dir="rtl">
+              <button onClick={() => setSelectedNoteAuthor('all')}
+                className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-[10px] font-black transition-all active:scale-95 ${selectedNoteAuthor === 'all' ? '' : ''}`}
+                style={selectedNoteAuthor === 'all'
+                  ? { background: 'var(--accent)', color: '#fff', boxShadow: '0 4px 12px rgba(249,115,22,0.25)' }
+                  : { background: 'var(--surface-2)', color: 'var(--text-3)', border: '1px solid var(--border)' }}>
+                همه
+              </button>
+              {noteAuthors.map(name => (
+                <button key={name} onClick={() => setSelectedNoteAuthor(name)}
+                  className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-[10.5px] font-black transition-all active:scale-95`}
+                  style={selectedNoteAuthor === name
+                    ? { background: 'var(--accent)', color: '#fff', boxShadow: '0 4px 12px rgba(249,115,22,0.25)' }
+                    : { background: 'var(--surface-2)', color: 'var(--text-3)', border: '1px solid var(--border)' }}>
+                  {name}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Notes Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {notes.map((note, i) => (
+            {filteredNotes.map((note, i) => (
               <div key={note.id} className="group relative overflow-hidden rounded-2xl transition-all duration-300 cursor-pointer active:scale-[0.97] hover:shadow-xl"
                 style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
                 onClick={() => setSelectedItem(note)}>
@@ -1289,7 +1344,7 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
                   </div>
 
                   {/* Title */}
-                  <h3 className="text-[13px] font-black leading-7 text-right line-clamp-2 mb-3 pr-10 transition-colors duration-300 group-hover:text-primary"
+                  <h3 className="text-[13px] font-black leading-7 text-right line-clamp-2 mb-3 pr-10 transition-colors duration-300 group-hover:text-primary "
                     style={{ color: 'var(--text)' }}>
                     {note.title}
                   </h3>
@@ -1297,11 +1352,13 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
                   {/* Meta */}
                   <div className="flex items-center justify-between flex-row-reverse">
                     <div className="flex items-center gap-1.5">
-                      <div className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-black"
-                        style={{ background: 'color-mix(in srgb, var(--accent) 12%, transparent)', color: 'var(--accent)' }}>
-                        {note.authorName?.charAt(0)}
-                      </div>
-                      <span className="text-[10px] font-bold" style={{ color: 'var(--text-3)' }}>{note.authorName}</span>
+                      <button onClick={(e) => { e.stopPropagation(); const authorId = note.authorId ? String(note.authorId) : undefined; if (onOpenAuthorProfile) onOpenAuthorProfile({ name: note.authorName || 'سُها', authorId }); }} className="flex items-center gap-1.5 hover:opacity-80 transition-opacity" title="مشاهده پروفایل نویسنده">
+                        <div className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-black"
+                          style={{ background: 'color-mix(in srgb, var(--accent) 12%, transparent)', color: 'var(--accent)' }}>
+                          {note.authorName?.charAt(0)}
+                        </div>
+                        <span className="text-[10px] font-bold underline-offset-1 hover:underline" style={{ color: 'var(--text-3)' }}>{note.authorName}</span>
+                      </button>
                     </div>
                     <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full"
                       style={{ background: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}>
@@ -1312,9 +1369,21 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
 
                   {/* Description preview */}
                   {note.description && (
-                    <p className="text-[10px] font-medium leading-5 mt-2.5 line-clamp-2 text-right" style={{ color: 'var(--text-3)' }}>
+                    <p className="text-[10px] font-medium leading-5 mt-2.5 line-clamp-2 text-right " style={{ color: 'var(--text-3)' }}>
                       {note.description.replace(/<[^>]*>/g, '').slice(0, 100)}...
                     </p>
+                  )}
+
+                  {/* Author actions: repost to Mahfel / edit */}
+                  {(user?.role === 'author' || user?.role === 'admin') && String(note.authorId || '') === String(user?._id || user?.id) && (
+                    <div className="flex items-center gap-2 mt-3">
+                      <button onClick={(e) => { e.stopPropagation(); onRepostToMahfel?.(note); }} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-[9px] font-black transition-all active:scale-95" style={{ background: 'color-mix(in srgb, var(--primary) 12%, transparent)', color: 'var(--primary)', border: '1px solid color-mix(in srgb, var(--primary) 20%, transparent)' }}>
+                        <i className="fas fa-paper-plane text-[8px]" /> بازنشر در محفل
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); setEditingNote(note); setNoteTitle(note.title || ''); setNoteContent(note.contentHtml || note.description || ''); setIsNoteComposerOpen(true); }} className="w-9 h-8 rounded-xl flex items-center justify-center transition-all active:scale-90" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                        <i className="fas fa-pen text-[9px]" style={{ color: 'var(--text-3)' }} />
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -1324,6 +1393,13 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
               </div>
             ))}
           </div>
+
+          {filteredNotes.length === 0 && (
+            <div className="text-center py-10" style={{ color: 'var(--text-3)' }}>
+              <i className="fas fa-feather-alt text-2xl mb-2 opacity-40" />
+              <p className="text-[11px] font-black ">یادداشتی از این نویسنده یافت نشد</p>
+            </div>
+          )}
         </section>
       )}
 
@@ -1332,8 +1408,8 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
         <div className="relative overflow-hidden p-6 md:p-8 text-center rounded-t-3xl" style={{ background: 'linear-gradient(135deg, #0f172a, #1e293b)' }}>
           <div className="relative z-10">
             <i className="fas fa-envelope-open-text text-2xl mb-3" style={{ color: 'var(--primary)' }} />
-            <h3 className="text-base md:text-lg font-black text-white mb-1">از تازه‌ترین کتاب‌ها باخبر شوید</h3>
-            <p className="text-[11px] text-gray-400 mb-4 max-w-md mx-auto">برای دریافت اطلاع‌رسانی انتشار کتاب‌های جدید نشر سُها، در کانال ایتا عضو شوید</p>
+            <h3 className="text-base md:text-lg font-black text-white mb-1 ">از تازه‌ترین کتاب‌ها باخبر شوید</h3>
+            <p className="text-[11px] text-gray-400 mb-4 max-w-md mx-auto ">برای دریافت اطلاع‌رسانی انتشار کتاب‌های جدید نشر سُها، در کانال ایتا عضو شوید</p>
             <a href="https://eitaa.com/sohabook" target="_blank" className="inline-flex items-center gap-2 py-3 px-6 rounded-2xl text-sm font-black text-white transition-all active:scale-95" style={{ background: 'var(--primary)', boxShadow: '0 10px 30px var(--primary-glow)' }}>
               <i className="fab fa-telegram-plane" />
               عضویت در کانال ایتا
@@ -1404,7 +1480,7 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
                 reader.readAsDataURL(file);
               }} />
             </label>
-            <h3 className="text-sm font-bold" style={{ color: 'var(--text)' }}>{isEditingProfile ? (editingName || 'کاربر نشر سُها') : (user?.name || 'کاربر نشر سُها')}</h3>
+            <h3 className="text-sm font-bold " style={{ color: 'var(--text)' }}>{isEditingProfile ? (editingName || 'کاربر نشر سُها') : (user?.name || 'کاربر نشر سُها')}</h3>
             <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-3)' }}>{isEditingProfile ? (editingPhone || user?.phoneNumber || '') : (user?.phoneNumber || '')}</p>
             <span className="inline-block mt-1.5 text-[9px] font-semibold px-2 py-0.5 rounded-full" style={{ background: 'var(--surface-2)', color: 'var(--text-3)' }}>
               {user?.role === 'admin' ? 'مدیر سایت' : user?.role === 'author' ? 'نویسنده' : 'کاربر'}
@@ -1420,7 +1496,7 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
             {walletPayStep === 'idle' && (
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-[10px] font-bold" style={{ color: 'var(--text-3)' }}>اطلاعات حساب</p>
+                  <p className="text-[10px] font-bold " style={{ color: 'var(--text-3)' }}>اطلاعات حساب</p>
                   <button onClick={() => {
                     if (isEditingProfile) {
                       if (user) {
@@ -1478,7 +1554,7 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
             {/* WALLET + QUICK CHARGE */}
             {walletPayStep === 'idle' && (
               <div>
-                <p className="text-[10px] font-bold mb-2" style={{ color: 'var(--text-3)' }}>کیف پول</p>
+                <p className="text-[10px] font-bold mb-2 " style={{ color: 'var(--text-3)' }}>کیف پول</p>
                 <div className="p-4 rounded-2xl" style={{ background: 'linear-gradient(135deg, #f59e0b, #f97316)' }}>
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-[10px] text-white/70 font-medium">موجودی</p>
@@ -1487,7 +1563,7 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
                   <p className="text-xl font-bold text-white">{toPersianDigits(walletBalance.toLocaleString('fa-IR'))} <span className="text-xs font-medium">تومان</span></p>
                 </div>
 
-                <p className="text-[10px] font-bold mt-3 mb-1.5" style={{ color: 'var(--text-3)' }}>شارژ سریع</p>
+                <p className="text-[10px] font-bold mt-3 mb-1.5 " style={{ color: 'var(--text-3)' }}>شارژ سریع</p>
                 <div className="grid grid-cols-4 gap-1.5">
                   {[100000, 200000, 500000, 1000000].map(a => (
                     <button key={a} onClick={() => { setWalletPayAmount(String(a)); setWalletPayStep('amount'); }} className="py-2 rounded-xl text-center transition-all active:scale-95" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
@@ -1536,6 +1612,76 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
         onDone={() => { resetWalletPay(); setIsProfileOpen(false); setIsEditingProfile(false); }}
         formatCard={formatWalletCard}
       />
+    )}
+
+    {/* ═══ NOTE COMPOSER (author only) ═══ */}
+    {isNoteComposerOpen && (user?.role === 'author' || user?.role === 'admin') && (
+      <div className="fixed inset-0 z-[7500] animate-fadeIn flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(6px)' }} dir="rtl">
+        <div className="w-full max-w-lg rounded-3xl overflow-hidden animate-scaleIn flex flex-col max-h-[90vh]" style={{ background: 'var(--surface)', border: '1px solid var(--border)', boxShadow: '0 25px 60px rgba(0,0,0,0.3)' }}>
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-4 shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, var(--primary), var(--secondary))' }}>
+                <i className="fas fa-pen-nib text-white text-xs" />
+              </div>
+              <div>
+                <h3 className="text-[13px] font-black " style={{ color: 'var(--text)' }}>{editingNote ? 'ویرایش یادداشت' : 'یادداشت جدید'}</h3>
+                <p className="text-[9px] font-bold " style={{ color: 'var(--text-3)' }}>پیش‌نویس‌ها فقط برای شما قابل مشاهده‌اند</p>
+              </div>
+            </div>
+            <button onClick={() => setIsNoteComposerOpen(false)} className="w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+              <i className="fas fa-xmark text-[11px]" style={{ color: 'var(--text-3)' }} />
+            </button>
+          </div>
+
+          {/* Body */}
+          <div className="flex-1 overflow-y-auto no-scrollbar p-5">
+            <label className="block text-[10px] font-black mb-1.5 " style={{ color: 'var(--text-3)' }}>عنوان یادداشت</label>
+            <input value={noteTitle} onChange={e => setNoteTitle(e.target.value)} placeholder="عنوان را بنویسید..." className="w-full px-3.5 py-3 rounded-xl text-[13px] font-bold outline-none focus:ring-2 transition-all" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text)', '--tw-ring-color': 'var(--primary)' } as any} />
+
+            <label className="block text-[10px] font-black mt-4 mb-1.5 " style={{ color: 'var(--text-3)' }}>متن یادداشت</label>
+            <textarea value={noteContent} onChange={e => setNoteContent(e.target.value)} placeholder="متن یادداشت خود را بنویسید..." rows={8} className="w-full px-3.5 py-3 rounded-xl text-[12px] font-medium outline-none focus:ring-2 transition-all resize-none leading-7" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text)', '--tw-ring-color': 'var(--primary)' } as any} />
+
+            {editingNote && (
+              <button onClick={async () => { if (!onDeleteNote || !window.confirm('این یادداشت حذف شود؟')) return; if (await onDeleteNote(String(editingNote.id))) { setToast({ message: 'یادداشت حذف شد', icon: 'fa-trash' }); setIsNoteComposerOpen(false); setEditingNote(null); } }} className="w-full mt-4 py-2.5 rounded-xl text-[10px] font-black transition-all active:scale-95" style={{ background: 'color-mix(in srgb, #ef4444 12%, var(--surface-2))', color: '#ef4444', border: '1px solid color-mix(in srgb, #ef4444 25%, transparent)' }}>
+                <i className="fas fa-trash ml-1.5" /> حذف یادداشت
+              </button>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="flex gap-2 p-4 shrink-0" style={{ borderTop: '1px solid var(--border)' }}>
+            <button onClick={async () => {
+              if (!noteTitle.trim() || !noteContent.trim() || noteSaving) return;
+              setNoteSaving(true);
+              if (editingNote) {
+                await onUpdateNote?.(String(editingNote.id), { title: noteTitle, content: noteContent, isDraft: true });
+              } else {
+                await onSaveNote?.({ title: noteTitle, content: noteContent, isDraft: true });
+              }
+              setNoteSaving(false);
+              setIsNoteComposerOpen(false);
+              setEditingNote(null);
+            }} disabled={!noteTitle.trim() || !noteContent.trim() || noteSaving} className="flex-1 py-3 rounded-xl text-[11px] font-black transition-all active:scale-95 disabled:opacity-30" style={{ background: 'var(--surface-2)', color: 'var(--text)', border: '1px solid var(--border)' }}>
+              <i className="fas fa-lock ml-1.5 text-[9px]" /> ذخیره پیش‌نویس
+            </button>
+            <button onClick={async () => {
+              if (!noteTitle.trim() || !noteContent.trim() || noteSaving) return;
+              setNoteSaving(true);
+              if (editingNote) {
+                await onUpdateNote?.(String(editingNote.id), { title: noteTitle, content: noteContent, isDraft: false });
+              } else {
+                await onSaveNote?.({ title: noteTitle, content: noteContent, isDraft: false });
+              }
+              setNoteSaving(false);
+              setIsNoteComposerOpen(false);
+              setEditingNote(null);
+            }} disabled={!noteTitle.trim() || !noteContent.trim() || noteSaving} className="flex-1 py-3 rounded-xl text-[11px] font-black text-white transition-all active:scale-95 disabled:opacity-30 shadow-lg" style={{ background: 'linear-gradient(135deg, var(--primary), var(--secondary))' }}>
+              <i className="fas fa-paper-plane ml-1.5 text-[9px]" /> انتشار در صفحه نشر
+            </button>
+          </div>
+        </div>
+      </div>
     )}
     </>
   );

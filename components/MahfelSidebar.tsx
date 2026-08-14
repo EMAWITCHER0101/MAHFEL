@@ -19,7 +19,6 @@ const NAV_ITEMS: { page: Page; icon: string; label: string }[] = [
   { page: 'library', icon: 'fas fa-book-open', label: 'کتابخانه' },
   { page: 'videos', icon: 'fas fa-video', label: 'ویدیو' },
   { page: 'nashr', icon: 'fas fa-book-reader', label: 'نشر' },
-  { page: 'ai', icon: 'fas fa-robot', label: 'هوش مصنوعی' },
 ];
 
 const MahfelSidebar: React.FC<MahfelSidebarProps> = ({

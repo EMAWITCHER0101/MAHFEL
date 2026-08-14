@@ -33,7 +33,7 @@ const InterestsPage: React.FC<InterestsPageProps> = ({ onInterestsSelected }) =>
   return (
     <div className="fixed inset-0 bg-background z-[2000] flex flex-col p-6 animate-fadeIn">
       <div className="text-center mt-8 mb-6">
-        <h1 className="text-2xl font-bold text-text-primary mb-2 font-nastaliq">به سرای هنر و اندیشه خوش آمدید!</h1>
+        <h1 className="text-2xl font-bold text-text-primary mb-2 ">به سرای هنر و اندیشه خوش آمدید!</h1>
         <p className="text-text-secondary">برای شروع، چند موضوع مورد علاقه خود را انتخاب کنید.</p>
       </div>
       

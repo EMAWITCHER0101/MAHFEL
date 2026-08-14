@@ -1,11 +1,38 @@
 import { Router } from 'express';
+import crypto from 'crypto';
 import User from '../models/User.js';
 import Comment from '../models/Comment.js';
 import Post from '../models/Post.js';
 import { auth, requireAuth, generateToken } from '../middleware/auth.js';
 import { isIranianIP, getClientIP } from '../utils/ipCheck.js';
+import { deleteUserContent } from '../utils/deleteUserContent.js';
+import { broadcast } from '../utils/broadcast.js';
+import { sendOtpSms } from '../utils/sms.js';
 
 const router = Router();
+
+const otpStore = new Map();
+const otpProofStore = new Map();
+
+function generateOtp() {
+  return String(Math.floor(1000 + Math.random() * 9000));
+}
+
+function cleanExpiredOtps() {
+  const now = Date.now();
+  for (const [phone, entry] of otpStore) {
+    if (entry.expiresAt < now) otpStore.delete(phone);
+  }
+  for (const [token, entry] of otpProofStore) {
+    if (entry.expiresAt < now) otpProofStore.delete(token);
+  }
+}
+
+function genProofToken(phone, purpose) {
+  const token = crypto.randomBytes(24).toString('hex');
+  otpProofStore.set(token, { phone, purpose, expiresAt: Date.now() + 10 * 60 * 1000 });
+  return token;
+}
 
 async function propagateProfileToContent(userId, oldName, newName, newAvatar) {
   const sets = { author: newName, authorAvatarUrl: newAvatar };
@@ -27,10 +54,22 @@ async function propagateProfileToContent(userId, oldName, newName, newAvatar) {
 
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, phoneNumber } = req.body;
+    const { name, email, password, phoneNumber, otpToken } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ error: 'نام الزامی است' });
     if (!password || String(password).length < 4) return res.status(400).json({ error: 'رمز عبور باید حداقل ۴ کاراکتر باشد' });
     if (!phoneNumber || !/^09\d{9}$/.test(String(phoneNumber).trim())) return res.status(400).json({ error: 'شماره موبایل نامعتبر است' });
+
+    const cleanPhone = String(phoneNumber).trim();
+
+    if (!otpToken) {
+      return res.status(400).json({ error: 'ابتدا کد تایید شماره موبایل را وارد کنید' });
+    }
+    const proof = otpProofStore.get(otpToken);
+    if (!proof || proof.phone !== cleanPhone || proof.purpose !== 'register' || proof.expiresAt < Date.now()) {
+      otpProofStore.delete(otpToken);
+      return res.status(400).json({ error: 'کد تایید نامعتبر یا منقضی شده است. مجدداً کد بگیرید' });
+    }
+    otpProofStore.delete(otpToken);
 
     const cleanEmail = email ? String(email).trim().toLowerCase() : '';
     if (cleanEmail) {
@@ -40,7 +79,6 @@ router.post('/register', async (req, res) => {
       if (existingEmail) return res.status(409).json({ error: 'ایمیل قبلاً ثبت شده است' });
     }
 
-    const cleanPhone = String(phoneNumber).trim();
     const existingPhone = await User.findOne({ phoneNumber: cleanPhone });
     if (existingPhone) return res.status(409).json({ error: 'شماره موبایل قبلاً ثبت شده است' });
 
@@ -55,6 +93,11 @@ router.post('/register', async (req, res) => {
       library: { podcasts: [], episodes: [], videos: [], books: [], notes: [] },
     });
     await user.save();
+
+    broadcast('data-changed', {
+      type: 'users', action: 'create',
+      item: { _id: user._id, name: user.name, avatar: user.avatar, role: user.role, createdAt: user.createdAt },
+    });
 
     const token = generateToken(user._id);
     res.status(201).json({
@@ -125,17 +168,46 @@ router.post('/login', async (req, res) => {
 
 router.post('/send-otp', async (req, res) => {
   try {
-    const { phoneNumber } = req.body;
-    if (!/^09\d{9}$/.test(phoneNumber)) {
-      return res.status(400).json({ error: 'شماره موبایل نامعتبر است' });
+    cleanExpiredOtps();
+    const { phoneNumber, purpose, name } = req.body;
+    if (!phoneNumber || !/^09\d{9}$/.test(String(phoneNumber).trim())) {
+      return res.json({ success: false, error: 'شماره موبایل نامعتبر است' });
     }
-    const otp = Math.floor(1000 + Math.random() * 9000).toString();
-    console.log('\n========================================');
-    console.log(`  OTP for ${phoneNumber}: ${otp}`);
-    console.log('========================================\n');
+    const phone = String(phoneNumber).trim();
+    const p = purpose || 'register';
+
+    if (p === 'register') {
+      const existing = await User.findOne({ phoneNumber: phone });
+      if (existing) return res.json({ success: false, error: 'این شماره موبایل قبلاً ثبت شده است' });
+    } else if (p === 'forgot') {
+      const existing = await User.findOne({ phoneNumber: phone });
+      if (!existing) return res.json({ success: false, error: 'حسابی با این شماره موبایل یافت نشد' });
+    }
+
+    const existing = otpStore.get(phone);
+    if (existing && existing.nextSendAt > Date.now()) {
+      const wait = Math.ceil((existing.nextSendAt - Date.now()) / 1000);
+      return res.json({ success: false, error: `لطفاً ${wait} ثانیه صبر کنید` });
+    }
+
+    const code = generateOtp();
+    otpStore.set(phone, {
+      code,
+      purpose: p,
+      expiresAt: Date.now() + 120000,
+      nextSendAt: Date.now() + 60000,
+      attempts: 0,
+    });
+
+    const smsResult = await sendOtpSms(phone, code, name);
+    if (!smsResult || !smsResult.sent) {
+      console.error('[SMS FAILED]', phone, smsResult);
+      return res.json({ success: false, error: 'خطا در ارسال پیامک. لطفاً دوباره تلاش کنید' });
+    }
     res.json({ success: true, message: 'کد تایید ارسال شد' });
   } catch (error) {
-    res.status(500).json({ error: 'خطای سرور' });
+    console.error('SEND OTP ERROR:', error);
+    res.json({ success: false, error: 'خطای سرور' });
   }
 });
 
@@ -155,39 +227,80 @@ function generateDefaultAvatar(name) {
 
 router.post('/verify-otp', async (req, res) => {
   try {
-    const { phoneNumber, otp } = req.body;
-    if (!otp || otp.length < 4) {
-      return res.status(400).json({ error: 'کد تایید ناقص است' });
+    cleanExpiredOtps();
+    const { phoneNumber, otp, purpose } = req.body;
+    if (!phoneNumber || !/^09\d{9}$/.test(String(phoneNumber).trim())) {
+      return res.json({ success: false, error: 'شماره موبایل نامعتبر است' });
+    }
+    if (!otp || String(otp).length < 4) {
+      return res.json({ success: false, error: 'کد تایید ناقص است' });
     }
 
-    let user = await User.findOne({ phoneNumber });
-    if (!user) {
-      user = new User({
-        phoneNumber,
-        name: '',
-        avatar: generateDefaultAvatar(''),
-        role: 'user',
-        interests: [],
-        library: { podcasts: [], episodes: [], videos: [], books: [], notes: [] },
+    const phone = String(phoneNumber).trim();
+    const p = purpose || 'register';
+
+    const stored = otpStore.get(phone);
+    const isDevBypass = !process.env.SMSIR_API_KEY && String(otp) === '0000';
+
+    if (!isDevBypass) {
+      if (!stored) {
+        return res.json({ success: false, error: 'ابتدا کد تایید را دریافت کنید' });
+      }
+      if (stored.expiresAt < Date.now()) {
+        otpStore.delete(phone);
+        return res.json({ success: false, error: 'کد تایید منقضی شده است' });
+      }
+      if (stored.purpose !== p) {
+        return res.json({ success: false, error: 'کد تایید مربوط به این عملیات نیست' });
+      }
+      if (String(otp) !== stored.code) {
+        stored.attempts++;
+        if (stored.attempts >= 5) {
+          otpStore.delete(phone);
+          return res.json({ success: false, error: 'تعداد تلاش‌ها بیش از حد مجاز است. مجدداً کد بگیرید' });
+        }
+        return res.json({ success: false, error: 'کد تایید اشتباه است' });
+      }
+    }
+
+    otpStore.delete(phone);
+
+    if (p === 'register') {
+      const existing = await User.findOne({ phoneNumber: phone });
+      if (existing) return res.json({ success: false, error: 'این شماره موبایل قبلاً ثبت شده است' });
+      const proofToken = genProofToken(phone, 'register');
+      return res.json({ success: true, proofToken });
+    }
+
+    if (p === 'forgot') {
+      const existing = await User.findOne({ phoneNumber: phone });
+      if (!existing) return res.json({ success: false, error: 'حسابی با این شماره موبایل یافت نشد' });
+      const proofToken = genProofToken(phone, 'forgot');
+      return res.json({ success: true, proofToken });
+    }
+
+    if (!purpose) {
+      let user = await User.findOne({ phoneNumber: phone });
+      if (!user) {
+        user = new User({
+          phoneNumber: phone,
+          name: '',
+          avatar: generateDefaultAvatar(''),
+          role: 'user',
+          interests: [],
+          library: { podcasts: [], episodes: [], videos: [], books: [], notes: [] },
+        });
+        await user.save();
+      }
+      const token = generateToken(user._id);
+      return res.json({
+        success: true, token,
+        user: { id: user._id, phoneNumber: user.phoneNumber, name: user.name, avatar: user.avatar, role: user.role, interests: user.interests, library: user.library },
+        isNewUser: !user.name,
       });
-      await user.save();
     }
 
-    const token = generateToken(user._id);
-    res.json({
-      success: true,
-      token,
-      user: {
-        id: user._id,
-        phoneNumber: user.phoneNumber,
-        name: user.name,
-        avatar: user.avatar,
-        role: user.role,
-        interests: user.interests,
-        library: user.library,
-      },
-      isNewUser: !user.name,
-    });
+    res.status(400).json({ error: 'purpose نامعتبر است' });
   } catch (error) {
     console.error('VERIFY OTP ERROR:', error);
     res.status(500).json({ error: 'خطای سرور' });
@@ -271,6 +384,19 @@ router.get('/me', requireAuth, async (req, res) => {
   });
 });
 
+// حذف کامل حساب خود + تمام پیام‌ها و محتوای کاربر
+router.delete('/me', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    await User.findByIdAndDelete(userId);
+    await deleteUserContent(userId);
+    broadcast('data-changed', { type: 'users', action: 'delete', id: String(userId) });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'خطای سرور' });
+  }
+});
+
 router.put('/library', requireAuth, async (req, res) => {
   try {
     req.user.library = { ...req.user.library, ...req.body };
@@ -323,6 +449,56 @@ router.put('/muted', requireAuth, async (req, res) => {
       mutedReason: req.user.mutedReason || '',
     });
   } catch (error) {
+    res.status(500).json({ error: 'خطای سرور' });
+  }
+});
+
+router.post('/reset-password', async (req, res) => {
+  try {
+    cleanExpiredOtps();
+    const { phoneNumber, otpToken, newPassword } = req.body;
+    if (!phoneNumber || !/^09\d{9}$/.test(String(phoneNumber).trim())) {
+      return res.json({ success: false, error: 'شماره موبایل نامعتبر است' });
+    }
+    if (!newPassword || String(newPassword).length < 4) {
+      return res.json({ success: false, error: 'رمز عبور باید حداقل ۴ کاراکتر باشد' });
+    }
+    if (!otpToken) {
+      return res.json({ success: false, error: 'ابتدا کد تایید را وارد کنید' });
+    }
+
+    const phone = String(phoneNumber).trim();
+    const proof = otpProofStore.get(otpToken);
+    if (!proof || proof.phone !== phone || proof.purpose !== 'forgot' || proof.expiresAt < Date.now()) {
+      otpProofStore.delete(otpToken);
+      return res.json({ success: false, error: 'کد تایید نامعتبر یا منقضی شده است. مجدداً کد بگیرید' });
+    }
+    otpProofStore.delete(otpToken);
+
+    const user = await User.findOne({ phoneNumber: phone });
+    if (!user) return res.json({ success: false, error: 'حسابی با این شماره موبایل یافت نشد' });
+
+    user.password = newPassword;
+    await user.save();
+
+    const token = generateToken(user._id);
+    res.json({
+      success: true,
+      message: 'رمز عبور با موفقیت تغییر کرد',
+      token,
+      user: {
+        id: user._id,
+        email: user.email,
+        phoneNumber: user.phoneNumber,
+        name: user.name,
+        avatar: user.avatar,
+        role: user.role,
+        interests: user.interests,
+        library: user.library,
+      },
+    });
+  } catch (error) {
+    console.error('RESET PASSWORD ERROR:', error);
     res.status(500).json({ error: 'خطای سرور' });
   }
 });

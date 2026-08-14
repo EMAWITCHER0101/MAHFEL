@@ -121,14 +121,17 @@ export function OfflineDetector({ children }: { children: React.ReactNode }) {
 
     const check = async () => {
       if (checking) return;
+      if (typeof document !== 'undefined' && document.hidden) return;
       const ok = await pingServer();
       if (mounted) setIsOffline(!ok);
     };
 
     check();
     interval = setInterval(check, 15000);
+    const onVisible = () => { if (!document.hidden) check(); };
+    document.addEventListener('visibilitychange', onVisible);
 
-    return () => { mounted = false; clearInterval(interval); };
+    return () => { mounted = false; clearInterval(interval); document.removeEventListener('visibilitychange', onVisible); };
   }, []);
 
   const handleRetry = async () => {

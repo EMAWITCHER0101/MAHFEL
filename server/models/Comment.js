@@ -32,5 +32,6 @@ commentSchema.index({ type: 1, podcastId: 1 });
 commentSchema.index({ type: 1, bookId: 1 });
 commentSchema.index({ parentId: 1 });
 commentSchema.index({ createdAt: -1 });
+commentSchema.index({ userId: 1 });
 
 export default mongoose.model('Comment', commentSchema);

@@ -125,14 +125,6 @@ export const USER_STEPS: GuideStep[] = [
     position: 'bottom',
   },
   {
-    selector: '[data-guide="ai"]',
-    title: 'هوش مصنوعی',
-    description: 'دستیار هوش مصنوعی سها. سوالات خود را بپرسید و پاسخ‌های هوشمند دریافت کنید.',
-    icon: 'fa-robot',
-    color: '#06b6d4',
-    position: 'bottom',
-  },
-  {
     selector: '[data-guide="profile"]',
     title: 'پروفایل',
     description: 'پروفایل شخصی خود را مشاهده و ویرایش کنید. تنظیمات حساب کاربری شما اینجاست.',

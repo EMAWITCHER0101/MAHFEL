@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- پلیر شناور نیتیو ویدیو — مثل یوتیوب (تایملاین + دکمه‌های کامل + تمام‌صفحه + کنترل محو شونده) -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/floating_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/floating_player_bg"
+    android:clipToOutline="true"
+    android:elevation="12dp"
+    android:outlineProvider="background">
+
+    <!-- سطح پخش ویدیو — در حالت عادی با فاصله از هدر/کنترل، در تمام‌صفحه کل صفحه -->
+    <FrameLayout
+        android:id="@+id/floating_video_area"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginTop="42dp"
+        android:layout_marginBottom="112dp"
+        android:background="#000000"
+        android:clipToOutline="true"
+        android:outlineProvider="background">
+
+        <TextureView
+            android:id="@+id/floating_texture"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <ProgressBar
+            android:id="@+id/floating_buffering"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="center"
+            android:indeterminateTint="#06B6D4"
+            android:visibility="gone" />
+    </FrameLayout>
+
+    <!-- هدر: عنوان + دکمه تمام‌صفحه/بستن — شناور روی ویدیو -->
+    <LinearLayout
+        android:id="@+id/floating_header"
+        android:layout_width="match_parent"
+        android:layout_height="42dp"
+        android:layout_gravity="top"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="#D90B1220"
+        android:paddingStart="12dp"
+        android:paddingEnd="6dp">
+
+        <TextView
+            android:id="@+id/floating_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:text="در حال پخش ویدیو…" />
+
+        <ImageView
+            android:id="@+id/floating_expand"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:padding="5dp"
+            android:src="@drawable/ic_fullscreen"
+            android:contentDescription="تمام‌صفحه"
+            android:background="?attr/selectableItemBackgroundBorderless" />
+
+        <ImageView
+            android:id="@+id/floating_close"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:padding="5dp"
+            android:src="@drawable/ic_close"
+            android:contentDescription="بستن"
+            android:background="?attr/selectableItemBackgroundBorderless" />
+    </LinearLayout>
+
+    <!-- کنترل‌ها: تایملاین + دکمه‌ها — شناور روی پایین ویدیو -->
+    <LinearLayout
+        android:id="@+id/floating_controls"
+        android:layout_width="match_parent"
+        android:layout_height="112dp"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:background="#E60B1220"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp">
+
+        <!-- تایملاین -->
+        <SeekBar
+            android:id="@+id/floating_seek"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="1000"
+            android:progress="0"
+            android:progressTint="#FF06B6D4"
+            android:thumbTint="#FFFFFF"
+            android:paddingTop="0dp"
+            android:paddingEnd="8dp"
+            android:paddingStart="8dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/floating_current"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="#B0FFFFFF"
+                android:textSize="10sp"
+                android:text="00:00" />
+
+            <TextView
+                android:id="@+id/floating_duration"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="end"
+                android:textColor="#B0FFFFFF"
+                android:textSize="10sp"
+                android:text="00:00" />
+        </LinearLayout>
+
+        <!-- دکمه‌های کنترل -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <ImageView
+                android:id="@+id/floating_prev"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:padding="5dp"
+                android:src="@drawable/ic_media_prev"
+                android:contentDescription="قبلی"
+                android:background="?attr/selectableItemBackgroundBorderless" />
+
+            <ImageView
+                android:id="@+id/floating_playpause"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:padding="8dp"
+                android:src="@drawable/ic_media_pause"
+                android:contentDescription="پخش/توقف"
+                android:background="?attr/selectableItemBackgroundBorderless" />
+
+            <ImageView
+                android:id="@+id/floating_next"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:padding="5dp"
+                android:src="@drawable/ic_media_next"
+                android:contentDescription="بعدی"
+                android:background="?attr/selectableItemBackgroundBorderless" />
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

@@ -16,8 +16,12 @@ const publishedBookSchema = new mongoose.Schema({
   type: { type: String, enum: ['book', 'pamphlet', 'note'], default: 'book' },
   date: String,
   relatedAudioIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Podcast' }],
+  authorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  isDraft: { type: Boolean, default: false },
 }, { timestamps: true, suppressReservedKeysWarning: true });
 
 publishedBookSchema.index({ title: 'text', description: 'text' });
+publishedBookSchema.index({ authorId: 1, type: 1 });
+publishedBookSchema.index({ type: 1, isDraft: 1, createdAt: -1 });
 
 export default mongoose.model('PublishedBook', publishedBookSchema);

@@ -29,3 +29,25 @@ tsconfig.tsbuildinfo
 deploy/.env.deploy
 .env.deploy
 .env.production
+
+# Keystore / secrets
+*.jks
+*.keystore
+
+# Build artifacts
+*.apk
+*.jar
+*.class
+
+# Gradle cache junk dumped in repo root
+*.pom
+*.module
+*.aar
+
+# Debug / test leftovers
+TestDownload.*
+cdp-eval.mjs
+mobile-screenshot.js
+err.xml
+ui*.xml
+*.png

@@ -1,11 +1,13 @@
 const {Client} = require('C:\\Users\\EMAD\\AppData\\Roaming\\npm\\node_modules\\ssh2');
 const fs = require('fs');
 const path = require('path');
+const dotenv = require('dotenv');
+dotenv.config({ path: path.join(__dirname, '.env.deploy') });
 
-const HOST = '87.107.165.104';
-const PORT = 9011;
-const USER = 'root';
-const PASS = 'BRykm7zfs3';
+const HOST = process.env.SSH_HOST;
+const PORT = parseInt(process.env.SSH_PORT || '9011');
+const USER = process.env.SSH_USER;
+const PASS = process.env.SSH_PASS;
 
 function ssh(label, cmd, timeout) {
   timeout = timeout || 120000;
@@ -49,21 +51,17 @@ function uploadFile(localPath, remotePath) {
 
 (async () => {
   try {
-    // 1. Upload frontend tarball
-    await uploadFile('E:\\soha-deploy-standalone.tar.gz', '/opt/soha/soha-deploy-standalone.tar.gz');
+    console.log('=== DEPLOY AUTH (BACKEND) ===');
 
-    // 2. Extract frontend
-    await ssh('Extract frontend', 'cd /opt/soha && rm -rf .next/standalone.bak && mv .next/standalone .next/standalone.bak && tar -xzf soha-deploy-standalone.tar.gz -C .next/ && cp .next/standalone.bak/server/node_modules .next/standalone/server/ -rf 2>/dev/null; echo "OK"', 60000);
-
-    // 3. Upload server files (routes/auth.js, models/User.js)
+    // 1. Upload server files
     await uploadFile('E:\\soha\\server\\routes\\auth.js', '/opt/soha/server/routes/auth.js');
     await uploadFile('E:\\soha\\server\\models\\User.js', '/opt/soha/server/models/User.js');
+    await uploadFile('E:\\soha\\server\\utils\\sms.js', '/opt/soha/server/utils/sms.js');
 
-    // 4. Restart both services
+    // 2. Restart backend
     await ssh('Restart backend', 'systemctl restart soha-backend && sleep 2 && systemctl is-active soha-backend', 20000);
-    await ssh('Restart frontend', 'systemctl restart soha-frontend && sleep 2 && systemctl is-active soha-frontend', 20000);
 
-    // 5. Verify
+    // 3. Verify
     await ssh('Check health', 'curl -s http://localhost:5000/api/health', 10000);
 
     console.log('\n=== DEPLOY COMPLETE ===');

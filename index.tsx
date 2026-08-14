@@ -17,25 +17,33 @@ root.render(
 );
 
 // --- Service Worker Registration ---
+// APK = نمایش خالص وب: هیچ سرویس‌ورکری ثبت نشود و کش قبلی هم پاک شود —
+// تا همیشه تازه‌ترین نسخه وب لود شود و هیچ داده‌ای داخل اپ ذخیره نماند.
 // In sandboxed preview environments, absolute paths or certain relative paths can resolve 
 // to the tool's domain (e.g., ai.studio) instead of the sandbox origin, causing errors.
-window.addEventListener('load', () => {
-  if ('serviceWorker' in navigator) {
-    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-      navigator.serviceWorker.getRegistrations().then(r => r.forEach(reg => reg.unregister()));
-    } else {
-      navigator.serviceWorker.register('./service-worker.js', { scope: './' })
-        .then(registration => {
-          console.log('Service Worker registered successfully:', registration.scope);
-        })
-        .catch(error => {
-          const isOriginError = error.message.includes('origin') || error.name === 'SecurityError';
+const isAppEnv = () => !!(window as any).AndroidBridge;
 
-          if (isOriginError) {
-            return;
-          }
-          console.warn('Service Worker registration failed:', error.message || error);
-        });
-    }
+window.addEventListener('load', () => {
+  if (!('serviceWorker' in navigator)) return;
+  if (isAppEnv()) {
+    navigator.serviceWorker.getRegistrations().then(r => r.forEach(reg => reg.unregister()));
+    try { if ('caches' in window) caches.keys().then(keys => keys.forEach(k => caches.delete(k))); } catch { /* ignore */ }
+    return;
+  }
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+    navigator.serviceWorker.getRegistrations().then(r => r.forEach(reg => reg.unregister()));
+  } else {
+    navigator.serviceWorker.register('./service-worker.js', { scope: './' })
+      .then(registration => {
+        console.log('Service Worker registered successfully:', registration.scope);
+      })
+      .catch(error => {
+        const isOriginError = error.message.includes('origin') || error.name === 'SecurityError';
+
+        if (isOriginError) {
+          return;
+        }
+        console.warn('Service Worker registration failed:', error.message || error);
+      });
   }
 });

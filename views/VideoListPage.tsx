@@ -88,7 +88,7 @@ const VideoListPage: React.FC<VideoListPageProps> = ({
 
             <div className="bg-gray-900 relative">
                 <div className="p-4 pb-2 text-right">
-                  <h1 className="text-base font-black leading-tight mb-3 text-gray-100">{activeVideo.title}</h1>
+                  <h1 className="text-base font-black leading-tight mb-3 text-gray-100 ">{activeVideo.title}</h1>
                   <div className="flex justify-between items-center text-[10px] font-bold text-gray-400">
                     <div className="flex items-center gap-5 text-lg">
                       <button onClick={() => onToggleLibrary(activeVideo.id)} className={`transition-colors ${isInLibrary ? 'text-primary' : 'hover:text-primary'}`}>
@@ -98,23 +98,23 @@ const VideoListPage: React.FC<VideoListPageProps> = ({
                           <i className="fas fa-share-alt"></i>
                       </button>
                     </div>
-                    <span>{toPersianDigits(activeVideo.viewCount)} بازدید • {activeVideo.uploadDate}</span>
+                    <span className="">{toPersianDigits(activeVideo.viewCount)} بازدید • {activeVideo.uploadDate}</span>
                   </div>
                 </div>
                 
                 <div className="border-y border-gray-800 bg-gray-900 mt-2 sticky top-[56.25vw] z-30 backdrop-blur-md">
                     <div className="flex items-center justify-around px-2">
-                        <button onClick={() => setActivePlayerTab('details')} className={`flex-1 py-3 text-xs font-black text-center border-b-2 ${activePlayerTab === 'details' ? 'text-primary border-primary' : 'text-gray-500 border-transparent'}`}>توضیحات</button>
-                        <button onClick={() => setActivePlayerTab('comments')} className={`flex-1 py-3 text-xs font-black text-center border-b-2 ${activePlayerTab === 'comments' ? 'text-primary border-primary' : 'text-gray-500 border-transparent'}`}>{`نظرات (${toPersianDigits(comments.length)})`}</button>
-                        <button onClick={() => setActivePlayerTab('upNext')} className={`flex-1 py-3 text-xs font-black text-center border-b-2 ${activePlayerTab === 'upNext' ? 'text-primary border-primary' : 'text-gray-500 border-transparent'}`}>مرتبط</button>
+                        <button onClick={() => setActivePlayerTab('details')} className={`flex-1 py-3 text-xs font-black text-center border-b-2  ${activePlayerTab === 'details' ? 'text-primary border-primary' : 'text-gray-500 border-transparent'}`}>توضیحات</button>
+                        <button onClick={() => setActivePlayerTab('comments')} className={`flex-1 py-3 text-xs font-black text-center border-b-2  ${activePlayerTab === 'comments' ? 'text-primary border-primary' : 'text-gray-500 border-transparent'}`}>{`نظرات (${toPersianDigits(comments.length)})`}</button>
+                        <button onClick={() => setActivePlayerTab('upNext')} className={`flex-1 py-3 text-xs font-black text-center border-b-2  ${activePlayerTab === 'upNext' ? 'text-primary border-primary' : 'text-gray-500 border-transparent'}`}>مرتبط</button>
                     </div>
                 </div>
 
                 <div className="bg-gray-900 pb-24">
                     {activePlayerTab === 'details' && (
                         <div className="p-4 text-sm text-gray-300 leading-loose text-justify bg-gray-800/30 m-4 rounded-3xl border border-gray-800 animate-fadeIn text-right">
-                            <p className="line-clamp-6">{activeVideo.description || 'توضیحاتی برای این ویدیو وجود ندارد.'}</p>
-                            <button onClick={() => onShowInstantView(activeVideo.title, activeVideo.fullText || activeVideo.description)} className="w-full mt-4 bg-primary/10 text-primary py-3 rounded-2xl font-black text-xs border border-primary/20 flex items-center justify-center gap-2"><i className="fas fa-align-justify"></i> مطالعه متن کامل</button>
+                            <p className="line-clamp-6 ">{activeVideo.description || 'توضیحاتی برای این ویدیو وجود ندارد.'}</p>
+                            <button onClick={() => onShowInstantView(activeVideo.title, activeVideo.fullText || activeVideo.description)} className="w-full mt-4 bg-primary/10 text-primary py-3 rounded-2xl font-black text-xs border border-primary/20 flex items-center justify-center gap-2 "><i className="fas fa-align-justify"></i> مطالعه متن کامل</button>
                         </div>
                     )}
                     {activePlayerTab === 'comments' && (
@@ -125,7 +125,7 @@ const VideoListPage: React.FC<VideoListPageProps> = ({
                             >
                                 <div className="flex items-center gap-3">
                                     <i className="fas fa-comment-dots text-primary"></i>
-                                    <span>نوشتن یادداشت یا پرسش...</span>
+                                    <span className="">نوشتن یادداشت یا پرسش...</span>
                                 </div>
                                 <i className="fas fa-arrow-left opacity-0 group-hover:opacity-100 transition-opacity"></i>
                             </button>
@@ -133,12 +133,12 @@ const VideoListPage: React.FC<VideoListPageProps> = ({
                                 <div key={c.id} className="flex items-start gap-4 p-3 rounded-2xl hover:bg-white/5 flex-row-reverse">
                                     <div className="w-10 h-10 rounded-full bg-primary flex-shrink-0 flex items-center justify-center text-white font-black">{c.author.charAt(0)}</div>
                                     <div className="text-gray-200 flex-1 min-w-0 text-right">
-                                        <div className="flex justify-between mb-1 flex-row-reverse"><span className="font-bold text-sm text-primary-light">{c.author}</span><span className="text-[10px] text-gray-500">{c.date}</span></div>
-                                        <p className="text-sm text-gray-400 leading-relaxed whitespace-pre-wrap">
+                                        <div className="flex justify-between mb-1 flex-row-reverse"><span className="font-bold text-sm text-primary-light ">{c.author}</span><span className="text-[10px] text-gray-500">{c.date}</span></div>
+                                        <p className="text-sm text-gray-400 leading-relaxed whitespace-pre-wrap ">
                                              {c.text.length > 250 ? (
                                                 <>
                                                     {c.text.substring(0, 250)}...
-                                                    <button onClick={() => onShowInstantView(`${c.author}`, c.text)} className="text-primary font-black text-xs block mt-1 hover:underline">مطالعه کامل</button>
+                                                    <button onClick={() => onShowInstantView(`${c.author}`, c.text)} className="text-primary font-black text-xs block mt-1 hover:underline ">مطالعه کامل</button>
                                                 </>
                                             ) : c.text}
                                         </p>
@@ -153,8 +153,8 @@ const VideoListPage: React.FC<VideoListPageProps> = ({
                                 <div key={nextVideo.id} onClick={() => handleVideoCardSelect(nextVideo)} className="bg-gray-800/40 p-2 rounded-2xl border border-white/5 flex gap-4 items-center cursor-pointer hover:bg-gray-800 transition-colors flex-row-reverse">
                                     <img src={nextVideo.thumbnailUrl} className="w-24 h-16 rounded-xl object-cover shadow-md" alt={nextVideo.title} />
                                     <div className="flex-1 min-w-0">
-                                        <h5 className="font-bold text-xs text-gray-100 line-clamp-2 leading-snug">{nextVideo.title}</h5>
-                                        <p className="text-[10px] text-gray-400 mt-1">{toPersianDigits(nextVideo.viewCount)} بازدید</p>
+                                        <h5 className="font-bold text-xs text-gray-100 line-clamp-2 leading-snug ">{nextVideo.title}</h5>
+                                        <p className="text-[10px] text-gray-400 mt-1 ">{toPersianDigits(nextVideo.viewCount)} بازدید</p>
                                     </div>
                                 </div>
                             ))}
@@ -185,8 +185,8 @@ const VideoListPage: React.FC<VideoListPageProps> = ({
                 <i className="fas fa-play text-white text-xs" />
               </div>
               <div className="hidden lg:block">
-                <p className="text-xs font-black leading-tight" style={{ color: 'var(--text)' }}>ویدیوها</p>
-                <p className="text-[8px] font-bold" style={{ color: 'var(--text-3)' }}>{toPersianDigits(String(filteredVideos.length))} ویدیو</p>
+                <p className="text-xs font-black leading-tight " style={{ color: 'var(--text)' }}>ویدیوها</p>
+                <p className="text-[8px] font-bold " style={{ color: 'var(--text-3)' }}>{toPersianDigits(String(filteredVideos.length))} ویدیو</p>
               </div>
             </div>
 
@@ -234,8 +234,8 @@ const VideoListPage: React.FC<VideoListPageProps> = ({
             <div className="w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-4" style={{ background: 'var(--surface-2)', border: '2px dashed var(--border)' }}>
               <i className="fas fa-film text-2xl" style={{ color: 'var(--text-3)' }} />
             </div>
-            <p className="text-sm font-black mb-1" style={{ color: 'var(--text)' }}>ویدیویی یافت نشد</p>
-            <p className="text-xs" style={{ color: 'var(--text-3)' }}>عبارت جستجو را تغییر دهید</p>
+            <p className="text-sm font-black mb-1 " style={{ color: 'var(--text)' }}>ویدیویی یافت نشد</p>
+            <p className="text-xs " style={{ color: 'var(--text-3)' }}>عبارت جستجو را تغییر دهید</p>
           </div>
         )}
       </div>

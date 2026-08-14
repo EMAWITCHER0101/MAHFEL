@@ -1,9 +1,41 @@
 import { Router } from 'express';
 import { Readable } from 'stream';
+import https from 'https';
 
 const router = Router();
 
 const ALLOWED_HOSTS = ['dl.soha-sima.ir'];
+
+// dl.soha-sima.ir served an expired cert (since 2026-08-07) while content is fine.
+// Use a relaxed TLS agent for this host so playback keeps working until the cert is renewed.
+const relaxedAgent = new https.Agent({
+  rejectUnauthorized: false,
+});
+
+// Try strict fetch first; on TLS failure (expired cert) fall back to a
+// relaxed node:https request that streams the response directly.
+const fetchWithTlsFallback = (url, fetchOpts) => {
+  return fetch(url, fetchOpts).catch(() => {
+    const parsed = new URL(url);
+    return new Promise((resolve, reject) => {
+      const req = https.request(
+        parsed,
+        { method: 'GET', headers: fetchOpts.headers || {}, agent: relaxedAgent },
+        (res) => {
+          resolve({
+            ok: res.statusCode >= 200 && res.statusCode < 300,
+            status: res.statusCode,
+            isNodeStream: true,
+            headers: { get: (name) => res.headers[name.toLowerCase()] || null },
+            body: res,
+          });
+        }
+      );
+      req.on('error', reject);
+      req.end();
+    });
+  });
+};
 
 router.get('/audio', async (req, res) => {
   try {
@@ -30,7 +62,7 @@ router.get('/audio', async (req, res) => {
       fetchOpts.headers['Range'] = range;
     }
 
-    const originRes = await fetch(url, fetchOpts);
+    let originRes = await fetchWithTlsFallback(url, fetchOpts);
 
     if (!originRes.ok && originRes.status !== 206) {
       return res.status(originRes.status).json({ error: 'Failed to fetch audio' });
@@ -51,16 +83,28 @@ router.get('/audio', async (req, res) => {
     res.set('Cache-Control', 'public, max-age=3600');
     res.set('Access-Control-Allow-Origin', '*');
 
-    const stream = Readable.fromWeb(originRes.body);
-    stream.on('error', (err) => {
-      console.error('Stream error:', err.message);
-      if (!res.headersSent) {
-        res.status(500).json({ error: 'Stream error' });
-      } else {
-        res.end();
-      }
-    });
-    stream.pipe(res);
+    if (originRes.isNodeStream) {
+      originRes.body.on('error', (err) => {
+        console.error('Stream error:', err.message);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Stream error' });
+        } else {
+          res.end();
+        }
+      });
+      originRes.body.pipe(res);
+    } else {
+      const stream = Readable.fromWeb(originRes.body);
+      stream.on('error', (err) => {
+        console.error('Stream error:', err.message);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Stream error' });
+        } else {
+          res.end();
+        }
+      });
+      stream.pipe(res);
+    }
   } catch (error) {
     console.error('Proxy error:', error.message);
     if (!res.headersSent) {
