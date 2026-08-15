@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import type { Post, Video, Comment, Podcast, Episode, Author, PublishedBook, PostComment } from '../types';
 import { toPersianDigits, isSameDay, formatDateSeparator, formatTimeFromISO, formatTime, DEFAULT_COVER } from '../utils/helpers';
 import AudioPlayer from '../components/AudioPlayer';
@@ -24,6 +25,75 @@ const DateSeparator: React.FC<{ date: string }> = ({ date }) => (
     </span>
   </div>
 );
+
+const QuoteChip: React.FC<{ text: string; onCancel?: () => void }> = ({ text, onCancel }) => (
+  <div className="flex items-center gap-1.5 mb-1.5 px-2 py-1.5 rounded-lg" style={{ background: 'color-mix(in srgb, var(--primary) 8%, transparent)', borderRight: '2px solid var(--primary)' }}>
+    <i className="fas fa-quote-right text-[7px] flex-shrink-0" style={{ color: 'var(--primary)' }}></i>
+    <span className="text-[9px] font-medium leading-relaxed line-clamp-1 flex-1 min-w-0" style={{ color: 'var(--text-2)' }}>{text}</span>
+    {onCancel && (
+      <button onClick={onCancel} className="flex-shrink-0 hover:opacity-60 transition-opacity" style={{ color: 'var(--text-3)' }}>
+        <i className="fas fa-times text-[8px]"></i>
+      </button>
+    )}
+  </div>
+);
+
+const QuoteBlock: React.FC<{ text: string; author: string }> = ({ text, author }) => (
+  <div className="mb-1.5 pr-2 py-1.5 rounded-lg" style={{ background: 'color-mix(in srgb, var(--primary) 6%, transparent)', borderRight: '2px solid var(--primary)' }}>
+    <div className="flex items-center gap-1">
+      <i className="fas fa-quote-right text-[6px]" style={{ color: 'var(--primary)' }}></i>
+      <span className="text-[8px] font-black" style={{ color: 'var(--primary)' }}>{author}</span>
+    </div>
+    <div className="text-[8px] font-medium mt-0.5 leading-relaxed line-clamp-1 opacity-70" style={{ color: 'var(--text-3)' }}>{text}</div>
+  </div>
+);
+
+// ─── منوی عملیات (پاسخ / نقل‌قول / لایک / ویرایش / حذف) — مشترک بین همه کارت‌های محفل ───
+const useActionMenu = () => {
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+  const openAt = useCallback((e: React.MouseEvent<HTMLElement>) => {
+    e.stopPropagation();
+    const r = e.currentTarget.getBoundingClientRect();
+    setPos({ top: Math.round(r.bottom + 2), right: Math.round(document.documentElement.clientWidth - r.right) });
+  }, []);
+  const close = useCallback(() => setPos(null), []);
+  return { pos, openAt, close };
+};
+
+type ActionMenuItem = { icon?: string; label?: string; color?: string; divider?: boolean; onClick?: () => void };
+
+const ActionMenu: React.FC<{ pos: { top: number; right: number }; onClose: () => void; items: ActionMenuItem[] }> = ({ pos, onClose, items }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as HTMLElement)) onClose(); };
+    const s = () => onClose();
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('mousedown', h);
+    document.addEventListener('scroll', s, true);
+    document.addEventListener('keydown', k);
+    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('scroll', s, true); document.removeEventListener('keydown', k); };
+  }, [onClose]);
+  return createPortal(
+    <div ref={ref} className="fixed z-[9999] animate-fadeIn" style={{ top: pos.top, right: pos.right }}>
+      <div className="rounded-xl shadow-lg py-0.5" style={{ background: 'var(--surface)', border: '1px solid var(--border)', minWidth: '150px' }}>
+        <div className="flex items-center justify-between px-2.5 py-1 border-b" style={{ borderColor: 'var(--border)' }}>
+          <span className="text-[9px] font-bold" style={{ color: 'var(--text-3)' }}>عملیات</span>
+          <button onClick={onClose} className="w-4 h-4 rounded-full flex items-center justify-center transition-all active:scale-90 hover:opacity-70" style={{ color: 'var(--text-3)' }}>
+            <i className="fas fa-times text-[7px]"></i>
+          </button>
+        </div>
+        {items.map((it, i) => it.divider ? (
+          <div key={i} className="h-px mx-2.5" style={{ background: 'var(--border)' }}></div>
+        ) : (
+          <button key={i} onClick={() => { it.onClick?.(); onClose(); }} className="w-full text-right px-2.5 py-2 text-[11px] font-medium flex items-center gap-2 transition-colors hover:bg-white/5" style={{ color: it.color || 'var(--text)' }}>
+            {it.icon && <i className={`${it.icon} text-[9px]`} style={{ color: it.color || 'var(--text-3)' }}></i>} {it.label}
+          </button>
+        ))}
+      </div>
+    </div>,
+    document.body
+  );
+};
 
 const MediaCard: React.FC<{
     video?: Video;
@@ -111,7 +181,7 @@ type RenderReplyProps = {
   currentUser?: string;
   likedReplies: Set<string>;
   touchStartX: React.MutableRefObject<number>;
-  onSwipeReply?: (target: { postId: number; author: string; text: string; commentId?: string }) => void;
+  onSwipeReply?: (target: { postId: number; author: string; text: string; commentId?: string; quotedText?: string }) => void;
   getCommentId: (c: any) => string;
   handleLikeReply: (id: string) => void;
   handleDeleteReply: (id: string) => void;
@@ -129,6 +199,35 @@ const RenderReply = React.memo<RenderReplyProps>(({ comment, depth, postId, loca
   const colorSeed = comment.author.charCodeAt(0) * 37;
   const [imgLightbox, setImgLightbox] = useState<{ src: string; text?: string; author?: string; authorAvatar?: string; time?: string } | null>(null);
   const [vidLightbox, setVidLightbox] = useState<string | null>(null);
+  const textRef = useRef<HTMLDivElement>(null);
+  const [showQuoteBtn, setShowQuoteBtn] = useState(false);
+  const [selectedQuoteText, setSelectedQuoteText] = useState('');
+  const menu = useActionMenu();
+
+  useEffect(() => {
+    const handler = () => {
+      setTimeout(() => {
+        const sel = window.getSelection();
+        if (sel && sel.toString().trim().length > 0 && textRef.current?.contains(sel.anchorNode)) {
+          setSelectedQuoteText(sel.toString().trim());
+          setShowQuoteBtn(true);
+        } else {
+          setShowQuoteBtn(false);
+          setSelectedQuoteText('');
+        }
+      }, 10);
+    };
+    document.addEventListener('selectionchange', handler);
+    return () => document.removeEventListener('selectionchange', handler);
+  }, []);
+
+  const handleQuoteReply = () => {
+    if (!selectedQuoteText) return;
+    onSwipeReply?.({ postId, author: comment.author, text: selectedQuoteText, commentId, quotedText: selectedQuoteText });
+    setShowQuoteBtn(false);
+    setSelectedQuoteText('');
+    window.getSelection()?.removeAllRanges();
+  };
 
   const handleSaveEdit = async () => {
     if (!editText.trim() || editText === comment.text) { setIsEditing(false); return; }
@@ -159,14 +258,17 @@ const RenderReply = React.memo<RenderReplyProps>(({ comment, depth, postId, loca
               <span className="font-bold text-[10px] cursor-pointer hover:opacity-70 transition-opacity" style={{ color: 'var(--text-1)' }} onClick={() => onOpenProfile?.(comment.userId, comment.author, comment.authorAvatarUrl)}>{comment.author}</span>
               <div className="w-0.5 h-0.5 rounded-full" style={{ background: 'var(--text-3)' }}></div>
               <span className="text-[8px] font-medium" style={{ color: 'var(--text-3)' }}>{formatTimeFromISO(comment.isoDate)}</span>
+              <button onClick={menu.openAt} className="w-5 h-5 rounded-md flex items-center justify-center transition-all hover:bg-black/5 active:scale-90 opacity-0 group-hover/reply:opacity-50 hover:!opacity-80 flex-shrink-0" style={{ color: 'var(--text-3)' }}>
+                <i className="fas fa-ellipsis-vertical text-[8px]"></i>
+              </button>
             </div>
-            {repliedTo && (
+            {((comment as any).quotedText || repliedTo) && (
               <div className="mb-1.5 pr-2 py-1.5 rounded-lg" style={{ background: 'color-mix(in srgb, var(--primary) 6%, transparent)', borderRight: '2px solid var(--primary)' }}>
                 <div className="flex items-center gap-1">
-                  <i className="fas fa-reply text-[6px]" style={{ color: 'var(--primary)' }}></i>
-                  <span className="text-[8px] font-black" style={{ color: 'var(--primary)' }}>{repliedTo.author}</span>
+                  <i className={`fas ${(comment as any).quotedText ? 'fa-quote-right' : 'fa-reply'} text-[6px]`} style={{ color: 'var(--primary)' }}></i>
+                  <span className="text-[8px] font-black" style={{ color: 'var(--primary)' }}>{repliedTo ? repliedTo.author : comment.author}</span>
                 </div>
-                <div className="text-[8px] font-medium mt-0.5 leading-relaxed line-clamp-1 opacity-70" style={{ color: 'var(--text-3)' }}>{repliedTo.text}</div>
+                <div className="text-[8px] font-medium mt-0.5 leading-relaxed line-clamp-1 opacity-70" style={{ color: 'var(--text-3)' }}>{(comment as any).quotedText || repliedTo?.text || ''}</div>
               </div>
             )}
             {comment.media && comment.media.length > 0 && (
@@ -216,8 +318,16 @@ const RenderReply = React.memo<RenderReplyProps>(({ comment, depth, postId, loca
                     <span className="font-medium"> از صوت</span>
                   </button>
                 )}
-                <p className="text-[11px] leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text)' }}>{comment.text}</p>
+                <p ref={textRef} className="text-[11px] leading-relaxed whitespace-pre-wrap select-text" style={{ color: 'var(--text)' }}>{comment.text}</p>
               </>
+            )}
+            {showQuoteBtn && !isEditing && (
+              <div className="absolute z-50 rounded-xl shadow-xl py-1 animate-fadeIn" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', top: '-40px', left: '50%', transform: 'translateX(-50%)' }}>
+                <button onClick={handleQuoteReply} className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-bold transition-colors hover:bg-white/5 whitespace-nowrap" style={{ color: 'var(--primary)' }}>
+                  <i className="fas fa-quote-right text-[9px]"></i>
+                  نقل‌قول و پاسخ
+                </button>
+              </div>
             )}
             {isOwn && !isEditing && (
               <button onClick={(e) => { e.stopPropagation(); setIsEditing(true); }}
@@ -262,6 +372,18 @@ const RenderReply = React.memo<RenderReplyProps>(({ comment, depth, postId, loca
     </div>
     {imgLightbox && <ImageLightbox src={imgLightbox.src} onClose={() => setImgLightbox(null)} text={imgLightbox.text} author={imgLightbox.author} authorAvatar={imgLightbox.authorAvatar} time={imgLightbox.time} />}
     {vidLightbox && <VideoLightbox url={vidLightbox} onClose={() => setVidLightbox(null)} />}
+    {menu.pos && (
+      <ActionMenu pos={menu.pos} onClose={menu.close} items={[
+        { icon: 'fas fa-reply', label: 'پاسخ', onClick: () => onSwipeReply?.({ postId, author: comment.author, text: comment.text, commentId }) },
+        { icon: 'fas fa-quote-right', label: 'نقل‌قول', onClick: () => onSwipeReply?.({ postId, author: comment.author, text: selectedQuoteText || comment.text, commentId, quotedText: selectedQuoteText || comment.text }) },
+        { divider: true },
+        { icon: 'far fa-heart', label: 'لایک', onClick: () => handleLikeReply(commentId) },
+        ...(isOwn ? [
+          { icon: 'fas fa-pen', label: 'ویرایش', onClick: () => setIsEditing(true) },
+          { icon: 'fas fa-trash-alt', label: 'حذف', color: '#ef4444', onClick: () => handleDeleteReply(commentId) },
+        ] : []),
+      ]} />
+    )}
     </>
   );
 });
@@ -284,7 +406,7 @@ const PostBubble: React.FC<{
   onUpdatePost?: (post: Post) => void;
   onDeletePost?: (postId: number) => void;
   currentUser?: string;
-  onSwipeReply?: (target: { postId: number; author: string; text: string; commentId?: string }) => void;
+  onSwipeReply?: (target: { postId: number; author: string; text: string; commentId?: string; quotedText?: string }) => void;
   onOpenProfile?: (userId?: string, name?: string, avatar?: string) => void;
 }> = React.memo(({ post, video, podcast, publishedBook, onShowComments, onPlayVideo, onPlayPodcast, onShowBook, onOpenMenu, isFirstInGroup, isLastInGroup, onShowInstantView, onAddComment, onNewPost, onUpdatePost, onDeletePost, currentUser, onSwipeReply, onOpenProfile }) => {
   const isAdminPost = post.author === 'سرای هنر و اندیشه' || post.author?.includes('مجموعه:');
@@ -302,6 +424,36 @@ const PostBubble: React.FC<{
   const [imgLightbox, setImgLightbox] = useState<{ src: string; text?: string; author?: string; authorAvatar?: string; time?: string } | null>(null);
   const [vidLightbox, setVidLightbox] = useState<string | null>(null);
   const touchStartX = useRef<number>(0);
+  const textRef = useRef<HTMLDivElement>(null);
+  const [showQuoteBtn, setShowQuoteBtn] = useState(false);
+  const [selectedQuoteText, setSelectedQuoteText] = useState('');
+
+  useEffect(() => {
+    const handler = () => {
+      setTimeout(() => {
+        const sel = window.getSelection();
+        if (sel && sel.toString().trim().length > 0 && textRef.current?.contains(sel.anchorNode)) {
+          setSelectedQuoteText(sel.toString().trim());
+          setShowQuoteBtn(true);
+        } else {
+          setShowQuoteBtn(false);
+          setSelectedQuoteText('');
+        }
+      }, 10);
+    };
+    document.addEventListener('selectionchange', handler);
+    return () => document.removeEventListener('selectionchange', handler);
+  }, []);
+
+  const handleQuoteReply = () => {
+    if (!selectedQuoteText) return;
+    onSwipeReply?.({ postId: post.id, author: post.author, text: selectedQuoteText, commentId: undefined, quotedText: selectedQuoteText });
+    setShowQuoteBtn(false);
+    setSelectedQuoteText('');
+    window.getSelection()?.removeAllRanges();
+  };
+
+  const menu = useActionMenu();
 
   const getCommentId = (c: any): string => String(c._id ?? c.id);
 
@@ -320,8 +472,8 @@ const PostBubble: React.FC<{
     }
   };
 
-  const toggleLike = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const toggleLike = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     const next = !liked;
     setLiked(next);
     try {
@@ -417,11 +569,16 @@ const PostBubble: React.FC<{
                       <i className="fas fa-pen text-[8px]"></i>
                     </button>
                   )}
+                  <button onClick={menu.openAt}
+                    className="w-6 h-6 rounded-lg flex items-center justify-center transition-all hover:bg-black/5 active:scale-90 opacity-50 hover:opacity-80"
+                    style={{ color: 'var(--text-3)' }}>
+                    <i className="fas fa-ellipsis-vertical text-[8px]"></i>
+                  </button>
                </div>
 
                {/* Text */}
                {post.text && (
-                 <div className="text-right mb-1.5">
+                 <div className="text-right mb-1.5 relative">
                    {isEditingPost ? (
                      <div>
                        <input value={editPostText} onChange={(e) => setEditPostText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSavePostEdit(); } if (e.key === 'Escape') setIsEditingPost(false); }}
@@ -431,9 +588,17 @@ const PostBubble: React.FC<{
                          <button onClick={handleSavePostEdit} className="text-[9px] font-bold px-3 py-1 rounded-lg" style={{ background: 'var(--primary)', color: 'white' }}>ذخیره</button>
                          <button onClick={() => { setIsEditingPost(false); setEditPostText(post.text || ''); }} className="text-[9px] font-bold px-3 py-1 rounded-lg" style={{ background: 'var(--surface-3)', color: 'var(--text-3)' }}>لغو</button>
                        </div>
-                     </div>
+                    </div>
                    ) : (
-                     <div className="text-[13px] leading-[1.7] font-medium whitespace-pre-wrap" style={{ color: 'var(--text)' }}>{post.text}</div>
+                     <div ref={textRef} className="text-[13px] leading-[1.7] font-medium whitespace-pre-wrap select-text" style={{ color: 'var(--text)' }}>{post.text}</div>
+                   )}
+                   {showQuoteBtn && !isEditingPost && (
+                     <div className="absolute z-50 rounded-xl shadow-xl py-1 animate-fadeIn" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', top: '-40px', left: '50%', transform: 'translateX(-50%)' }}>
+                       <button onClick={handleQuoteReply} className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-bold transition-colors hover:bg-white/5 whitespace-nowrap" style={{ color: 'var(--primary)' }}>
+                         <i className="fas fa-quote-right text-[9px]"></i>
+                         نقل‌قول و پاسخ
+                       </button>
+                     </div>
                    )}
                  </div>
                )}
@@ -533,6 +698,18 @@ const PostBubble: React.FC<{
     </div>
     {imgLightbox && <ImageLightbox src={imgLightbox.src} onClose={() => setImgLightbox(null)} text={imgLightbox.text} author={imgLightbox.author} authorAvatar={imgLightbox.authorAvatar} time={imgLightbox.time} />}
     {vidLightbox && <VideoLightbox url={vidLightbox} onClose={() => setVidLightbox(null)} />}
+    {menu.pos && (
+      <ActionMenu pos={menu.pos} onClose={menu.close} items={[
+        { icon: 'fas fa-reply', label: 'پاسخ', onClick: () => onSwipeReply?.({ postId: post.id, author: post.author, text: post.text || '' }) },
+        { icon: 'fas fa-quote-right', label: 'نقل‌قول', onClick: () => onSwipeReply?.({ postId: post.id, author: post.author, text: selectedQuoteText || post.text || '', quotedText: selectedQuoteText || post.text || '' }) },
+        { divider: true },
+        { icon: liked ? 'fas fa-heart' : 'far fa-heart', label: liked ? 'برداشتن لایک' : 'لایک', color: liked ? '#ef4444' : undefined, onClick: () => toggleLike() },
+        ...(currentUser && post.author === currentUser ? [
+          { icon: 'fas fa-pen', label: 'ویرایش', onClick: () => { setIsEditingPost(true); setEditPostText(post.text || ''); } },
+          { icon: 'fas fa-trash-alt', label: 'حذف', color: '#ef4444', onClick: () => setShowDeleteConfirm(true) },
+        ] : []),
+      ]} />
+    )}
   </>
   );
 });
@@ -542,7 +719,7 @@ const VideoCommentItem: React.FC<{
   video: Video;
   allComments: Comment[];
   onOpenVideo: (video: Video, timestamp?: number, highlightId?: string) => void;
-  onAddComment: (text: string, video: Video, videoTimestamp?: number, parentId?: string, audioTimestamp?: number) => void;
+  onAddComment: (text: string, video: Video, videoTimestamp?: number, parentId?: string, audioTimestamp?: number, quotedText?: string) => void;
   onDeleteComment?: (commentId: string) => void;
   onLikeComment?: (commentId: string) => void;
   onUpdateComment?: (commentId: string, newText: string) => void;
@@ -564,6 +741,11 @@ const VideoCommentItem: React.FC<{
   const [editText, setEditText] = useState(comment.text);
   const [commentText, setCommentText] = useState(comment.text);
   const replyTimerRef = useRef<number | null>(null);
+  const textRef = useRef<HTMLDivElement>(null);
+  const [showQuoteBtn, setShowQuoteBtn] = useState(false);
+  const [selectedQuoteText, setSelectedQuoteText] = useState('');
+  const [replyQuoteText, setReplyQuoteText] = useState('');
+  const menu = useActionMenu();
 
   const childReplies = comment.replies || allComments.filter(c => c.parentId === (comment._id || String(comment.id)));
   const totalReplyCount = (() => {
@@ -595,6 +777,34 @@ const VideoCommentItem: React.FC<{
     return () => { if (replyTimerRef.current) clearInterval(replyTimerRef.current); };
   }, []);
 
+  useEffect(() => {
+    const handler = () => {
+      setTimeout(() => {
+        const sel = window.getSelection();
+        if (sel && sel.toString().trim().length > 0 && textRef.current?.contains(sel.anchorNode)) {
+          setSelectedQuoteText(sel.toString().trim());
+          setShowQuoteBtn(true);
+        } else {
+          setShowQuoteBtn(false);
+          setSelectedQuoteText('');
+        }
+      }, 10);
+    };
+    document.addEventListener('selectionchange', handler);
+    return () => document.removeEventListener('selectionchange', handler);
+  }, []);
+
+  const handleQuoteReply = () => {
+    if (!selectedQuoteText) return;
+    setReplyQuoteText(selectedQuoteText);
+    setReplyTo(cid);
+    setIsReplying(true);
+    setReplyText('');
+    setShowQuoteBtn(false);
+    setSelectedQuoteText('');
+    window.getSelection()?.removeAllRanges();
+  };
+
   const handleReply = (commentId: string, authorName: string) => {
     setReplyTo(commentId);
     setIsReplying(true);
@@ -612,12 +822,13 @@ const VideoCommentItem: React.FC<{
   const handleSendReply = () => {
     if (!replyText.trim()) return;
     const audioTs = includeAudioTs && (comment as any).audioTimestamp != null ? (comment as any).audioTimestamp : undefined;
-    onAddComment(replyText, video, replyTimestamp || undefined, replyTo || (comment._id || String(comment.id)), audioTs);
+    onAddComment(replyText, video, replyTimestamp || undefined, replyTo || (comment._id || String(comment.id)), audioTs, replyQuoteText || undefined);
     setReplyText('');
     setReplyTo('');
     setIsReplying(false);
     setReplyTimestamp(null);
     setIncludeAudioTs(false);
+    setReplyQuoteText('');
     setShowReplies(true);
   };
 
@@ -685,6 +896,9 @@ const VideoCommentItem: React.FC<{
                 <div className="flex items-center gap-2 mb-1.5">
                   <span className="font-black text-[12px] cursor-pointer hover:opacity-70 transition-opacity" style={{ color: 'var(--primary)' }} onClick={() => onOpenProfile?.(comment.userId, comment.author, comment.authorAvatarUrl)}>{comment.author}</span>
                   <span className="text-[10px]" style={{ color: 'var(--text-3)' }}>{formatTimeFromISO(comment.isoDate)}</span>
+                  <button onClick={menu.openAt} className="w-6 h-6 rounded-lg flex items-center justify-center transition-all hover:bg-black/5 active:scale-90 opacity-0 group-hover:opacity-50 hover:!opacity-80 flex-shrink-0" style={{ color: 'var(--text-3)' }}>
+                    <i className="fas fa-ellipsis-vertical text-[9px]"></i>
+                  </button>
                 </div>
                 {isEditing ? (
                   <div>
@@ -711,7 +925,16 @@ const VideoCommentItem: React.FC<{
                         <span className="font-medium"> از صوت</span>
                       </button>
                     )}
-                    <p className="text-[12px] leading-[2] font-medium whitespace-pre-wrap" style={{ color: 'var(--text-2)' }}>{commentText}</p>
+                    {(comment as any).quotedText && <QuoteBlock text={(comment as any).quotedText} author={comment.author} />}
+                    <p ref={textRef} className="text-[12px] leading-[2] font-medium whitespace-pre-wrap select-text relative" style={{ color: 'var(--text-2)' }}>{commentText}</p>
+                    {showQuoteBtn && !isEditing && (
+                      <div className="absolute z-50 rounded-xl shadow-xl py-1 animate-fadeIn" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', top: '-40px', left: '50%', transform: 'translateX(-50%)' }}>
+                        <button onClick={handleQuoteReply} className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-bold transition-colors hover:bg-white/5 whitespace-nowrap" style={{ color: 'var(--primary)' }}>
+                          <i className="fas fa-quote-right text-[9px]"></i>
+                          نقل‌قول و پاسخ
+                        </button>
+                      </div>
+                    )}
                   </>
                   )}
 
@@ -745,6 +968,7 @@ const VideoCommentItem: React.FC<{
 
             {isReplying && replyTo && replyTo === cid && (
               <div className="mt-3 pt-3 border-t animate-fadeIn" style={{ borderColor: 'var(--border)' }}>
+                {replyQuoteText && <QuoteChip text={replyQuoteText} onCancel={() => setReplyQuoteText('')} />}
                 {(comment as any).audioTimestamp != null && (
                   <button type="button" onClick={() => setIncludeAudioTs(!includeAudioTs)}
                     className="flex items-center gap-1.5 mb-2 px-2 py-1 rounded-lg transition-all active:scale-95 cursor-pointer"
@@ -774,7 +998,7 @@ const VideoCommentItem: React.FC<{
                     <i className="fas fa-paper-plane text-[9px]"></i>
                   </button>
                   <button
-                    onClick={() => { setIsReplying(false); setReplyTo(''); setReplyText(''); }}
+                    onClick={() => { setIsReplying(false); setReplyTo(''); setReplyText(''); setReplyQuoteText(''); }}
                     className="w-9 h-9 rounded-xl flex items-center justify-center transition-all active:scale-95 flex-shrink-0"
                     style={{ background: 'var(--surface-3)', color: 'var(--text-3)', border: '1px solid var(--border)' }}
                   >
@@ -819,7 +1043,9 @@ const VideoCommentItem: React.FC<{
                         replyTo={replyTo}
                         onReplyTextChange={setReplyText}
                         onSendReply={handleSendReply}
-                        onCancelReply={() => { setIsReplying(false); setReplyTo(''); setReplyText(''); }}
+                        onCancelReply={() => { setIsReplying(false); setReplyTo(''); setReplyText(''); setReplyQuoteText(''); }}
+                        quoteText={replyQuoteText}
+                        onQuoteTextChange={setReplyQuoteText}
                        />
                        );
                     })}
@@ -828,6 +1054,18 @@ const VideoCommentItem: React.FC<{
             )}
           </div>
         </div>
+        {menu.pos && (
+          <ActionMenu pos={menu.pos} onClose={menu.close} items={[
+            { icon: 'fas fa-reply', label: 'پاسخ', onClick: () => handleReply(cid, comment.author) },
+            { icon: 'fas fa-quote-right', label: 'نقل‌قول', onClick: () => { setReplyQuoteText(selectedQuoteText || comment.text); setReplyTo(cid); setIsReplying(true); setReplyText(''); } },
+            { divider: true },
+            { icon: isLiked ? 'fas fa-heart' : 'far fa-heart', label: 'لایک', color: isLiked ? '#ef4444' : undefined, onClick: () => onLikeComment?.(cid) },
+            ...(isOwner ? [
+              { icon: 'fas fa-pen', label: 'ویرایش', onClick: () => setIsEditing(true) },
+              { icon: 'fas fa-trash-alt', label: 'حذف', color: '#ef4444', onClick: () => onDeleteComment?.(cid) },
+            ] : []),
+          ]} />
+        )}
       </div>
     );
   }
@@ -853,11 +1091,17 @@ const ReplyItem: React.FC<{
   onSendReply?: () => void;
   onCancelReply?: () => void;
   replyTo?: string;
+  quoteText?: string;
+  onQuoteTextChange?: (text: string) => void;
   onOpenProfile?: (userId?: string, name?: string, avatar?: string) => void;
-}> = ({ reply, video, allComments, onOpenVideo, onDeleteComment, onLikeComment, onUpdateComment, onReply, currentUserName, userRole, likedComments = new Set(), isReplyingHere, replyText, onReplyTextChange, onSendReply, onCancelReply, replyTo = '', onOpenProfile }) => {
+}> = ({ reply, video, allComments, onOpenVideo, onDeleteComment, onLikeComment, onUpdateComment, onReply, currentUserName, userRole, likedComments = new Set(), isReplyingHere, replyText, onReplyTextChange, onSendReply, onCancelReply, replyTo = '', quoteText = '', onQuoteTextChange, onOpenProfile }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(reply.text);
   const [showNestedReplies, setShowNestedReplies] = useState(false);
+  const textRef = useRef<HTMLDivElement>(null);
+  const [showQuoteBtn, setShowQuoteBtn] = useState(false);
+  const [selectedQuoteText, setSelectedQuoteText] = useState('');
+  const menu = useActionMenu();
   const hasTimestamp = typeof reply.videoTimestamp === 'number' && reply.videoTimestamp >= 0;
   const isOwner = reply.author === currentUserName;
   const isAdmin = userRole === 'admin';
@@ -872,6 +1116,32 @@ const ReplyItem: React.FC<{
     if (!editText.trim()) { setIsEditing(false); return; }
     onUpdateComment?.(rid, editText.trim());
     setIsEditing(false);
+  };
+
+  useEffect(() => {
+    const handler = () => {
+      setTimeout(() => {
+        const sel = window.getSelection();
+        if (sel && sel.toString().trim().length > 0 && textRef.current?.contains(sel.anchorNode)) {
+          setSelectedQuoteText(sel.toString().trim());
+          setShowQuoteBtn(true);
+        } else {
+          setShowQuoteBtn(false);
+          setSelectedQuoteText('');
+        }
+      }, 10);
+    };
+    document.addEventListener('selectionchange', handler);
+    return () => document.removeEventListener('selectionchange', handler);
+  }, []);
+
+  const handleQuoteReply = () => {
+    if (!selectedQuoteText) return;
+    onQuoteTextChange?.(selectedQuoteText);
+    onReply?.(rid, reply.author);
+    setShowQuoteBtn(false);
+    setSelectedQuoteText('');
+    window.getSelection()?.removeAllRanges();
   };
 
   return (
@@ -896,6 +1166,9 @@ const ReplyItem: React.FC<{
         <div className="flex items-center gap-2 mb-1">
           <span className="font-bold text-[11px] cursor-pointer hover:opacity-70 transition-opacity" style={{ color: 'var(--primary)' }} onClick={() => onOpenProfile?.(reply.userId, reply.author, reply.authorAvatarUrl)}>{reply.author}</span>
           <span className="text-[9px]" style={{ color: 'var(--text-3)' }}>{formatTimeFromISO(reply.isoDate)}</span>
+          <button onClick={menu.openAt} className="w-5 h-5 rounded-md flex items-center justify-center transition-all hover:bg-black/5 active:scale-90 opacity-0 group-hover:opacity-50 hover:!opacity-80 flex-shrink-0" style={{ color: 'var(--text-3)' }}>
+            <i className="fas fa-ellipsis-vertical text-[8px]"></i>
+          </button>
         </div>
         {isEditing ? (
           <div>
@@ -909,6 +1182,7 @@ const ReplyItem: React.FC<{
           </div>
         ) : reply.text ? (
           <>
+            {(reply as any).quotedText && <QuoteBlock text={(reply as any).quotedText} author={reply.author} />}
             {reply.audioTimestamp != null && (
               <button onClick={() => { const el = document.querySelector('audio'); const ts = reply.audioTimestamp; if (el && ts != null) { el.currentTime = ts; el.play().catch(() => {}); } }}
                 className="flex items-center gap-1.5 mb-1.5 px-2 py-1 rounded-lg transition-all active:scale-95"
@@ -919,7 +1193,17 @@ const ReplyItem: React.FC<{
                 <span className="font-medium"> از صوت</span>
               </button>
             )}
-            <p className="text-[11px] leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-2)' }}>{reply.text}</p>
+            <div className="relative">
+              <p ref={textRef} className="text-[11px] leading-relaxed whitespace-pre-wrap select-text" style={{ color: 'var(--text-2)' }}>{reply.text}</p>
+              {showQuoteBtn && !isEditing && (
+                <div className="absolute z-50 rounded-xl shadow-xl py-1 animate-fadeIn" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', top: '-36px', left: '50%', transform: 'translateX(-50%)' }}>
+                  <button onClick={handleQuoteReply} className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-bold transition-colors hover:bg-white/5 whitespace-nowrap" style={{ color: 'var(--primary)' }}>
+                    <i className="fas fa-quote-right text-[9px]"></i>
+                    نقل‌قول و پاسخ
+                  </button>
+                </div>
+              )}
+            </div>
           </>
         ) : null}
         <div className="flex items-center gap-2.5 mt-1.5">
@@ -948,6 +1232,7 @@ const ReplyItem: React.FC<{
     </div>
     {isReplyingHere && !nestedReplies.some((r: any) => String(r._id || r.id) === replyTo) && (
       <div className="mt-2 ml-9 animate-fadeIn">
+        {quoteText && <QuoteChip text={quoteText} onCancel={() => onQuoteTextChange?.('')} />}
         <div className="flex gap-2">
           <input
             autoFocus
@@ -1015,12 +1300,26 @@ const ReplyItem: React.FC<{
                 onReplyTextChange={onReplyTextChange}
                 onSendReply={onSendReply}
                 onCancelReply={onCancelReply}
+                quoteText={quoteText}
+                onQuoteTextChange={onQuoteTextChange}
                 onOpenProfile={onOpenProfile}
               />
               );
             })}
         </div>
       </div>
+    )}
+    {menu.pos && (
+      <ActionMenu pos={menu.pos} onClose={menu.close} items={[
+        { icon: 'fas fa-reply', label: 'پاسخ', onClick: () => onReply?.(rid, reply.author) },
+        { icon: 'fas fa-quote-right', label: 'نقل‌قول', onClick: () => { onQuoteTextChange?.(selectedQuoteText || reply.text); onReply?.(rid, reply.author); } },
+        { divider: true },
+        { icon: isLiked ? 'fas fa-heart' : 'far fa-heart', label: 'لایک', color: isLiked ? '#ef4444' : undefined, onClick: () => onLikeComment?.(rid) },
+        ...(isOwner ? [
+          { icon: 'fas fa-pen', label: 'ویرایش', onClick: () => setIsEditing(true) },
+          { icon: 'fas fa-trash-alt', label: 'حذف', color: '#ef4444', onClick: () => onDeleteComment?.(rid) },
+        ] : []),
+      ]} />
     )}
     </div>
   );
@@ -1032,11 +1331,11 @@ const PodcastReplyItem: React.FC<{
   podcast: Podcast;
   epIdx: number;
   onPlayPodcast: (podcast: Podcast, episodeIndex: number, seekTime?: number, expandPlayer?: boolean) => void;
+  onAddComment: (text: string, video: any, videoTimestamp?: number, parentId?: string, audioTimestamp?: number, quotedText?: string) => void;
   onDeleteComment?: (commentId: string) => void;
   onLikeComment?: (commentId: string) => void;
   onUpdateComment?: (commentId: string, newText: string) => void;
-  onRequestReply?: (commentId: string, author: string, text: string, podcastId: string, episodeIndex: number, audioTimestamp?: number) => void;
-  onAddComment?: (text: string, video: any, videoTimestamp?: number, parentId?: string, audioTimestamp?: number) => void;
+  onRequestReply?: (commentId: string, author: string, text: string, podcastId: string, episodeIndex: number, audioTimestamp?: number, quotedText?: string) => void;
   currentUserName?: string;
   userRole?: string;
   likedComments?: Set<string>;
@@ -1046,6 +1345,10 @@ const PodcastReplyItem: React.FC<{
   const [editText, setEditText] = useState(reply.text);
   const [replyText, setReplyText] = useState('');
   const [isReplying, setIsReplying] = useState(false);
+  const [replyQuoteText, setReplyQuoteText] = useState('');
+  const textRef = useRef<HTMLDivElement>(null);
+  const [showQuoteBtn, setShowQuoteBtn] = useState(false);
+  const [selectedQuoteText, setSelectedQuoteText] = useState('');
   const rid = reply._id || String(reply.id);
   const isOwner = reply.author === currentUserName;
   const isAdmin = userRole === 'admin';
@@ -1067,10 +1370,39 @@ const PodcastReplyItem: React.FC<{
   const handleSendReply = () => {
     if (!replyText.trim() || !onAddComment) return;
     const audioTs = (reply.audioTimestamp ?? reply.timestamp) != null ? Number(reply.audioTimestamp ?? reply.timestamp) : undefined;
-    onAddComment(replyText, { id: (podcast as any)._id || podcast.id, title: podcast.title }, undefined, rid, audioTs);
+    onAddComment(replyText, { id: (podcast as any)._id || podcast.id, title: podcast.title }, undefined, rid, audioTs, replyQuoteText || undefined);
     setReplyText('');
     setIsReplying(false);
+    setReplyQuoteText('');
   };
+
+  useEffect(() => {
+    const handler = () => {
+      setTimeout(() => {
+        const sel = window.getSelection();
+        if (sel && sel.toString().trim().length > 0 && textRef.current?.contains(sel.anchorNode)) {
+          setSelectedQuoteText(sel.toString().trim());
+          setShowQuoteBtn(true);
+        } else {
+          setShowQuoteBtn(false);
+          setSelectedQuoteText('');
+        }
+      }, 10);
+    };
+    document.addEventListener('selectionchange', handler);
+    return () => document.removeEventListener('selectionchange', handler);
+  }, []);
+
+  const handleQuoteReply = () => {
+    if (!selectedQuoteText) return;
+    setReplyQuoteText(selectedQuoteText);
+    setIsReplying(true);
+    setShowQuoteBtn(false);
+    setSelectedQuoteText('');
+    window.getSelection()?.removeAllRanges();
+  };
+
+  const menu = useActionMenu();
 
   return (
     <div>
@@ -1090,6 +1422,9 @@ const PodcastReplyItem: React.FC<{
           <div className="flex items-center gap-1.5 mb-0.5">
             <span className="font-bold text-[10px] cursor-pointer hover:opacity-70 transition-opacity" style={{ color: 'var(--primary)' }} onClick={openProfile}>{reply.author}</span>
             <span className="text-[8px]" style={{ color: 'var(--text-3)' }}>{formatTimeFromISO(reply.isoDate)}</span>
+            <button onClick={menu.openAt} className="w-5 h-5 rounded-md flex items-center justify-center transition-all hover:bg-black/5 active:scale-90 opacity-0 group-hover:opacity-50 hover:!opacity-80 flex-shrink-0" style={{ color: 'var(--text-3)' }}>
+              <i className="fas fa-ellipsis-vertical text-[8px]"></i>
+            </button>
           </div>
           {(reply.audioTimestamp ?? reply.timestamp) != null && (
             <button onClick={() => { if (onPlayPodcast) onPlayPodcast(podcast, epIdx, Number(reply.audioTimestamp ?? reply.timestamp), true); }}
@@ -1112,9 +1447,20 @@ const PodcastReplyItem: React.FC<{
             </div>
           ) : (
             <>
-              <p className="text-[10px] leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-2)' }}>{reply.text}</p>
+              {(reply as any).quotedText && <QuoteBlock text={(reply as any).quotedText} author={reply.author} />}
+              <div className="relative">
+                <p ref={textRef} className="text-[10px] leading-relaxed whitespace-pre-wrap select-text" style={{ color: 'var(--text-2)' }}>{reply.text}</p>
+                {showQuoteBtn && !isEditing && (
+                  <div className="absolute z-50 rounded-xl shadow-xl py-1 animate-fadeIn" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', top: '-34px', left: '50%', transform: 'translateX(-50%)' }}>
+                    <button onClick={handleQuoteReply} className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-bold transition-colors hover:bg-white/5 whitespace-nowrap" style={{ color: 'var(--primary)' }}>
+                      <i className="fas fa-quote-right text-[9px]"></i>
+                      نقل‌قول و پاسخ
+                    </button>
+                  </div>
+                )}
+              </div>
               <div className="flex items-center gap-2 mt-1">
-                <button onClick={() => { if (onRequestReply) { const audioTs = (reply.audioTimestamp ?? reply.timestamp) != null ? Number(reply.audioTimestamp ?? reply.timestamp) : undefined; onRequestReply(rid, reply.author, reply.text, String((podcast as any)._id || podcast.id), epIdx, audioTs); } else { setIsReplying(true); } }}
+                <button onClick={() => { if (onRequestReply) { const audioTs = (reply.audioTimestamp ?? reply.timestamp) != null ? Number(reply.audioTimestamp ?? reply.timestamp) : undefined; onRequestReply(rid, reply.author, reply.text, String((podcast as any)._id || podcast.id), epIdx, audioTs, replyQuoteText || undefined); } else { setIsReplying(true); } }}
                   className="text-[8px] font-bold transition-colors" style={{ color: isReplying ? 'var(--primary)' : 'var(--text-3)' }}>
                   <i className="fas fa-reply text-[6px] ml-1"></i>پاسخ
                 </button>
@@ -1134,6 +1480,7 @@ const PodcastReplyItem: React.FC<{
           )}
           {isReplying && (
             <div className="mt-2 animate-fadeIn">
+              {replyQuoteText && <QuoteChip text={replyQuoteText} onCancel={() => setReplyQuoteText('')} />}
               <div className="flex gap-1.5">
                 <input autoFocus value={replyText} onChange={(e) => setReplyText(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendReply(); } }}
@@ -1146,7 +1493,7 @@ const PodcastReplyItem: React.FC<{
                   style={{ background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))' }}>
                   <i className="fas fa-paper-plane text-[7px]"></i>
                 </button>
-                <button onClick={() => { setIsReplying(false); setReplyText(''); }}
+                <button onClick={() => { setIsReplying(false); setReplyText(''); setReplyQuoteText(''); }}
                   className="w-7 h-7 rounded-lg flex items-center justify-center transition-all active:scale-95 flex-shrink-0"
                   style={{ background: 'var(--surface-3)', color: 'var(--text-3)', border: '1px solid var(--border)' }}>
                   <i className="fas fa-times text-[7px]"></i>
@@ -1181,6 +1528,18 @@ const PodcastReplyItem: React.FC<{
           </div>
         </div>
       )}
+    {menu.pos && (
+      <ActionMenu pos={menu.pos} onClose={menu.close} items={[
+        { icon: 'fas fa-reply', label: 'پاسخ', onClick: () => { if (onRequestReply) { const audioTs = (reply.audioTimestamp ?? reply.timestamp) != null ? Number(reply.audioTimestamp ?? reply.timestamp) : undefined; onRequestReply(rid, reply.author, reply.text, String((podcast as any)._id || podcast.id), epIdx, audioTs, undefined); } else { setIsReplying(true); } } },
+        { icon: 'fas fa-quote-right', label: 'نقل‌قول', onClick: () => { if (onRequestReply) { const audioTs = (reply.audioTimestamp ?? reply.timestamp) != null ? Number(reply.audioTimestamp ?? reply.timestamp) : undefined; onRequestReply(rid, reply.author, selectedQuoteText || reply.text, String((podcast as any)._id || podcast.id), epIdx, audioTs, selectedQuoteText || reply.text); } else { setIsReplying(true); setReplyQuoteText(selectedQuoteText || reply.text); } } },
+        { divider: true },
+        { icon: isLiked ? 'fas fa-heart' : 'far fa-heart', label: 'لایک', color: isLiked ? '#ef4444' : undefined, onClick: () => onLikeComment?.(rid) },
+        ...((isOwner || isAdmin) ? [
+          { icon: 'fas fa-pen', label: 'ویرایش', onClick: () => { setIsEditing(true); setEditText(reply.text); } },
+          { icon: 'fas fa-trash-alt', label: 'حذف', color: '#ef4444', onClick: () => onDeleteComment?.(rid) },
+        ] : []),
+      ]} />
+    )}
     </div>
   );
 };
@@ -1190,7 +1549,7 @@ const PodcastCommentItem: React.FC<{
   podcast: Podcast;
   allComments: Comment[];
   onPlayPodcast: (podcast: Podcast, episodeIndex: number, seekTime?: number, expandPlayer?: boolean) => void;
-  onAddComment: (text: string, video: any, videoTimestamp?: number, parentId?: string, audioTimestamp?: number) => void;
+  onAddComment: (text: string, video: any, videoTimestamp?: number, parentId?: string, audioTimestamp?: number, quotedText?: string) => void;
   onDeleteComment?: (commentId: string) => void;
   onLikeComment?: (commentId: string) => void;
   onUpdateComment?: (commentId: string, newText: string) => void;
@@ -1203,7 +1562,7 @@ const PodcastCommentItem: React.FC<{
   isGloballyPlaying?: boolean;
   onGlobalTogglePlay?: () => void;
   onShowDiscussion?: () => void;
-  onRequestReply?: (commentId: string, author: string, text: string, podcastId: string, episodeIndex: number, audioTimestamp?: number) => void;
+  onRequestReply?: (commentId: string, author: string, text: string, podcastId: string, episodeIndex: number, audioTimestamp?: number, quotedText?: string) => void;
   onOpenProfile?: (userId?: string, name?: string, avatar?: string) => void;
 }> = ({ comment, podcast, allComments, onPlayPodcast, onAddComment, onDeleteComment, onLikeComment, onUpdateComment, currentUserName, userRole, depth = 0, likedComments = new Set(), currentPlayingPodcastId, currentPlayingEpIdx, isGloballyPlaying, onGlobalTogglePlay, onShowDiscussion, onRequestReply, onOpenProfile }) => {
   const [showReplies, setShowReplies] = useState(false);
@@ -1213,6 +1572,10 @@ const PodcastCommentItem: React.FC<{
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(comment.text);
   const [commentText, setCommentText] = useState(comment.text);
+  const textRef = useRef<HTMLDivElement>(null);
+  const [showQuoteBtn, setShowQuoteBtn] = useState(false);
+  const [selectedQuoteText, setSelectedQuoteText] = useState('');
+  const menu = useActionMenu();
   const epIdx = comment.episodeIndex != null ? comment.episodeIndex : 0;
   const episode = podcast.episodes?.[epIdx];
   const hasAudioTs = (comment.audioTimestamp ?? comment.timestamp) != null;
@@ -1251,6 +1614,36 @@ const PodcastCommentItem: React.FC<{
     setReplyTo('');
     setIsReplying(false);
     setShowReplies(true);
+  };
+
+  useEffect(() => {
+    const handler = () => {
+      setTimeout(() => {
+        const sel = window.getSelection();
+        if (sel && sel.toString().trim().length > 0 && textRef.current?.contains(sel.anchorNode)) {
+          setSelectedQuoteText(sel.toString().trim());
+          setShowQuoteBtn(true);
+        } else {
+          setShowQuoteBtn(false);
+          setSelectedQuoteText('');
+        }
+      }, 10);
+    };
+    document.addEventListener('selectionchange', handler);
+    return () => document.removeEventListener('selectionchange', handler);
+  }, []);
+
+  const handleQuoteReply = () => {
+    if (!selectedQuoteText) return;
+    if (onRequestReply) {
+      const audioTs = hasAudioTs ? Number(comment.audioTimestamp ?? comment.timestamp) : undefined;
+      onRequestReply(cid, comment.author, selectedQuoteText, String((podcast as any)._id || podcast.id), epIdx, audioTs, selectedQuoteText);
+    } else {
+      handleReply(cid);
+    }
+    setShowQuoteBtn(false);
+    setSelectedQuoteText('');
+    window.getSelection()?.removeAllRanges();
   };
 
   if (depth === 0) {
@@ -1341,6 +1734,9 @@ const PodcastCommentItem: React.FC<{
               </div>
               <span className="text-[11px] font-bold cursor-pointer hover:opacity-70 transition-opacity" style={{ color: 'var(--primary)' }} onClick={() => onOpenProfile?.(comment.userId, comment.author, comment.authorAvatarUrl)}>{comment.author}</span>
               <span className="text-[8px]" style={{ color: 'var(--text-3)' }}>{formatTimeFromISO(comment.isoDate)}</span>
+              <button onClick={menu.openAt} className="w-5 h-5 rounded-md flex items-center justify-center transition-all hover:bg-black/5 active:scale-90 opacity-30 hover:!opacity-70 flex-shrink-0" style={{ color: 'var(--text-3)' }}>
+                <i className="fas fa-ellipsis-vertical text-[8px]"></i>
+              </button>
             </div>
             {isEditing ? (
               <div>
@@ -1353,7 +1749,20 @@ const PodcastCommentItem: React.FC<{
                 </div>
               </div>
             ) : (
-              <p className="text-[11px] leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-2)' }}>{commentText}</p>
+              <>
+                {(comment as any).quotedText && <QuoteBlock text={(comment as any).quotedText} author={comment.author} />}
+                <div className="relative">
+                  <p ref={textRef} className="text-[11px] leading-relaxed whitespace-pre-wrap select-text" style={{ color: 'var(--text-2)' }}>{commentText}</p>
+                  {showQuoteBtn && !isEditing && (
+                    <div className="absolute z-50 rounded-xl shadow-xl py-1 animate-fadeIn" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', top: '-34px', left: '50%', transform: 'translateX(-50%)' }}>
+                      <button onClick={handleQuoteReply} className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-bold transition-colors hover:bg-white/5 whitespace-nowrap" style={{ color: 'var(--primary)' }}>
+                        <i className="fas fa-quote-right text-[9px]"></i>
+                        نقل‌قول و پاسخ
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
             )}
             <div className="flex items-center gap-3 mt-2">
               <button onClick={() => { if (onRequestReply) { const audioTs = hasAudioTs ? Number(comment.audioTimestamp ?? comment.timestamp) : undefined; onRequestReply(cid, comment.author, comment.text, String((podcast as any)._id || podcast.id), epIdx, audioTs); } else { handleReply(cid); } }} className="text-[9px] font-bold transition-colors flex items-center gap-1" style={{ color: 'var(--text-3)' }}>
@@ -1403,6 +1812,18 @@ const PodcastCommentItem: React.FC<{
             </div>
           )}
         </div>
+        {menu.pos && (
+          <ActionMenu pos={menu.pos} onClose={menu.close} items={[
+            { icon: 'fas fa-reply', label: 'پاسخ', onClick: () => handleReply(cid) },
+            { icon: 'fas fa-quote-right', label: 'نقل‌قول', onClick: () => { if (onRequestReply) { const audioTs = hasAudioTs ? Number(comment.audioTimestamp ?? comment.timestamp) : undefined; onRequestReply(cid, comment.author, selectedQuoteText || comment.text, String((podcast as any)._id || podcast.id), epIdx, audioTs, selectedQuoteText || comment.text); } else { handleReply(cid); } } },
+            { divider: true },
+            { icon: isLiked ? 'fas fa-heart' : 'far fa-heart', label: 'لایک', color: isLiked ? '#ef4444' : undefined, onClick: () => onLikeComment?.(cid) },
+            ...((isOwner || isAdmin) ? [
+              { icon: 'fas fa-pen', label: 'ویرایش', onClick: () => { setIsEditing(true); setEditText(comment.text); } },
+              { icon: 'fas fa-trash-alt', label: 'حذف', color: '#ef4444', onClick: () => onDeleteComment?.(cid) },
+            ] : []),
+          ]} />
+        )}
       </div>
     );
   }
@@ -1423,8 +1844,8 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
-  const [replyTarget, setReplyTarget] = useState<{ postId: number; author: string; text: string; commentId?: string } | null>(null);
-  const [podcastReplyTarget, setPodcastReplyTarget] = useState<{ commentId: string; author: string; text: string; podcastId: string; episodeIndex: number; audioTimestamp?: number } | null>(null);
+  const [replyTarget, setReplyTarget] = useState<{ postId: number; author: string; text: string; commentId?: string; quotedText?: string } | null>(null);
+  const [podcastReplyTarget, setPodcastReplyTarget] = useState<{ commentId: string; author: string; text: string; podcastId: string; episodeIndex: number; audioTimestamp?: number; quotedText?: string } | null>(null);
   const [markAudioTimestamp, setMarkAudioTimestamp] = useState(false);
   const [chatEnabled, setChatEnabled] = useState(true);
   const [chatMessage, setChatMessage] = useState('');
@@ -1478,7 +1899,7 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
     if (podcastReplyTarget) {
       const text = inputText.trim();
       if (text) {
-        onAddComment?.(text, { id: podcastReplyTarget.podcastId, episodes: [] }, undefined, podcastReplyTarget.commentId, podcastReplyTarget.audioTimestamp);
+        onAddComment?.(text, { id: podcastReplyTarget.podcastId, episodes: [] }, undefined, podcastReplyTarget.commentId, podcastReplyTarget.audioTimestamp, podcastReplyTarget.quotedText || podcastReplyTarget.text);
         setInputText('');
         setInputMedia(null);
         setPodcastReplyTarget(null);
@@ -1492,7 +1913,7 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
         const replyPost = posts.find((p: Post) => String(p.id) === String(replyTarget.postId));
         const hasAudio = replyPost?.media?.some(m => m.type === 'audio');
         const audioTs = markAudioTimestamp && hasAudio ? Math.floor((document.querySelector('audio') as HTMLAudioElement)?.currentTime || 0) : undefined;
-        const updated = await addPostComment(String(replyTarget.postId), text, replyTarget.commentId ? String(replyTarget.commentId) : undefined, media.length > 0 ? media : undefined, undefined, audioTs);
+        const updated = await addPostComment(String(replyTarget.postId), text, replyTarget.commentId ? String(replyTarget.commentId) : undefined, media.length > 0 ? media : undefined, replyTarget.quotedText || replyTarget.text, audioTs);
         if (updated && (updated as any).warnings) {
           setToastMessage(`⚠️ اخطار ${(updated as any).warnings} از ۳ — پیام شما حذف شد`);
           setToastVisible(true);
@@ -1844,9 +2265,9 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
                       const virtualPost: any = { id: Date.now(), author: c.author, authorAvatarUrl: c.authorAvatarUrl || '', date: c.date || '', isoDate: c.isoDate || '', text: c.text, comments: c.replies || [], likes: 0, podcastId: String(item.podcast?.id || (item.podcast as any)?._id || ''), episodeIndex: c.episodeIndex != null ? c.episodeIndex : 0, parentCommentId: c._id || c.id };
                       (onShowComments as any)?.(virtualPost, item.podcast);
                     }}
-                    onRequestReply={(commentId, author, text, podcastId, episodeIndex, audioTimestamp) => {
+                    onRequestReply={(commentId, author, text, podcastId, episodeIndex, audioTimestamp, quotedText) => {
                       setReplyTarget(null);
-                      setPodcastReplyTarget({ commentId, author, text, podcastId, episodeIndex, audioTimestamp });
+                      setPodcastReplyTarget({ commentId, author, text, podcastId, episodeIndex, audioTimestamp, quotedText });
                       setTimeout(() => inputRef.current?.focus(), 50);
                     }}
                   />
@@ -1915,11 +2336,11 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <i className="fas fa-headphones text-[7px]" style={{ color: 'var(--primary)' }}></i>
+                  <i className={`fas ${podcastReplyTarget.quotedText ? 'fa-quote-right' : 'fa-headphones'} text-[7px]`} style={{ color: 'var(--primary)' }}></i>
                   <span className="text-[10px] font-black" style={{ color: 'var(--primary)' }}>پاسخ به {podcastReplyTarget.author}</span>
                 </div>
                 <div className="text-[9px] font-medium leading-relaxed line-clamp-2 mt-0.5" style={{ color: 'var(--text-3)' }}>
-                  <span className="opacity-70">{podcastReplyTarget.text}</span>
+                  <span className="opacity-70">{podcastReplyTarget.quotedText || podcastReplyTarget.text}</span>
                 </div>
               </div>
               <button onClick={() => setPodcastReplyTarget(null)}

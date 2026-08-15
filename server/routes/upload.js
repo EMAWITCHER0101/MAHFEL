@@ -23,11 +23,12 @@ const fileFilter = (req, file, cb) => {
   const allowedMimes = [
     'image/jpeg', 'image/png', 'image/gif', 'image/webp',
     'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/aac',
+    'application/pdf',
   ];
   if (allowedMimes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error('فقط تصاویر (jpg, png, gif, webp) و صوت (mp3, wav, ogg, aac) مجاز است'));
+    cb(new Error('فقط تصاویر (jpg, png, gif, webp)، صوت (mp3, wav, ogg, aac) و PDF مجاز است'));
   }
 };
 

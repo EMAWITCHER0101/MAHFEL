@@ -8,6 +8,7 @@ import type { CustomVideoPlayerHandle } from '../components/CustomVideoPlayer';
 import { startVideoBackground, stopVideoBackground, isVideoBackgroundActive, registerVideoSource, updateBackgroundMeta, updateBackgroundState } from '../services/backgroundPlayback';
 import type { VideoBgSource } from '../services/backgroundPlayback';
 import { getVideoStream } from '../services/api';
+import { useActionMenu, ActionMenu, QuoteBlock, QuoteChip, QuoteBar, useSelectionQuote } from '../components/QuoteActions';
 
 interface VideoPlayerPageProps {
   video: Video;
@@ -19,7 +20,7 @@ interface VideoPlayerPageProps {
   onBack: () => void;
   onCloseMini?: () => void;
   onVideoSelect: (video: Video) => void;
-  onAddComment: (text: string, video: Video, videoTimestamp?: number, parentId?: string, audioTimestamp?: number) => void;
+  onAddComment: (text: string, video: Video, videoTimestamp?: number, parentId?: string, audioTimestamp?: number, quotedText?: string) => void;
   onAuthorSelect: (author: Author) => void;
   onPlayVideo: (video: Video) => void;
   userLibrary: string[];
@@ -74,6 +75,10 @@ const VideoPlayerPage: React.FC<VideoPlayerPageProps> = (props) => {
     try { return new Set(JSON.parse(localStorage.getItem('soha_liked_comments') || '[]')); } catch { return new Set(); }
   });
   const [seekLoading, setSeekLoading] = useState<{ time: number } | null>(null);
+  const [replyQuoteText, setReplyQuoteText] = useState('');
+  const [menuCid, setMenuCid] = useState<string | null>(null);
+  const menu = useActionMenu();
+  const [selQuote, setSelQuote] = useState<{ cid: string; text: string; rect: DOMRect } | null>(null);
 
   const commentInputRef = useRef<HTMLTextAreaElement>(null);
   const videoPlayerRef = useRef<CustomVideoPlayerHandle>(null);
@@ -175,7 +180,7 @@ const VideoPlayerPage: React.FC<VideoPlayerPageProps> = (props) => {
   const handleSubmitComment = () => {
     if (!commentText.trim()) return;
     if (replyTo) {
-      onAddComment(commentText, video, undefined, replyTo);
+      onAddComment(commentText, video, undefined, replyTo, undefined, replyQuoteText || undefined);
     } else if (markTimestamp) {
       onAddComment(commentText, video, currentTime);
     } else {
@@ -184,12 +189,28 @@ const VideoPlayerPage: React.FC<VideoPlayerPageProps> = (props) => {
     setCommentText('');
     setReplyTo(null);
     setReplyToAuthor('');
+    setReplyQuoteText('');
     showToast('نظر شما ثبت شد');
   };
 
   const handleReply = (commentId: string, authorName: string) => {
     setReplyTo(commentId);
     setReplyToAuthor(authorName);
+    setReplyQuoteText('');
+    commentInputRef.current?.focus();
+  };
+
+  useSelectionQuote((cid, text, rect) => {
+    setSelQuote({ cid, text, rect });
+  });
+
+  const handleQuoteReplyPick = () => {
+    if (!selQuote) return;
+    const c = videoComments.find(x => String(x.id || (x as any)._id) === selQuote.cid);
+    if (c) handleReply(selQuote.cid, c.author);
+    setReplyQuoteText(selQuote.text);
+    setSelQuote(null);
+    window.getSelection()?.removeAllRanges();
     commentInputRef.current?.focus();
   };
 
@@ -242,7 +263,14 @@ const VideoPlayerPage: React.FC<VideoPlayerPageProps> = (props) => {
           <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
             <span className="text-[13px] font-extrabold" style={{ color: 'var(--primary)' }}>{c.author}</span>
             <span className="text-[11px]" style={{ color: 'var(--text-3)' }}>{c.date}</span>
+            <button onClick={(e) => { e.stopPropagation(); setMenuCid(cid); menu.openAt(e); }}
+              className="w-6 h-6 rounded-md flex items-center justify-center transition-all hover:bg-black/5 active:scale-90 opacity-30 hover:!opacity-70 flex-shrink-0" style={{ color: 'var(--text-3)' }}>
+              <i className="fas fa-ellipsis-vertical text-[9px]"></i>
+            </button>
           </div>
+          {(c as any).quotedText && (
+            <div className="mb-1.5"><QuoteBlock text={String((c as any).quotedText)} author={c.author} /></div>
+          )}
           {editingCommentId === cid ? (
             <div>
               <input value={editCommentText} onChange={(e) => setEditCommentText(e.target.value)}
@@ -257,7 +285,9 @@ const VideoPlayerPage: React.FC<VideoPlayerPageProps> = (props) => {
               </div>
             </div>
           ) : (
-          <div className="text-[13px] leading-[2] whitespace-pre-wrap" style={{ color: 'var(--text-2)' }}>
+          <>
+          <QuoteBar show={!!(selQuote && selQuote.cid === cid)} onClick={handleQuoteReplyPick} />
+          <div className="text-[13px] leading-[2] whitespace-pre-wrap" style={{ color: 'var(--text-2)' }} data-comment-text data-cid={cid}>
             {c.text.includes('@') && c.text.match(/@(\S+)/) ? (
               c.text.split(/(@\S+)/).map((part, i) =>
                 part.startsWith('@') ? (
@@ -271,6 +301,7 @@ const VideoPlayerPage: React.FC<VideoPlayerPageProps> = (props) => {
               </>
             ) : c.text}
           </div>
+          </>
           )}
           <div className="flex items-center gap-4 mt-2.5">
             <button onClick={() => handleReply(cid, c.author)}
@@ -315,6 +346,7 @@ const VideoPlayerPage: React.FC<VideoPlayerPageProps> = (props) => {
       )}
       {replyTo === cid && (
         <div className="mt-3 animate-fadeIn">
+          {replyQuoteText && <QuoteChip text={replyQuoteText} onCancel={() => setReplyQuoteText('')} />}
           <div className="flex gap-2">
             <textarea
               autoFocus
@@ -340,6 +372,24 @@ const VideoPlayerPage: React.FC<VideoPlayerPageProps> = (props) => {
             <i className="fas fa-times ml-1" /> لغو پاسخ
           </button>
         </div>
+      )}
+      {menu.pos && menuCid === cid && (
+        <ActionMenu pos={menu.pos} onClose={menu.close} items={[
+          { icon: 'fas fa-reply', label: 'پاسخ', onClick: () => handleReply(cid, c.author) },
+          { icon: 'fas fa-quote-right', label: 'نقل‌قول', onClick: () => { handleReply(cid, c.author); setReplyQuoteText(selQuote && selQuote.cid === cid ? selQuote.text : c.text); } },
+          { divider: true },
+          { icon: isLiked ? 'fas fa-heart' : 'far fa-heart', label: isLiked ? 'برداشتن لایک' : 'لایک', color: isLiked ? '#ef4444' : undefined, onClick: () => {
+              onLikeComment?.(cid);
+              const next = new Set(likedComments);
+              if (next.has(cid)) next.delete(cid); else next.add(cid);
+              setLikedComments(next);
+              localStorage.setItem('soha_liked_comments', JSON.stringify([...next]));
+            } },
+          ...(currentUserName === c.author ? [
+            { icon: 'fas fa-pen', label: 'ویرایش', onClick: () => { setEditingCommentId(cid); setEditCommentText(c.text); } },
+            ...(onDeleteComment ? [{ icon: 'fas fa-trash-alt', label: 'حذف', color: '#ef4444', onClick: () => onDeleteComment(cid) }] : []),
+          ] : []),
+        ]} />
       )}
     </div>
     );

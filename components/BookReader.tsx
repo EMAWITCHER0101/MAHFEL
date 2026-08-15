@@ -10,10 +10,11 @@ interface BookReaderProps {
 }
 
 interface PageContent {
-  type: 'cover' | 'title' | 'toc' | 'content' | 'end';
+  type: 'cover' | 'title' | 'toc' | 'content' | 'pdf' | 'end';
   title?: string;
   text?: string;
   subtitle?: string;
+  pageNum?: number;
 }
 
 const BookReader: React.FC<BookReaderProps> = ({ book, onClose, startPage }) => {
@@ -105,13 +106,29 @@ const BookReader: React.FC<BookReaderProps> = ({ book, onClose, startPage }) => 
       }
     }
 
-    if (book.contentHtml) {
+    if (book.pdfPages && book.pdfPages.length > 0) {
+      for (let i = 1; i <= book.pdfPages.length; i++) {
+        pages.push({ type: 'pdf', pageNum: i });
+      }
+    } else if (book.pdfUrl) {
+      pages.push({ type: 'content', text: 'صفحات کتاب در حال آماده‌سازی است. لطفاً کمی بعد دوباره تلاش کنید.' });
+    } else if (book.contentHtml) {
       const tmp = document.createElement('div');
       tmp.innerHTML = book.contentHtml;
-      const text = tmp.textContent || tmp.innerText || '';
-      const chunkSize = 220;
-      for (let i = 0; i < text.length; i += chunkSize) {
-        pages.push({ type: 'content', text: text.slice(i, i + chunkSize) });
+      // هر پاراگراف واقعی کتاب یک صفحه میشود (ورق زدن منطبق بر صفحات PDF)
+      const paragraphs: string[] = [];
+      Array.from(tmp.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6')).forEach((el: any) => {
+        const t = (el.textContent || '').trim();
+        if (t) paragraphs.push(t);
+      });
+      if (paragraphs.length > 1) {
+        paragraphs.forEach(t => pages.push({ type: 'content', text: t }));
+      } else {
+        const text = tmp.textContent || tmp.innerText || '';
+        const chunkSize = 220;
+        for (let i = 0; i < text.length; i += chunkSize) {
+          pages.push({ type: 'content', text: text.slice(i, i + chunkSize) });
+        }
       }
     }
 
@@ -125,6 +142,12 @@ const BookReader: React.FC<BookReaderProps> = ({ book, onClose, startPage }) => 
 
   const pages = generatePages();
   const totalPages = pages.length;
+
+  useEffect(() => {
+    if (currentPage >= totalPages) {
+      setCurrentPage(Math.max(1, totalPages - 2));
+    }
+  }, [totalPages]);
 
   useEffect(() => {
     if (totalPages <= 0) return;
@@ -171,7 +194,7 @@ const BookReader: React.FC<BookReaderProps> = ({ book, onClose, startPage }) => 
     return () => window.removeEventListener('keydown', handleKeyNav);
   }, [handleKeyNav]);
 
-  const page = pages[currentPage];
+  const page = pages[currentPage] || pages[0];
 
   const bgColors = [
     { name: 'تیره', value: '#1a1a1a', text: '#e5e5e5', accent: '#a3a3a3' },
@@ -249,6 +272,19 @@ const BookReader: React.FC<BookReaderProps> = ({ book, onClose, startPage }) => 
             <div className="absolute bottom-4 left-0 right-0 text-center">
               <span className="text-[9px] font-bold" style={{ color: accentColor, opacity: 0.5 }}>{toPersianDigits(String(currentPage + 1))}</span>
             </div>
+          </div>
+        );
+      case 'pdf':
+        return (
+          <div className="w-full h-full flex items-center justify-center overflow-hidden" style={{ background: '#fff' }}>
+            <img
+              src={book.pdfPages?.[(p.pageNum || 1) - 1]}
+              alt={`صفحه ${p.pageNum}`}
+              draggable={false}
+              className="w-full h-full object-contain select-none"
+              loading={p.pageNum === 1 ? 'eager' : 'lazy'}
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+            />
           </div>
         );
       case 'end':

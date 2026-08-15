@@ -52,7 +52,7 @@ const SupportPage: React.FC<SupportPageProps> = ({ user, onToggleSidebar, theme 
       {/* Header */}
       <header className="sticky top-0 z-30 px-4 py-3 border-b" style={{ background: theme === 'dark' ? 'var(--surface-2)' : 'var(--surface)', borderColor: 'var(--border)' }}>
         <div className="flex items-center gap-3">
-          <button onClick={onToggleSidebar} className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-90 transition-all" style={{ background: 'var(--surface-3)', color: 'var(--text-2)' }}>
+          <button onClick={onToggleSidebar} className="hidden lg:flex w-9 h-9 rounded-xl items-center justify-center active:scale-90 transition-all" style={{ background: 'var(--surface-3)', color: 'var(--text-2)' }}>
             <i className="fas fa-bars text-sm"></i>
           </button>
           <div className="flex-1 min-w-0">

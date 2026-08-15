@@ -370,6 +370,9 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
     const [notifBody, setNotifBody] = useState('');
     const [notifTarget, setNotifTarget] = useState('all');
     const [notifSending, setNotifSending] = useState(false);
+    const [notifItemType, setNotifItemType] = useState('');
+    const [notifItemId, setNotifItemId] = useState('');
+    const [notifLink, setNotifLink] = useState('');
 
     const [supportMessages, setSupportMessages] = useState<any[]>([]);
     const [supportTotal, setSupportTotal] = useState(0);
@@ -436,6 +439,43 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
         const list = await getNotifications();
         if (list) setNotifList(list);
     }, []);
+
+    // انتخاب مورد (ویدیو/صوت/کتاب/یادداشت/پیام محفل) → پر کردن عنوان، متن و لینک نوتیفیکیشن
+    const applyNotifItem = useCallback((type: string, id: string) => {
+        const find = (list: any[], key: string) => list.find((x: any) => String(x._id || x.id) === key);
+        if (type === 'video') {
+            const v = find(localData.videos, id);
+            if (!v) return;
+            setNotifTitle(`🎬 ویدیو جدید: ${v.title}`);
+            setNotifBody((v.description || 'ویدیوی جدید منتشر شد — تماشا کنید').slice(0, 140));
+            setNotifLink(`/mahfel/video/${v._id || v.id}`);
+        } else if (type === 'podcast') {
+            const p = find(localData.podcasts, id);
+            if (!p) return;
+            const ep = p.episodes?.[0];
+            setNotifTitle(`🎧 صوت جدید: ${ep?.title || p.title}`);
+            setNotifBody(`اپیزود تازه از «${p.title}» منتشر شد — بشنوید`);
+            setNotifLink(`/mahfel/podcast/${p._id || p.id}`);
+        } else if (type === 'book') {
+            const b = find(localData.publishedBooks, id);
+            if (!b) return;
+            setNotifTitle(`📚 کتاب جدید: ${b.title}`);
+            setNotifBody(`کتاب «${b.title}» منتشر شد — مشاهده کنید`);
+            setNotifLink(`/mahfel/book/${b._id || b.id}`);
+        } else if (type === 'note') {
+            const n = find(localData.publishedBooks, id);
+            if (!n) return;
+            setNotifTitle(`📝 یادداشت جدید: ${n.title}`);
+            setNotifBody((n.description || `یادداشت «${n.title}» منتشر شد — بخوانید`).slice(0, 140));
+            setNotifLink(`/mahfel/book/${n._id || n.id}`);
+        } else if (type === 'post') {
+            const p = find(localData.posts, id);
+            if (!p) return;
+            setNotifTitle(`💬 پیام جدید در محفل: ${p.author || 'کاربر'}`);
+            setNotifBody((p.text || '').slice(0, 140));
+            setNotifLink(`/mahfel/post/${p._id || p.id}`);
+        }
+    }, [localData]);
 
     const loadSupportMessages = useCallback(async (page = supportPage, readFilter = supportReadFilter) => {
         const data = await getSupportMessages(page, 20, readFilter === '' ? undefined : readFilter === 'true');
@@ -661,7 +701,8 @@ if (activeTab === 'versions') loadVersions();
                 <StatCard icon="fa-comment-dots" label="نظرات" value={stats?.comments || 0} color="#0d9488" />
                 <StatCard icon="fa-book" label="کتاب‌ها" value={stats?.books || 0} color="#8b5cf6" />
                 <StatCard icon="fa-user-tie" label="اساتید" value={stats?.authors || 0} color="#ec4899" />
-                <StatCard icon="fa-shopping-cart" label="نشر" value={stats?.publishedBooks || 0} color="#2563eb" />
+                <StatCard icon="fa-book" label="کتاب‌های نشر" value={stats?.publishedBooks || 0} color="#2563eb" />
+                <StatCard icon="fa-sticky-note" label="یادداشت‌ها" value={stats?.publishedNotes || 0} color="#64748b" />
                 <StatCard icon="fa-eye" label="کل پخش‌ها" value={stats?.totalPlays || 0} color="#7c3aed" />
                 <StatCard icon="fa-headphones" label="بازدید صوتی (پلی‌لیست)" value={stats?.podcastViews || 0} color="#1ab394" />
                 <StatCard icon="fa-play-circle" label="بازدید ویدیو" value={stats?.videoViews || 0} color="#2e86c1" />
@@ -1677,7 +1718,14 @@ const renderPostsPanel = () => (
                         <h3 className="text-xs font-black text-gray-700 flex items-center gap-2"><i className="fas fa-list-ul text-pink-500"></i>{p.isNew ? 'ایجاد پلی‌لیست جدید' : 'ویرایش پلی‌لیست'} <span className="text-[9px] text-gray-400 font-bold">({toPersianDigits(p.videoIds?.length || 0)} ویدیو)</span></h3>
                         <FormField label="نام پلی‌لیست"><TextInput value={p.name || ''} placeholder="مثلا: ضیافتح" onChange={(e: any) => setEdit('name', e.target.value)} /></FormField>
                         <FormField label="توضیحات"><TextArea value={p.description || ''} onChange={(e: any) => setEdit('description', e.target.value)} rows={2} /></FormField>
-                        <FormField label="کاور (اختیاری — در صورت خالی بودن از اولین ویدیو استفاده می‌شود)"><div className="flex gap-2"><TextInput value={p.cover || ''} onChange={(e: any) => setEdit('cover', e.target.value)} /><UploadButton onUpload={(url: string) => setEdit('cover', url)} /></div></FormField>
+                        <FormField label="کاور (اختیاری — در صورت خالی بودن کاور پیش‌فرض نمایش داده می‌شود)"><div className="flex gap-2"><TextInput value={p.cover || ''} onChange={(e: any) => setEdit('cover', e.target.value)} /><UploadButton onUpload={(url: string) => setEdit('cover', url)} /></div>
+                            <div className="mt-2 flex items-center gap-2">
+                                <div className="relative w-20 h-12 rounded-xl overflow-hidden flex-shrink-0 shadow-sm border border-gray-100" style={{ background: 'linear-gradient(135deg, #ec4899, #8b5cf6)' }}>
+                                    {p.cover ? <img src={p.cover} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><i className="fas fa-list-ul text-white text-xs"></i></div>}
+                                </div>
+                                <span className="text-[9px] font-bold text-gray-400">پیش‌نمایش کاور — با آپلود عکس جدید بلافاصله به‌روز می‌شود</span>
+                            </div>
+                        </FormField>
                         <div className="grid grid-cols-2 gap-3">
                             <FormField label="ترتیب (order)"><TextInput type="number" value={p.order ?? 0} onChange={(e: any) => setEdit('order', Number(e.target.value))} /></FormField>
                             <FormField label="وضعیت">
@@ -1719,7 +1767,9 @@ const renderPostsPanel = () => (
                 {adminPlaylists.map((pl: any, i: number) => (
                     <div key={pl.id} className="bg-white p-2 rounded-2xl border shadow-sm flex items-center justify-between group hover:border-pink-300 transition-all">
                         <div className="flex items-center gap-3">
-                            <img src={pl.cover || 'https://via.placeholder.com/120x68?text=Playlist'} className="w-16 h-12 rounded-xl object-cover shadow-sm" />
+                            <div className="relative w-16 h-12 rounded-xl overflow-hidden flex-shrink-0 shadow-sm" style={{ background: 'linear-gradient(135deg, #ec4899, #8b5cf6)' }}>
+                                {pl.cover ? <img src={pl.cover} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><i className="fas fa-list-ul text-white text-xs"></i></div>}
+                            </div>
                             <div>
                                 <p className="text-[10px] font-black text-gray-700 truncate max-w-[160px]">{pl.name || 'بی‌نام'}</p>
                                 <div className="flex items-center gap-2 mt-1">
@@ -2234,16 +2284,53 @@ const renderPostsPanel = () => (
                             <option value="authors">نویسندگان</option>
                         </select>
                     </FormField>
+                    <FormField label="انتخاب مورد (اختیاری — با کلیک روی نوتیفیکیشن به آن هدایت می‌شود)">
+                        <div className="flex flex-col gap-2">
+                            <select value={notifItemType} onChange={(e) => { setNotifItemType(e.target.value); setNotifItemId(''); setNotifLink(''); }}
+                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-xs text-gray-700 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all shadow-sm">
+                                <option value="">بدون مورد (فقط پیام)</option>
+                                <option value="video">🎬 ویدیو</option>
+                                <option value="podcast">🎧 پلی‌لیست صوت</option>
+                                <option value="book">📚 کتاب</option>
+                                <option value="note">📝 یادداشت</option>
+                                <option value="post">💬 پیام محفل</option>
+                            </select>
+                            {notifItemType && (
+                                <select value={notifItemId} onChange={(e) => applyNotifItem(notifItemType, e.target.value)}
+                                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-xs text-gray-700 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all shadow-sm">
+                                    <option value="">— انتخاب کنید —</option>
+                                    {(notifItemType === 'book' || notifItemType === 'note'
+                                        ? localData.publishedBooks.filter((b: any) => notifItemType === 'note' ? b.type === 'note' : b.type === 'book')
+                                        : notifItemType === 'video' ? localData.videos
+                                        : notifItemType === 'podcast' ? localData.podcasts
+                                        : localData.posts).map((x: any) => (
+                                            <option key={String(x._id || x.id)} value={String(x._id || x.id)}>
+                                                {String(x.title || x.text || '').slice(0, 60)}
+                                            </option>
+                                    ))}
+                                </select>
+                            )}
+                            {notifLink && (
+                                <div className="flex items-center gap-2 px-3 py-2 bg-primary/5 border border-primary/20 rounded-xl">
+                                    <i className="fas fa-link text-[10px] text-primary"></i>
+                                    <span className="text-[10px] font-bold text-gray-600 truncate" dir="ltr">{notifLink}</span>
+                                </div>
+                            )}
+                        </div>
+                    </FormField>
                     <button
                         disabled={notifSending || !notifTitle.trim() || !notifBody.trim()}
                         onClick={async () => {
                             setNotifSending(true);
-                            const res = await adminSendNotification(notifTitle, notifBody, notifTarget);
+                            const res = await adminSendNotification(notifTitle, notifBody, notifTarget, notifLink || undefined);
                             setNotifSending(false);
                             if (res && (res as any)._id) {
                                 setAdminToast({ type: 'success', message: 'نوتیفیکیشن با موفقیت ارسال شد ✅' });
                                 setNotifTitle('');
                                 setNotifBody('');
+                                setNotifItemType('');
+                                setNotifItemId('');
+                                setNotifLink('');
                                 loadNotifications();
                             } else {
                                 setAdminToast({ type: 'error', message: 'خطا در ارسال نوتیفیکیشن' });

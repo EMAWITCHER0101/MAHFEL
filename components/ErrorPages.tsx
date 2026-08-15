@@ -104,38 +104,71 @@ export function OfflineDetector({ children }: { children: React.ReactNode }) {
   const [checking, setChecking] = useState(false);
 
   const pingServer = async (): Promise<boolean> => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15000);
     try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 5000);
-      const res = await fetch('/logo.jpg', { method: 'HEAD', cache: 'no-store', signal: ctrl.signal });
+      const urls = ['/logo.jpg', '/favicon.svg'];
+      for (const u of urls) {
+        try {
+          const res = await fetch(u, { method: 'HEAD', cache: 'no-store', signal: ctrl.signal });
+          if (res.ok) { clearTimeout(timer); return true; }
+        } catch { /* try next */ }
+      }
       clearTimeout(timer);
-      return res.ok;
+      return false;
     } catch {
+      clearTimeout(timer);
       return false;
     }
   };
 
+  const isActuallyOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
+
   useEffect(() => {
     let mounted = true;
     let interval: ReturnType<typeof setInterval>;
+    let inFlight = false;
 
     const check = async () => {
-      if (checking) return;
+      if (inFlight) return;
       if (typeof document !== 'undefined' && document.hidden) return;
+      if (isActuallyOffline()) { if (mounted) setIsOffline(true); return; }
+      inFlight = true;
       const ok = await pingServer();
+      inFlight = false;
       if (mounted) setIsOffline(!ok);
+    };
+
+    const onOnline = () => {
+      if (mounted) setIsOffline(false);
+      check();
+    };
+    const onOffline = () => {
+      if (mounted) setIsOffline(true);
     };
 
     check();
     interval = setInterval(check, 15000);
-    const onVisible = () => { if (!document.hidden) check(); };
-    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
 
-    return () => { mounted = false; clearInterval(interval); document.removeEventListener('visibilitychange', onVisible); };
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+      document.removeEventListener('visibilitychange', () => { if (!document.hidden) check(); });
+    };
   }, []);
 
   const handleRetry = async () => {
     setChecking(true);
+    if (isActuallyOffline()) {
+      setIsOffline(true);
+      setChecking(false);
+      return;
+    }
     const ok = await pingServer();
     setIsOffline(!ok);
     setChecking(false);

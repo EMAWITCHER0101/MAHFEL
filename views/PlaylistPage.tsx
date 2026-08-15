@@ -4,6 +4,7 @@ import { toPersianDigits, formatPersianDate, formatTime, DEFAULT_COVER } from '.
 import InstantView from '../components/InstantView';
 import MahfelSidebar from '../components/MahfelSidebar';
 import Sidebar from '../components/Sidebar';
+import { useActionMenu, ActionMenu, QuoteBlock, QuoteChip, QuoteBar, useSelectionQuote } from '../components/QuoteActions';
 
 interface PlaylistPageProps {
   podcast: Podcast;
@@ -12,7 +13,7 @@ interface PlaylistPageProps {
   onBack: () => void;
   onPlayEpisode: (podcast: Podcast, episodeIndex: number) => void;
   onAuthorSelect?: (author: Author) => void;
-  onAddComment?: (text: string, podcast: Podcast, episodeIndex?: number, parentId?: string, audioTimestamp?: number) => void;
+  onAddComment?: (text: string, podcast: Podcast, episodeIndex?: number, parentId?: string, audioTimestamp?: number, quotedText?: string) => void;
   onDeleteComment?: (id: string) => void;
   onUpdateComment?: (id: string, text: string) => void;
   onLikeComment?: (id: string) => void;
@@ -75,6 +76,10 @@ const PlaylistPage: React.FC<PlaylistPageProps> = ({
   const [editCommentId, setEditCommentId] = useState<string | null>(null);
   const [editCommentText, setEditCommentText] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [replyQuoteText, setReplyQuoteText] = useState('');
+  const [menuCid, setMenuCid] = useState<string | null>(null);
+  const menu = useActionMenu();
+  const [selQuote, setSelQuote] = useState<{ cid: string; text: string; rect: DOMRect } | null>(null);
   const [markAudioTimestamp, setMarkAudioTimestamp] = useState(false);
   const [uploadedMedia, setUploadedMedia] = useState<{ url: string; type: string } | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -153,10 +158,11 @@ const PlaylistPage: React.FC<PlaylistPageProps> = ({
   const handleSubmitComment = () => {
     if (!commentText.trim()) return;
     if (onAddComment) {
-      onAddComment(commentText.trim(), podcast, selectedEpisodeIndex, replyTo?.id || undefined, markAudioTimestamp ? currentAudioTime : undefined);
+      onAddComment(commentText.trim(), podcast, selectedEpisodeIndex, replyTo?.id || undefined, markAudioTimestamp ? currentAudioTime : undefined, replyQuoteText || undefined);
     }
     setCommentText('');
     setReplyTo(null);
+    setReplyQuoteText('');
     setMarkAudioTimestamp(false);
     setUploadedMedia(null);
   };
@@ -166,6 +172,19 @@ const PlaylistPage: React.FC<PlaylistPageProps> = ({
   };
 
   const isOwnComment = (c: Comment) => currentUserName && c.author === currentUserName;
+
+  useSelectionQuote((cid, text, rect) => {
+    setSelQuote({ cid, text, rect });
+  });
+
+  const handleQuoteReplyPick = () => {
+    if (!selQuote) return;
+    const c = comments.find(x => String((x as any)._id || x.id) === selQuote.cid);
+    if (c) setReplyTo({ id: selQuote.cid, author: String(c.author), text: String(c.text).substring(0, 50) });
+    setReplyQuoteText(selQuote.text);
+    setSelQuote(null);
+    window.getSelection()?.removeAllRanges();
+  };
 
   return (
     <>
@@ -447,6 +466,11 @@ const PlaylistPage: React.FC<PlaylistPageProps> = ({
       {activeTab === 'comments' && (
         <div className={`fixed bottom-0 left-0 right-0 ${isDark ? 'border-t border-white/[0.06] bg-gray-900/95 lg:border-l lg:border-white/[0.06]' : 'border-t border-gray-200 bg-white/95 lg:border-l lg:border-gray-200'} backdrop-blur-xl px-3 py-2.5 z-[1000] lg:flex lg:justify-center lg:left-0 lg:right-72`}>
           <div className="lg:max-w-2xl lg:w-full">
+          {replyQuoteText && (
+            <div className="mb-1.5 px-1" dir="rtl">
+              <QuoteChip text={replyQuoteText} onCancel={() => setReplyQuoteText('')} />
+            </div>
+          )}
           <div className="flex gap-1.5 items-end" dir="ltr">
             <button onClick={handleSubmitComment} disabled={!commentText.trim()}
               className="bg-primary text-white w-10 h-10 rounded-xl flex items-center justify-center active:scale-90 transition-all disabled:opacity-40 flex-shrink-0 shadow-lg shadow-primary/20">
@@ -523,6 +547,10 @@ const PlaylistPage: React.FC<PlaylistPageProps> = ({
                   <div className={`text-[9px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{String(comment.date || formatPersianDate(String(comment.isoDate)))}</div>
                 </div>
               </div>
+              <button onClick={(e) => { e.stopPropagation(); setMenuCid(cid); menu.openAt(e); }}
+                className={`w-6 h-6 rounded-md flex items-center justify-center transition-all hover:bg-black/5 active:scale-90 opacity-30 hover:!opacity-70 flex-shrink-0 ${isDark ? 'hover:!bg-white/10' : ''}`} style={{ color: 'var(--text-3)' }}>
+                <i className="fas fa-ellipsis-vertical text-[9px]"></i>
+              </button>
               {(comment.audioTimestamp ?? comment.timestamp) !== undefined && (
                 <button onClick={() => {
                   const ts = Number(comment.audioTimestamp ?? comment.timestamp);
@@ -547,7 +575,11 @@ const PlaylistPage: React.FC<PlaylistPageProps> = ({
               </div>
             </div>
           ) : (
-            <p className={`${isDark ? 'text-gray-300' : 'text-gray-600'} text-sm leading-relaxed whitespace-pre-wrap break-words`}>{String(comment.text)}</p>
+            <>
+            {(comment as any).quotedText && <QuoteBlock text={String((comment as any).quotedText)} author={String(comment.author)} />}
+            <QuoteBar show={!!(selQuote && selQuote.cid === cid)} onClick={handleQuoteReplyPick} />
+            <p data-comment-text data-cid={cid} className={`${isDark ? 'text-gray-300' : 'text-gray-600'} text-sm leading-relaxed whitespace-pre-wrap break-words`}>{String(comment.text)}</p>
+            </>
           )}
 
           <div className="flex items-center gap-3 mt-2">
@@ -590,6 +622,18 @@ const PlaylistPage: React.FC<PlaylistPageProps> = ({
           <div className={`${isOverDepth ? '' : 'mt-2 space-y-2'}`}>
             {replies.map(reply => renderComment(reply, isOverDepth ? depth : depth + 1))}
           </div>
+        )}
+        {menu.pos && menuCid === cid && (
+          <ActionMenu pos={menu.pos} onClose={menu.close} items={[
+            { icon: 'fas fa-reply', label: 'پاسخ', onClick: () => setReplyTo({ id: cid, author: String(comment.author), text: String(comment.text).substring(0, 50) }) },
+            { icon: 'fas fa-quote-right', label: 'نقل‌قول', onClick: () => { setReplyTo({ id: cid, author: String(comment.author), text: String(comment.text).substring(0, 50) }); setReplyQuoteText(selQuote && selQuote.cid === cid ? selQuote.text : String(comment.text)); } },
+            { divider: true },
+            { icon: isLiked ? 'fas fa-heart' : 'far fa-heart', label: isLiked ? 'برداشتن لایک' : 'لایک', color: isLiked ? '#ef4444' : undefined, onClick: () => { if (onLikeComment) onLikeComment(cid); } },
+            ...(isOwn ? [
+              { icon: 'fas fa-pen', label: 'ویرایش', onClick: () => { setEditCommentId(cid); setEditCommentText(String(comment.text)); } },
+              ...(onDeleteComment ? [{ icon: 'fas fa-trash-alt', label: 'حذف', color: '#ef4444', onClick: () => setDeleteConfirmId(cid) }] : []),
+            ] : []),
+          ]} />
         )}
       </div>
     );

@@ -635,10 +635,10 @@ export const getNotifications = async (): Promise<any[] | null> => {
   return apiFetch<any[]>('/notifications');
 };
 
-export const adminSendNotification = async (title: string, body: string, target: string = 'all'): Promise<any> => {
+export const adminSendNotification = async (title: string, body: string, target: string = 'all', link?: string, type?: string): Promise<any> => {
   return apiFetch('/notifications', {
     method: 'POST',
-    body: JSON.stringify({ title, body, target }),
+    body: JSON.stringify({ title, body, target, link: link || '', type: type || 'admin' }),
   });
 };
 

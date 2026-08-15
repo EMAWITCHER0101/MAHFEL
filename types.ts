@@ -178,6 +178,7 @@ export interface PublishedBook {
   description: string;
   authorName: string;
   pdfUrl?: string;
+  pdfPages?: string[];
   buyUrl?: string;
   isNew?: boolean;
   price?: string;

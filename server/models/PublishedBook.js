@@ -8,6 +8,7 @@ const publishedBookSchema = new mongoose.Schema({
   description: { type: String, default: '' },
   authorName: { type: String, default: 'نشر سرای هنر و اندیشه' },
   pdfUrl: String,
+  pdfPages: [{ type: String, default: [] }],
   buyUrl: String,
   isNew: { type: Boolean, default: false },
   price: { type: String, default: '۰' },

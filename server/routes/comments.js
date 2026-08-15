@@ -144,6 +144,23 @@ router.post('/', requireAuth, async (req, res) => {
       }
     } catch (ignored) {}
 
+    // نوتیفیکیشن همگانی «پیام جدید در محفل» برای همه کاربران
+    try {
+      if (req.user.role !== 'admin') {
+        let link = '/mahfel';
+        if (comment.podcastId) link = `/mahfel/podcast/${comment.podcastId}`;
+        else if (comment.videoId) link = `/mahfel/video/${comment.videoId}`;
+        else if (comment.bookId) link = `/mahfel/book/${comment.bookId}`;
+        const notif = await Notification.create({
+          title: '💬 پیام جدید در محفل',
+          body: `${req.user.name}: ${(body.text || 'پیام').slice(0, 90)}`,
+          type: 'community',
+          link,
+        });
+        broadcast('data-changed', { type: 'notifications', action: 'create', item: notif.toObject() });
+      }
+    } catch (ignored) {}
+
     res.status(201).json(obj);
   } catch (error) {
     res.status(400).json({ error: error.message });

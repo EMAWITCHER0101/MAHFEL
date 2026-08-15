@@ -134,6 +134,18 @@ router.post('/', requireAuth, async (req, res) => {
     if (req.user.role !== 'admin') {
       await notifyAdminsOfCommunityMessage(req.user.name, req.body.text, 'post');
     }
+    // نوتیفیکیشن همگانی «پیام جدید در محفل» برای همه کاربران
+    try {
+      if (req.user.role !== 'admin') {
+        const notif = await Notification.create({
+          title: '💬 پیام جدید در محفل',
+          body: `${req.user.name}: ${(req.body.text || 'پیام').slice(0, 90)}`,
+          type: 'community',
+          link: `/mahfel/post/${post._id}`,
+        });
+        broadcast('data-changed', { type: 'notifications', action: 'create', item: notif.toObject() });
+      }
+    } catch (ignored) {}
     res.status(201).json(post);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -348,6 +360,19 @@ router.post('/:id/comments', requireAuth, async (req, res) => {
             type: 'reply',
           });
         }
+      }
+    } catch (ignored) {}
+
+    // نوتیفیکیشن همگانی «پیام جدید در محفل» برای همه کاربران
+    try {
+      if (req.user.role !== 'admin') {
+        const notif = await Notification.create({
+          title: '💬 پیام جدید در محفل',
+          body: `${req.user.name}: ${(req.body.text || 'پیام').slice(0, 90)}`,
+          type: 'community',
+          link: `/mahfel/post/${req.params.id}`,
+        });
+        broadcast('data-changed', { type: 'notifications', action: 'create', item: notif.toObject() });
       }
     } catch (ignored) {}
 

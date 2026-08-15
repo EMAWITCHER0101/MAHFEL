@@ -9,6 +9,7 @@ import CheckoutFlow from '../components/CheckoutFlow';
 import OrdersPage, { type Order } from './OrdersPage';
 import BookReader from '../components/BookReader';
 import { getMyPurchaseRequests } from '../services/api';
+import { useActionMenu, ActionMenu, QuoteBlock, QuoteChip, QuoteBar, useSelectionQuote } from '../components/QuoteActions';
 
 // ─── Wallet Payment Page ──────────────────────────────────────────────────────
 const WalletPaymentPage: React.FC<{
@@ -321,7 +322,7 @@ const WalletPaymentPage: React.FC<{
 // ─── Note Detail ──────────────────────────────────────────────────────────────
 export const NoteDetailView: React.FC<{
     note: PublishedBook; allPodcasts: Podcast[]; comments: Comment[];
-    onAddComment: (text: string, note: PublishedBook) => void; onClose: () => void;
+    onAddComment: (text: string, note: PublishedBook, parentId?: string, quotedText?: string) => void; onClose: () => void;
     onDeleteComment?: (commentId: string) => void; onLikeComment?: (commentId: string) => void;
     onUpdateComment?: (commentId: string, newText: string) => void;
     currentUserName?: string;
@@ -329,12 +330,47 @@ export const NoteDetailView: React.FC<{
     const [likedComments, setLikedComments] = useState<Set<string>>(() => new Set(JSON.parse(localStorage.getItem('soha_liked_comments') || '[]')));
     const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
     const [editText, setEditText] = useState('');
+    const [replyTarget, setReplyTarget] = useState<{ id: string; author: string } | null>(null);
+    const [replyText, setReplyText] = useState('');
+    const [replyQuoteText, setReplyQuoteText] = useState('');
+    const [menuCid, setMenuCid] = useState<string | null>(null);
+    const menu = useActionMenu();
+    const [selQuote, setSelQuote] = useState<{ cid: string; text: string; rect: DOMRect } | null>(null);
     const getCid = (c: Comment) => String((c as any)._id || c.id);
     const relatedPodcasts = useMemo(() => {
         if (!note.relatedAudioIds) return [];
         return allPodcasts.filter(p => note.relatedAudioIds?.includes(p.id));
     }, [note.relatedAudioIds, allPodcasts]);
     const noteComments = comments.filter(c => c.bookId === note.id);
+
+    useSelectionQuote((cid, text, rect) => {
+        setSelQuote({ cid, text, rect });
+    });
+
+    const handleQuotePick = () => {
+        if (!selQuote) return;
+        const c = comments.find(x => getCid(x) === selQuote.cid);
+        setReplyTarget({ id: selQuote.cid, author: c ? String(c.author) : '' });
+        setReplyQuoteText(selQuote.text);
+        setSelQuote(null);
+        window.getSelection()?.removeAllRanges();
+    };
+
+    const handleSendReply = () => {
+        if (!replyTarget || !replyText.trim()) return;
+        onAddComment?.(replyText.trim(), note, replyTarget.id, replyQuoteText || undefined);
+        setReplyText('');
+        setReplyTarget(null);
+        setReplyQuoteText('');
+    };
+
+    const toggleLikeLocal = (cid: string) => {
+        onLikeComment?.(cid);
+        const next = new Set(likedComments);
+        if (next.has(cid)) next.delete(cid); else next.add(cid);
+        setLikedComments(next);
+        localStorage.setItem('soha_liked_comments', JSON.stringify([...next]));
+    };
     return (
         <div className="fixed inset-0 bg-[#121212] z-[5000] overflow-y-auto animate-fadeIn flex flex-col no-scrollbar text-gray-300">
             <header className="sticky top-0 bg-[#1a1a1a]/90 backdrop-blur-md border-b border-white/5 p-4 flex justify-between items-center z-10">
@@ -375,7 +411,8 @@ export const NoteDetailView: React.FC<{
                             const isOwner = currentUserName === c.author;
                             return (
                             <div key={c.id} className="bg-white/5 p-5 rounded-2xl border border-white/5 shadow-sm text-right">
-                                <div className="flex justify-between items-center mb-3 flex-row-reverse"><span className="text-primary font-black text-sm">{c.author}</span><span className="text-[10px] text-gray-500 font-bold">{c.date}</span></div>
+                                <div className="flex justify-between items-center mb-3 flex-row-reverse"><span className="text-primary font-black text-sm">{c.author}</span><span className="flex items-center gap-1.5"><span className="text-[10px] text-gray-500 font-bold">{c.date}</span><button onClick={(e) => { e.stopPropagation(); setMenuCid(cid); menu.openAt(e); }} className="w-5 h-5 rounded-md flex items-center justify-center transition-all hover:bg-white/10 active:scale-90 opacity-30 hover:!opacity-70 flex-shrink-0" style={{ color: '#999' }}><i className="fas fa-ellipsis-vertical text-[8px]"></i></button></span></div>
+                                {(c as any).quotedText && <div className="mb-2"><QuoteBlock text={String((c as any).quotedText)} author={String(c.author)} /></div>}
                                 {editingCommentId === cid ? (
                                     <div className="mb-2">
                                         <input value={editText} onChange={e => setEditText(e.target.value)}
@@ -390,7 +427,23 @@ export const NoteDetailView: React.FC<{
                                         </div>
                                     </div>
                                 ) : (
-                                <p className="text-gray-400 text-sm leading-relaxed whitespace-pre-wrap ">{c.text}</p>
+                                <>
+                                <QuoteBar show={!!(selQuote && selQuote.cid === cid)} onClick={handleQuotePick} />
+                                <p data-comment-text data-cid={cid} className="text-gray-400 text-sm leading-relaxed whitespace-pre-wrap ">{c.text}</p>
+                                </>
+                                )}
+                                {replyTarget?.id === cid && (
+                                    <div className="mt-2 animate-fadeIn">
+                                        {replyQuoteText && <QuoteChip text={replyQuoteText} onCancel={() => setReplyQuoteText('')} />}
+                                        <div className="flex gap-1.5">
+                                            <input autoFocus value={replyText} onChange={e => setReplyText(e.target.value)}
+                                                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendReply(); } if (e.key === 'Escape') setReplyTarget(null); }}
+                                                placeholder={`پاسخ به ${replyTarget.author}...`}
+                                                className="flex-1 bg-transparent outline-none text-xs leading-relaxed px-2 py-1 rounded-lg" style={{ color: '#ccc', border: '1px solid color-mix(in srgb, var(--primary) 40%, transparent)' }} />
+                                            <button onClick={handleSendReply} disabled={!replyText.trim()} className="text-[9px] font-bold px-3 py-1 rounded-lg disabled:opacity-30" style={{ background: 'var(--primary)', color: 'white' }}>ارسال</button>
+                                            <button onClick={() => setReplyTarget(null)} className="text-[9px] font-bold px-3 py-1 rounded-lg" style={{ background: 'rgba(255,255,255,0.1)', color: '#999' }}>لغو</button>
+                                        </div>
+                                    </div>
                                 )}
                                 <div className="flex items-center gap-4 mt-2.5">
                                     {onLikeComment && (
@@ -422,7 +475,8 @@ export const NoteDetailView: React.FC<{
                                             const rIsOwner = currentUserName === r.author;
                                             return (
                                             <div key={r.id} className="bg-white/5 p-3 rounded-xl border border-white/5 text-right">
-                                                <div className="flex justify-between items-center mb-1 flex-row-reverse"><span className="text-primary font-black text-xs">{r.author}</span><span className="text-[9px] text-gray-500 font-bold">{r.date}</span></div>
+                                                <div className="flex justify-between items-center mb-1 flex-row-reverse"><span className="text-primary font-black text-xs">{r.author}</span><span className="flex items-center gap-1.5"><span className="text-[9px] text-gray-500 font-bold">{r.date}</span><button onClick={(e) => { e.stopPropagation(); setMenuCid(rid); menu.openAt(e); }} className="w-4 h-4 rounded-md flex items-center justify-center transition-all hover:bg-white/10 active:scale-90 opacity-30 hover:!opacity-70 flex-shrink-0" style={{ color: '#999' }}><i className="fas fa-ellipsis-vertical text-[7px]"></i></button></span></div>
+                                                {(r as any).quotedText && <div className="mb-1"><QuoteBlock text={String((r as any).quotedText)} author={String(r.author)} /></div>}
                                                 {editingCommentId === rid ? (
                                                     <div className="mb-1">
                                                         <input value={editText} onChange={e => setEditText(e.target.value)}
@@ -437,7 +491,10 @@ export const NoteDetailView: React.FC<{
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                <p className="text-gray-400 text-xs leading-relaxed whitespace-pre-wrap ">{r.text}</p>
+                                                <>
+                                                <QuoteBar show={!!(selQuote && selQuote.cid === rid)} onClick={handleQuotePick} />
+                                                <p data-comment-text data-cid={rid} className="text-gray-400 text-xs leading-relaxed whitespace-pre-wrap ">{r.text}</p>
+                                                </>
                                                 )}
                                                 <div className="flex items-center gap-3 mt-2">
                                                     {onLikeComment && (
@@ -461,13 +518,41 @@ export const NoteDetailView: React.FC<{
                                                         </button>
                                                     )}
                                                 </div>
+                                                {menu.pos && menuCid === rid && (
+                                                    <ActionMenu pos={menu.pos} onClose={menu.close} items={[
+                                                        { icon: 'fas fa-reply', label: 'پاسخ', onClick: () => setReplyTarget({ id: rid, author: String(r.author) }) },
+                                                        { icon: 'fas fa-quote-right', label: 'نقل‌قول', onClick: () => { setReplyTarget({ id: rid, author: String(r.author) }); setReplyQuoteText(selQuote && selQuote.cid === rid ? selQuote.text : String(r.text)); } },
+                                                        { divider: true },
+                                                        { icon: rIsLiked ? 'fas fa-heart' : 'far fa-heart', label: rIsLiked ? 'برداشتن لایک' : 'لایک', color: rIsLiked ? '#ef4444' : undefined, onClick: () => toggleLikeLocal(rid) },
+                                                        ...(rIsOwner && onUpdateComment ? [
+                                                            { icon: 'fas fa-pen', label: 'ویرایش', onClick: () => { setEditingCommentId(rid); setEditText(r.text); } },
+                                                        ] : []),
+                                                        ...(rIsOwner && onDeleteComment ? [
+                                                            { icon: 'fas fa-trash-alt', label: 'حذف', color: '#ef4444', onClick: () => onDeleteComment(rid) },
+                                                        ] : []),
+                                                    ]} />
+                                                )}
                                             </div>
                                             );
                                         })}
                                     </div>
                                 )}
-                            </div>
-                            );
+{menu.pos && menuCid === cid && (
+                                    <ActionMenu pos={menu.pos} onClose={menu.close} items={[
+                                        { icon: 'fas fa-reply', label: 'پاسخ', onClick: () => setReplyTarget({ id: cid, author: String(c.author) }) },
+                                        { icon: 'fas fa-quote-right', label: 'نقل‌قول', onClick: () => { setReplyTarget({ id: cid, author: String(c.author) }); setReplyQuoteText(selQuote && selQuote.cid === cid ? selQuote.text : String(c.text)); } },
+                                        { divider: true },
+                                        { icon: isLiked ? 'fas fa-heart' : 'far fa-heart', label: isLiked ? 'برداشتن لایک' : 'لایک', color: isLiked ? '#ef4444' : undefined, onClick: () => toggleLikeLocal(cid) },
+                                        ...(isOwner && onUpdateComment ? [
+                                            { icon: 'fas fa-pen', label: 'ویرایش', onClick: () => { setEditingCommentId(cid); setEditText(c.text); } },
+                                        ] : []),
+                                        ...(isOwner && onDeleteComment ? [
+                                            { icon: 'fas fa-trash-alt', label: 'حذف', color: '#ef4444', onClick: () => onDeleteComment(cid) },
+                                        ] : []),
+                                    ]} />
+                                )}
+                                    </div>
+                                    );
                         }) : <div className="py-10 text-center text-gray-600 italic text-sm ">اولین کسی باشید که گفتگو می‌کند.</div>}
                     </div>
                 </section>
@@ -479,18 +564,25 @@ export const NoteDetailView: React.FC<{
 // ─── Book Detail View ─────────────────────────────────────────────────────────
 export const BookDetailView: React.FC<{
     book: PublishedBook; allPodcasts: Podcast[]; onClose: () => void;
-    comments: Comment[]; onAddComment: (text: string, book: PublishedBook) => void;
+    comments: Comment[]; onAddComment: (text: string, book: PublishedBook, parentId?: string, quotedText?: string) => void;
     onAddToCart?: (book: PublishedBook) => void; onReadBook?: (book: PublishedBook) => void;
     onDeleteComment?: (commentId: string) => void; onLikeComment?: (commentId: string) => void;
     onUpdateComment?: (commentId: string, newText: string) => void;
     currentUserName?: string; userAvatar?: string;
-}> = ({ book, allPodcasts, onClose, comments, onAddComment, onAddToCart, onDeleteComment, onLikeComment, onUpdateComment, currentUserName }) => {
+    purchased?: boolean;
+}> = ({ book, allPodcasts, onClose, comments, onAddComment, onAddToCart, onDeleteComment, onLikeComment, onUpdateComment, currentUserName, purchased }) => {
     const [activeTab, setActiveTab] = useState<'info' | 'audio' | 'comments'>('info');
     const [addedToCart, setAddedToCart] = useState(false);
     const [imgLoaded, setImgLoaded] = useState(false);
     const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
     const [editText, setEditText] = useState('');
     const [likedComments, setLikedComments] = useState<Set<string>>(() => new Set(JSON.parse(localStorage.getItem('soha_liked_comments') || '[]')));
+    const [replyTarget, setReplyTarget] = useState<{ id: string; author: string } | null>(null);
+    const [replyText, setReplyText] = useState('');
+    const [replyQuoteText, setReplyQuoteText] = useState('');
+    const [menuCid, setMenuCid] = useState<string | null>(null);
+    const menu = useActionMenu();
+    const [selQuote, setSelQuote] = useState<{ cid: string; text: string; rect: DOMRect } | null>(null);
     const relatedPodcasts = useMemo(() => {
         if (!book.relatedAudioIds) return [];
         return allPodcasts.filter(p => book.relatedAudioIds?.includes(p.id));
@@ -498,6 +590,35 @@ export const BookDetailView: React.FC<{
     const bookComments = comments.filter(c => c.bookId === book.id);
     const getCid = (c: Comment) => String((c as any)._id || c.id);
     const handleAddToCart = () => { if (onAddToCart) { onAddToCart(book); setAddedToCart(true); setTimeout(() => setAddedToCart(false), 2000); } };
+
+    useSelectionQuote((cid, text, rect) => {
+        setSelQuote({ cid, text, rect });
+    });
+
+    const handleQuotePick = () => {
+        if (!selQuote) return;
+        const c = comments.find(x => getCid(x) === selQuote.cid);
+        setReplyTarget({ id: selQuote.cid, author: c ? String(c.author) : '' });
+        setReplyQuoteText(selQuote.text);
+        setSelQuote(null);
+        window.getSelection()?.removeAllRanges();
+    };
+
+    const handleSendReply = () => {
+        if (!replyTarget || !replyText.trim()) return;
+        onAddComment?.(replyText.trim(), book, replyTarget.id, replyQuoteText || undefined);
+        setReplyText('');
+        setReplyTarget(null);
+        setReplyQuoteText('');
+    };
+
+    const toggleLikeLocal = (cid: string) => {
+        onLikeComment?.(cid);
+        const next = new Set(likedComments);
+        if (next.has(cid)) next.delete(cid); else next.add(cid);
+        setLikedComments(next);
+        localStorage.setItem('soha_liked_comments', JSON.stringify([...next]));
+    };
 
     return (
         <div className="fixed inset-0 z-[2000] overflow-y-auto animate-fadeIn" style={{ background: 'var(--surface)' }} dir="rtl">
@@ -593,7 +714,13 @@ export const BookDetailView: React.FC<{
 
                         {/* Action Buttons */}
                         <div className="flex gap-3 mb-8">
-                            {onAddToCart && (
+                            {purchased && (
+                                <button disabled className="flex-1 py-3.5 rounded-2xl font-black text-sm flex items-center justify-center gap-2" style={{ background: '#22c55e', color: 'white', boxShadow: '0 10px 30px rgba(34,197,94,0.3)' }}>
+                                    <i className="fas fa-check-circle" />
+                                    خریداری شده
+                                </button>
+                            )}
+                            {onAddToCart && !purchased && (
                                 <button onClick={handleAddToCart} className="flex-1 py-3.5 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.97] relative overflow-hidden" style={{ background: addedToCart ? '#22c55e' : 'var(--primary)', color: 'white', boxShadow: addedToCart ? '0 10px 30px rgba(34,197,94,0.3)' : '0 10px 30px var(--primary-glow)' }}>
                                     <i className={`fas ${addedToCart ? 'fa-check' : 'fa-cart-plus'}`} />
                                     {addedToCart ? 'اضافه شد به سبد' : 'افزودن به سبد خرید'}
@@ -672,8 +799,9 @@ export const BookDetailView: React.FC<{
                                     <div key={c.id} className="p-4 rounded-2xl" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
                                         <div className="flex justify-between items-center mb-2 flex-row-reverse">
                                             <span className="text-sm font-bold" style={{ color: 'var(--primary)' }}>{c.author}</span>
-                                            <span className="text-[10px] font-bold" style={{ color: 'var(--text-3)' }}>{c.date}</span>
+                                            <span className="flex items-center gap-1.5"><span className="text-[10px] font-bold" style={{ color: 'var(--text-3)' }}>{c.date}</span><button onClick={(e) => { e.stopPropagation(); setMenuCid(cid); menu.openAt(e); }} className="w-5 h-5 rounded-md flex items-center justify-center transition-all hover:bg-black/5 active:scale-90 opacity-30 hover:!opacity-70 flex-shrink-0" style={{ color: 'var(--text-3)' }}><i className="fas fa-ellipsis-vertical text-[8px]"></i></button></span>
                                         </div>
+                                        {(c as any).quotedText && <div className="mb-1.5"><QuoteBlock text={String((c as any).quotedText)} author={String(c.author)} /></div>}
                                         {editingCommentId === cid ? (
                                             <div className="mb-2">
                                                 <input value={editText} onChange={e => setEditText(e.target.value)}
@@ -688,7 +816,23 @@ export const BookDetailView: React.FC<{
                                                 </div>
                                             </div>
                                         ) : (
-                                        <p className="text-sm leading-relaxed whitespace-pre-wrap text-justify " style={{ color: 'var(--text-2)' }}>{c.text}</p>
+                                        <>
+                                        <QuoteBar show={!!(selQuote && selQuote.cid === cid)} onClick={handleQuotePick} />
+                                        <p data-comment-text data-cid={cid} className="text-sm leading-relaxed whitespace-pre-wrap text-justify " style={{ color: 'var(--text-2)' }}>{c.text}</p>
+                                        </>
+                                        )}
+                                        {replyTarget?.id === cid && (
+                                            <div className="mt-2 animate-fadeIn">
+                                                {replyQuoteText && <QuoteChip text={replyQuoteText} onCancel={() => setReplyQuoteText('')} />}
+                                                <div className="flex gap-1.5">
+                                                    <input autoFocus value={replyText} onChange={e => setReplyText(e.target.value)}
+                                                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendReply(); } if (e.key === 'Escape') setReplyTarget(null); }}
+                                                        placeholder={`پاسخ به ${replyTarget.author}...`}
+                                                        className="flex-1 bg-transparent outline-none text-xs leading-relaxed px-2 py-1 rounded-lg" style={{ color: 'var(--text)', border: '1px solid color-mix(in srgb, var(--primary) 40%, transparent)' }} />
+                                                    <button onClick={handleSendReply} disabled={!replyText.trim()} className="text-[9px] font-bold px-3 py-1 rounded-lg disabled:opacity-30" style={{ background: 'var(--primary)', color: 'white' }}>ارسال</button>
+                                                    <button onClick={() => setReplyTarget(null)} className="text-[9px] font-bold px-3 py-1 rounded-lg" style={{ background: 'var(--surface-3)', color: 'var(--text-3)' }}>لغو</button>
+                                                </div>
+                                            </div>
                                         )}
                                         <div className="flex items-center gap-4 mt-2.5">
                                             {onLikeComment && (
@@ -722,8 +866,9 @@ export const BookDetailView: React.FC<{
                                                     <div key={r.id} className="p-3 rounded-xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
                                                         <div className="flex justify-between items-center mb-1 flex-row-reverse">
                                                             <span className="text-xs font-bold" style={{ color: 'var(--primary)' }}>{r.author}</span>
-                                                            <span className="text-[9px] font-bold" style={{ color: 'var(--text-3)' }}>{r.date}</span>
+                                                            <span className="flex items-center gap-1.5"><span className="text-[9px] font-bold" style={{ color: 'var(--text-3)' }}>{r.date}</span><button onClick={(e) => { e.stopPropagation(); setMenuCid(rid); menu.openAt(e); }} className="w-4 h-4 rounded-md flex items-center justify-center transition-all hover:bg-black/5 active:scale-90 opacity-30 hover:!opacity-70 flex-shrink-0" style={{ color: 'var(--text-3)' }}><i className="fas fa-ellipsis-vertical text-[7px]"></i></button></span>
                                                         </div>
+                                                        {(r as any).quotedText && <div className="mb-1"><QuoteBlock text={String((r as any).quotedText)} author={String(r.author)} /></div>}
                                                         {editingCommentId === rid ? (
                                                             <div className="mb-1">
                                                                 <input value={editText} onChange={e => setEditText(e.target.value)}
@@ -738,7 +883,10 @@ export const BookDetailView: React.FC<{
                                                                 </div>
                                                             </div>
                                                         ) : (
-                                                        <p className="text-xs leading-relaxed whitespace-pre-wrap text-justify " style={{ color: 'var(--text-2)' }}>{r.text}</p>
+                                                        <>
+                                                        <QuoteBar show={!!(selQuote && selQuote.cid === rid)} onClick={handleQuotePick} />
+                                                        <p data-comment-text data-cid={rid} className="text-xs leading-relaxed whitespace-pre-wrap text-justify " style={{ color: 'var(--text-2)' }}>{r.text}</p>
+                                                        </>
                                                         )}
                                                         <div className="flex items-center gap-3 mt-2">
                                                             {onLikeComment && (
@@ -755,17 +903,45 @@ export const BookDetailView: React.FC<{
                                                                     <i className="fas fa-pen text-[8px]" />
                                                                 </button>
                                                             )}
-                                                            {rIsOwner && onDeleteComment && (
-                                                                <button onClick={() => onDeleteComment(rid)}
-                                                                    className="text-[10px] font-semibold flex items-center gap-1.5 transition-all hover:opacity-80 text-red-400/70 hover:text-red-400">
-                                                                    <i className="fas fa-trash text-[8px]" />
-                                                                </button>
-                                                            )}
-                                                        </div>
+{rIsOwner && onDeleteComment && (
+                                                            <button onClick={() => onDeleteComment(rid)}
+                                                                className="text-[10px] font-semibold flex items-center gap-1.5 transition-all hover:opacity-80 text-red-400/70 hover:text-red-400">
+                                                                <i className="fas fa-trash text-[8px]" />
+                                                            </button>
+                                                        )}
                                                     </div>
-                                                    );
-                                                })}
+                                                    {menu.pos && menuCid === rid && (
+                                                        <ActionMenu pos={menu.pos} onClose={menu.close} items={[
+                                                            { icon: 'fas fa-reply', label: 'پاسخ', onClick: () => setReplyTarget({ id: rid, author: String(r.author) }) },
+{ icon: 'fas fa-quote-right', label: 'نقل‌قول', onClick: () => { setReplyTarget({ id: rid, author: String(r.author) }); setReplyQuoteText(selQuote && selQuote.cid === rid ? selQuote.text : String(r.text)); } },
+                                                            { divider: true },
+                                                            { icon: rIsLiked ? 'fas fa-heart' : 'far fa-heart', label: rIsLiked ? 'برداشتن لایک' : 'لایک', color: rIsLiked ? '#ef4444' : undefined, onClick: () => toggleLikeLocal(rid) },
+                                                            ...(rIsOwner && onUpdateComment ? [
+                                                                { icon: 'fas fa-pen', label: 'ویرایش', onClick: () => { setEditingCommentId(rid); setEditText(r.text); } },
+                                                            ] : []),
+                                                            ...(rIsOwner && onDeleteComment ? [
+                                                                { icon: 'fas fa-trash-alt', label: 'حذف', color: '#ef4444', onClick: () => onDeleteComment(rid) },
+                                                            ] : []),
+]} />
+                                                    )}
+                                                </div>
+                                                );
+                                            })}
                                             </div>
+                                        )}
+                                        {menu.pos && menuCid === cid && (
+                                            <ActionMenu pos={menu.pos} onClose={menu.close} items={[
+                                                { icon: 'fas fa-reply', label: 'پاسخ', onClick: () => setReplyTarget({ id: cid, author: String(c.author) }) },
+{ icon: 'fas fa-quote-right', label: 'نقل‌قول', onClick: () => { setReplyTarget({ id: cid, author: String(c.author) }); setReplyQuoteText(selQuote && selQuote.cid === cid ? selQuote.text : String(c.text)); } },
+                                                { divider: true },
+                                                { icon: isLiked ? 'fas fa-heart' : 'far fa-heart', label: isLiked ? 'برداشتن لایک' : 'لایک', color: isLiked ? '#ef4444' : undefined, onClick: () => toggleLikeLocal(cid) },
+                                                ...(isOwner && onUpdateComment ? [
+                                                    { icon: 'fas fa-pen', label: 'ویرایش', onClick: () => { setEditingCommentId(cid); setEditText(c.text); } },
+                                                ] : []),
+                                                ...(isOwner && onDeleteComment ? [
+                                                    { icon: 'fas fa-trash-alt', label: 'حذف', color: '#ef4444', onClick: () => onDeleteComment(cid) },
+                                                ] : []),
+                                            ]} />
                                         )}
                                     </div>
                                     );
@@ -782,7 +958,7 @@ export const BookDetailView: React.FC<{
 // ─── Main NashrPage ───────────────────────────────────────────────────────────
 interface NashrPageProps {
   publishedBooks: PublishedBook[]; allPodcasts: Podcast[]; comments: Comment[];
-  onAddComment: (text: string, book: PublishedBook) => void;
+  onAddComment: (text: string, book: PublishedBook, parentId?: string, quotedText?: string) => void;
   user: User | null;
   onUpdateUser: (user: User) => void;
   onDeleteComment?: (commentId: string) => void;
@@ -976,18 +1152,31 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
 
   useEffect(() => { if (cartBounce) { const t = setTimeout(() => setCartBounce(false), 500); return () => clearTimeout(t); } }, [cartBounce]);
 
+  // ─── کتاب‌های خریداری‌شده (تاییدشده) — نمایش «خریداری شده» و جلوگیری از خرید مجدد ───
+  const purchasedBookIds = useMemo(() => {
+    const s = new Set<string>();
+    orders.filter(o => o.status === 'confirmed').forEach(o => (o.items || []).forEach(i => s.add(String(i.title).trim())));
+    return s;
+  }, [orders]);
+  const isBookPurchased = useCallback((book: PublishedBook) => purchasedBookIds.has(String(book.title).trim()), [purchasedBookIds]);
+
   const addToCart = useCallback((book: PublishedBook) => {
+    if (isBookPurchased(book)) { showToast(`«${book.title.slice(0, 18)}...» قبلاً خریداری شده است`, 'fa-check-circle'); return; }
     setCartItems(prev => {
       const exists = prev.find(i => i.book.id === book.id);
-      if (exists) { showToast(`تعداد «${book.title.slice(0, 18)}...» افزایش یافت`, 'fa-plus-circle'); return prev.map(i => i.book.id === book.id ? { ...i, quantity: i.quantity + 1 } : i); }
+      if (exists) { showToast(`«${book.title.slice(0, 18)}...» از قبل در سبد خرید است`, 'fa-cart-shopping'); return prev; }
       showToast(`«${book.title.slice(0, 18)}...» به سبد اضافه شد`, 'fa-cart-plus');
       return [...prev, { book, quantity: 1 }];
     });
     setCartBounce(true);
-  }, [showToast]);
+  }, [showToast, isBookPurchased]);
 
   const removeFromCart = useCallback((bookId: number) => { setCartItems(prev => prev.filter(i => i.book.id !== bookId)); showToast('حذف شد', 'fa-trash-alt'); }, [showToast]);
-  const updateCartQuantity = useCallback((bookId: number, qty: number) => { if (qty <= 0) { removeFromCart(bookId); return; } setCartItems(prev => prev.map(i => i.book.id === bookId ? { ...i, quantity: qty } : i)); }, [removeFromCart]);
+  const updateCartQuantity = useCallback((bookId: number, qty: number) => {
+    if (qty <= 0) { removeFromCart(bookId); return; }
+    if (qty > 1) { showToast('هر کتاب فقط یک نسخه در سبد خرید', 'fa-info-circle'); return; }
+    setCartItems(prev => prev.map(i => i.book.id === bookId ? { ...i, quantity: qty } : i));
+  }, [removeFromCart, showToast]);
   const handleCheckoutComplete = useCallback((order: Order) => { setOrders(prev => [order, ...prev]); setCartItems([]); showToast(`درخواست ${order.orderNumber} ثبت شد — در انتظار تایید ادمین`, 'fa-clock'); }, [showToast]);
   const cartCount = cartItems.reduce((sum, i) => sum + i.quantity, 0);
 
@@ -1079,7 +1268,7 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
   // Navigation
   if (selectedItem) {
     if (selectedItem.type === 'note') return <NoteDetailView note={selectedItem} allPodcasts={allPodcasts} comments={comments} onAddComment={onAddComment} onClose={() => setSelectedItem(null)} onDeleteComment={onDeleteComment} onLikeComment={onLikeComment} onUpdateComment={onUpdateComment} currentUserName={user?.name} />;
-    return <BookDetailView book={selectedItem} allPodcasts={allPodcasts} comments={comments} onAddComment={onAddComment} onClose={() => setSelectedItem(null)} onAddToCart={addToCart} onReadBook={setReadingBook} onDeleteComment={onDeleteComment} onLikeComment={onLikeComment} onUpdateComment={onUpdateComment} currentUserName={user?.name} />;
+    return <BookDetailView book={selectedItem} allPodcasts={allPodcasts} comments={comments} onAddComment={onAddComment} onClose={() => setSelectedItem(null)} onAddToCart={addToCart} onReadBook={setReadingBook} onDeleteComment={onDeleteComment} onLikeComment={onLikeComment} onUpdateComment={onUpdateComment} currentUserName={user?.name} purchased={isBookPurchased(selectedItem)} />;
   }
   if (showOrders) return <OrdersPage orders={orders} publishedBooks={publishedBooks} onBack={() => setShowOrders(false)} onReadBook={(book, page) => { setReadingBook(book); setReadingStartPage(page || 0); setShowOrders(false); }} />;
   if (readingBook) return <BookReader book={readingBook} startPage={readingStartPage} onClose={() => { setReadingBook(null); setReadingStartPage(0); }} />;
@@ -1255,6 +1444,7 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
             {filteredBooks.map((book, i) => {
               const inCart = cartItems.find(ci => ci.book.id === book.id);
               const qty = inCart?.quantity || 0;
+              const purchased = isBookPurchased(book);
               return (
               <div key={book.id} className="group cursor-pointer flex flex-col animate-fadeInUp" style={{ animationDelay: `${i * 50}ms` }} onClick={() => setSelectedItem(book)}>
                 {/* Book Card */}
@@ -1294,9 +1484,14 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
                   )}
                 </div>
 
-                {/* Add to cart / Quantity selector */}
+                {/* Add to cart / Purchased / Quantity selector */}
                 <div onClick={e => e.stopPropagation()}>
-                  {qty === 0 ? (
+                  {purchased ? (
+                    <button disabled className="w-full py-2 rounded-xl text-[10px] font-black flex items-center justify-center gap-1.5" style={{ background: 'color-mix(in srgb, #22c55e 15%, transparent)', border: '1px solid rgba(34,197,94,0.35)', color: '#16a34a' }}>
+                      <i className="fas fa-check-circle text-[9px]" />
+                      خریداری شده
+                    </button>
+                  ) : qty === 0 ? (
                     <button onClick={() => addToCart(book)} className="w-full py-2 rounded-xl text-[10px] font-black transition-all active:scale-95 flex items-center justify-center gap-1.5 animate-fadeInUp" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--primary)' }}>
                       <i className="fas fa-cart-plus text-[9px]" />
                       افزودن به سبد
@@ -1309,7 +1504,7 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
                       <div className="flex-1 text-center text-[12px] font-black tabular-nums" style={{ color: 'var(--text)', background: 'var(--surface)', minWidth: 32 }}>
                         {toPersianDigits(String(qty))}
                       </div>
-                      <button onClick={() => updateCartQuantity(book.id, qty + 1)} className="h-full px-3 flex items-center justify-center transition-all active:scale-90" style={{ background: 'var(--surface-2)', color: 'var(--text)' }}>
+                      <button onClick={() => updateCartQuantity(book.id, qty + 1)} className="h-full px-3 flex items-center justify-center transition-all active:scale-90" style={{ background: 'var(--surface-2)', color: qty >= 1 ? 'var(--text-3)' : 'var(--text)' }}>
                         <i className="fas fa-plus text-[9px]" />
                       </button>
                     </div>

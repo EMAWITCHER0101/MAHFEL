@@ -76,7 +76,7 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ orders, publishedBooks, onBack,
               <i className="fas fa-receipt text-sm text-white" />
             </div>
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-black" style={{ color: 'var(--text)' }}>سفارشات من</h1>
+              <h1 className="text-lg font-black" style={{ color: 'var(--text)' }}>مطالعات من</h1>
               {orders.length > 0 && (
                 <span className="px-2 py-0.5 rounded-full text-[11px] font-bold" style={{ background: 'color-mix(in srgb, var(--primary) 12%, transparent)', color: 'var(--primary)' }}>{toPersianDigits(String(orders.length))}</span>
               )}
@@ -97,7 +97,7 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ orders, publishedBooks, onBack,
                 <i className="fas fa-times text-xs" style={{ color: 'var(--text-3)' }} />
               </div>
             </div>
-            <p className="text-sm font-black mb-1" style={{ color: 'var(--text)' }}>هنوز سفارشی ثبت نکرده‌اید</p>
+            <p className="text-sm font-black mb-1" style={{ color: 'var(--text)' }}>هنوز مطالعه‌ای ثبت نکرده‌اید</p>
             <p className="text-xs leading-relaxed max-w-[240px]" style={{ color: 'var(--text-3)' }}>کتاب‌های مورد علاقه خود را از نشر سُها تهیه کنید و اینجا مشاهده کنید</p>
           </div>
         ) : (
@@ -106,7 +106,7 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ orders, publishedBooks, onBack,
             <div className="grid grid-cols-3 gap-3 mb-6">
               <div className="rounded-2xl p-3 text-center" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
                 <p className="text-lg font-black" style={{ color: 'var(--primary)' }}>{toPersianDigits(String(orders.length))}</p>
-                <p className="text-[9px] font-bold mt-0.5" style={{ color: 'var(--text-3)' }}>کل سفارشات</p>
+                <p className="text-[9px] font-bold mt-0.5" style={{ color: 'var(--text-3)' }}>کل مطالعات</p>
               </div>
               <div className="rounded-2xl p-3 text-center" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
                 <p className="text-lg font-black" style={{ color: '#22c55e' }}>{toPersianDigits(String(confirmedBooks))}</p>

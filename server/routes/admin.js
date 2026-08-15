@@ -32,9 +32,11 @@ function pctChange(current, previous) {
 
 router.get('/stats', async (req, res) => {
   try {
-    const [users, videos, posts, comments, podcasts, authors, books, publishedBooks] = await Promise.all([
+    const [users, videos, posts, comments, podcasts, authors, books, publishedBooks, publishedNotes] = await Promise.all([
       User.countDocuments(), Video.countDocuments(), Post.countDocuments(), Comment.countDocuments(),
-      Podcast.countDocuments(), Author.countDocuments(), Book.countDocuments(), PublishedBook.countDocuments(),
+      Podcast.countDocuments(), Author.countDocuments(), Book.countDocuments(),
+      PublishedBook.countDocuments({ type: 'book' }),
+      PublishedBook.countDocuments({ type: 'note' }),
     ]);
     const recentUsers = await User.find().sort('-createdAt').limit(5).select('name phoneNumber role avatar createdAt');
     const recentPosts = await Post.find().sort('-createdAt').limit(5).select('author text createdAt likes');
@@ -83,7 +85,7 @@ router.get('/stats', async (req, res) => {
       { $sort: { count: -1 } }
     ]);
     res.json({
-      users, videos, posts, comments, podcasts, authors, books, publishedBooks,
+      users, videos, posts, comments, podcasts, authors, books, publishedBooks, publishedNotes,
       recentUsers, recentPosts, roleStats, commentsByType,
       totalLikes: (totalLikes[0]?.total || 0) + (totalPostLikes[0]?.total || 0),
       totalPlays: (podcastViews[0]?.total || 0) + (videoViews[0]?.total || 0),

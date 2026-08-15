@@ -1,0 +1,30 @@
+const { Client } = require('C:\\Users\\EMAD\\AppData\\Roaming\\npm\\node_modules\\ssh2');
+require('dotenv').config({ path: 'E:\\soha\\deploy\\.env.deploy' });
+const fs = require('fs');
+const c = new Client();
+c.on('ready', () => {
+  c.sftp((err, sftp) => {
+    if (err) { console.error(err.message); process.exit(1); }
+    const up = (local, remote) => new Promise((res, rej) => {
+      const w = sftp.createWriteStream(remote);
+      w.on('close', res); w.on('error', rej);
+      fs.createReadStream(local).pipe(w);
+    });
+    (async () => {
+      try {
+        await up('E:\\soha\\server\\models\\PublishedBook.js', '/opt/soha/server/models/PublishedBook.js');
+        console.log('model uploaded');
+        await up('C:\\Users\\EMAD\\AppData\\Local\\Temp\\opencode\\pdfx\\set-pages-db.mjs', '/opt/soha/server/set-pages-db.mjs');
+        console.log('script uploaded');
+        c.exec('cd /opt/soha/server && node set-pages-db.mjs; rm -f set-pages-db.mjs', (e, s) => {
+          if (e) { console.error(e.message); c.end(); return; }
+          let o = '';
+          s.on('data', d => o += d);
+          s.stderr.on('data', d => o += d);
+          s.on('close', () => { console.log(o); c.end(); });
+        });
+      } catch (err) { console.error(err.message); process.exit(1); }
+    })();
+  });
+}).on('error', e => { console.error(e.message); process.exit(1); })
+  .connect({ host: process.env.SSH_HOST, port: +process.env.SSH_PORT, username: process.env.SSH_USER, password: process.env.SSH_PASS, readyTimeout: 15000, keepaliveInterval: 10000 });

@@ -51,14 +51,12 @@ router.get('/admin/stats', auth, requireRole('admin'), async (req, res) => {
       daily.push(...dailyRaw.map(d => ({ date: d._id, value: d.value })));
     }
 
-    // پرفروش‌ترین کتاب‌ها (تایید شده)
-    const topBooks = await PurchaseRequest.aggregate([
-      { $match: { status: 'confirmed', ...(since ? { createdAt: { $gte: since } } : {}) } },
-      { $unwind: '$items' },
-      { $group: { _id: '$items.title', revenue: { $sum: { $multiply: [{ $toDouble: '$items.price' }, { $toDouble: '$items.quantity' }] } }, qty: { $sum: '$items.quantity' } } },
-      { $sort: { revenue: -1 } },
-      { $limit: 10 },
-    ]);
+    // پرفروش‌ترین کتاب‌ها (تایید شده) — محاسبه در JS چون قیمت‌ها ممکن است فارسی ذخیره شده باشند
+    const toNum = (v) => {
+      const s = String(v ?? '').replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[،,]/g, '').trim();
+      const n = Number(s);
+      return Number.isFinite(n) ? n : 0;
+    };
 
     // تعداد فروش هر کتاب + خریداران (تایید شده)
     const bookOrders = await PurchaseRequest.find(
@@ -71,16 +69,17 @@ router.get('/admin/stats', auth, requireRole('admin'), async (req, res) => {
         const t = String(it.title || 'بدون عنوان');
         if (!booksMap.has(t)) booksMap.set(t, { title: t, qty: 0, revenue: 0, orders: 0, buyers: [] });
         const b = booksMap.get(t);
-        const rev = (Number(it.price) || 0) * (Number(it.quantity) || 1);
-        b.qty += Number(it.quantity) || 1;
+        const rev = toNum(it.price) * toNum(it.quantity);
+        b.qty += toNum(it.quantity);
         b.revenue += rev;
         b.orders += 1;
-        b.buyers.push({ name: o.userName || 'کاربر', phone: o.userPhone || '', qty: Number(it.quantity) || 1, date: o.createdAt });
+        b.buyers.push({ name: o.userName || 'کاربر', phone: o.userPhone || '', qty: toNum(it.quantity), date: o.createdAt });
       }
     }
     const books = [...booksMap.values()]
       .map(b => ({ ...b, buyers: b.buyers.slice(0, 50) }))
       .sort((a, b) => b.revenue - a.revenue);
+    const topBooks = books.slice(0, 10).map(b => ({ title: b.title, revenue: b.revenue, qty: b.qty }));
 
     // هزینه‌ها در بازه
     const expenseFilter = since ? { date: { $gte: since } } : {};
@@ -97,7 +96,7 @@ router.get('/admin/stats', auth, requireRole('admin'), async (req, res) => {
       period,
       totals,
       daily,
-      topBooks: topBooks.map(b => ({ title: b._id, revenue: b.revenue || 0, qty: b.qty || 0 })),
+      topBooks: topBooks.map(b => ({ title: b.title, revenue: b.revenue || 0, qty: b.qty || 0 })),
       books,
       expenses: { count: expenses.count, sum: expenses.sum },
       netProfit,
@@ -155,7 +154,7 @@ router.post('/', requireAuth, async (req, res) => {
         title: 'درخواست خرید جدید 🛒',
         body: `${req.user.name || req.user.phoneNumber || 'کاربر'} — ${items.length} کتاب — مبلغ ${Number(totalPrice).toLocaleString('fa-IR')} تومان — کد پیگیری ${trackingCode}`,
         type: 'admin',
-        link: '',
+        link: `/purchases/${request._id}`,
       });
       broadcast('data-changed', { type: 'notifications', action: 'create' });
       sendWebPushToAll({
@@ -213,6 +212,14 @@ router.patch('/:id', auth, requireRole('admin'), async (req, res) => {
     request.adminNote = adminNote || '';
     request.reviewedAt = new Date();
     await request.save();
+
+    // حذف نوتیفیکیشن «درخواست تایید» برای ادمین — چون پرداخت بررسی شده، دیگر نمایش داده نشود
+    try {
+      await Notification.deleteMany({ type: 'admin', link: `/purchases/${request._id}` });
+      broadcast('data-changed', { type: 'notifications', action: 'delete' });
+    } catch (e) {
+      console.error('PURCHASE NOTIF CLEANUP ERROR', e);
+    }
 
     // نوتیفیکیشن به خریدار
     try {

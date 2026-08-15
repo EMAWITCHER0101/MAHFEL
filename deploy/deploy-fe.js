@@ -60,6 +60,7 @@ function uploadFile(lp, rp) {
       'server/models/User.js', 'server/models/Podcast.js', 'server/models/PublishedBook.js', 'server/models/Notification.js',
       'server/middleware/auth.js', 'server/utils/profanityFilter.js', 'server/utils/ipCheck.js',
       'server/routes/notifications.js', 'server/routes/support.js', 'server/models/SupportMessage.js',
+      'server/routes/purchaseRequests.js', 'server/models/PurchaseRequest.js',
       'server/package.json',
     ];
     for (const f of serverFiles) {
@@ -77,7 +78,7 @@ function uploadFile(lp, rp) {
     await uploadFile('C:\\Temp\\soha-fe.tar.gz', '/tmp/soha-fe.tar.gz');
     console.log(await ssh('cd /opt/soha && tar -xzf /tmp/soha-fe.tar.gz -C .next/', 30000));
     await uploadFile('C:\\Temp\\soha-static.tar.gz', '/tmp/soha-static.tar.gz');
-    console.log(await ssh('cd /opt/soha/.next/standalone/.next && rm -rf static && tar -xzf /tmp/soha-static.tar.gz', 30000));
+    console.log(await ssh('cd /opt/soha/.next/standalone/.next && rm -rf static && mkdir -p static && tar -xzf /tmp/soha-static.tar.gz -C static', 30000));
     await uploadFile('C:\\Temp\\soha-public.tar.gz', '/tmp/soha-public.tar.gz');
     console.log(await ssh('cd /opt/soha && tar -xzf /tmp/soha-public.tar.gz', 30000));
     console.log(await ssh('rm -rf /opt/soha/.next/standalone/public && cp -r /opt/soha/public /opt/soha/.next/standalone/public 2>/dev/null || true'));

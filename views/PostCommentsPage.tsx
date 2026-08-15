@@ -395,7 +395,6 @@ const ChatBubble: React.FC<{
             setShowQuoteBtn(true);
           } else {
             setShowQuoteBtn(false);
-            setSelectedQuoteText('');
           }
         }, 10);
       };
@@ -590,7 +589,6 @@ const ChatBubble: React.FC<{
               </div>
             )}
           </div>
-      </div>
           {showQuoteBtn && (
             <div className="absolute z-50 rounded-xl shadow-xl py-1 animate-fadeIn"
                  style={{
@@ -605,7 +603,7 @@ const ChatBubble: React.FC<{
               </button>
             </div>
           )}
-
+      </div>
           {showMenu && menuPos && createPortal(
             <div ref={menuRef} className="fixed z-[9999] animate-fadeIn"
                  style={{ top: menuPos.top, right: menuPos.right, left: menuPos.left }}>
@@ -623,7 +621,7 @@ const ChatBubble: React.FC<{
                   style={{ color: 'var(--text)' }}>
                   <i className="fas fa-reply text-[9px]" style={{ color: 'var(--text-3)' }}></i> پاسخ
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); onReply(comment, comment.text); setShowMenu(false); setMenuPos(null); }}
+                <button onClick={(e) => { e.stopPropagation(); onReply(comment, selectedQuoteText || comment.text); setShowMenu(false); setMenuPos(null); }}
                   className="w-full text-right px-2.5 py-2 text-[11px] font-medium flex items-center gap-2 transition-colors hover:bg-white/5"
                   style={{ color: 'var(--text)' }}>
                   <i className="fas fa-quote-right text-[9px]" style={{ color: 'var(--text-3)' }}></i> نقل‌قول

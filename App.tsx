@@ -45,6 +45,13 @@ const BookPage = React.lazy(() => import('./views/BookPage'));
 const PostCommentsPage = React.lazy(() => import('./views/PostCommentsPage'));
 import { formatTime } from './utils/helpers';
 
+// کلید «آخرین نوتیفیکیشن دیده‌شده» — جدا برای مهمان و هر کاربر، تا لاگین/لاگ‌اوت باگ نمایش نوتیفیکیشن نسازد
+const notifLastSeenKey = (): string => {
+    let uid = '';
+    try { const u = JSON.parse(localStorage.getItem('user_data') || 'null'); uid = String(u?.id ?? u?._id ?? ''); } catch { /* ignore */ }
+    return uid ? `mahfel_last_notif_id_${uid}` : 'mahfel_last_notif_id_guest';
+};
+
 const AppInner: React.FC = () => {
     const { theme, toggleTheme } = useTheme();
     const [appState, setAppState] = useState<'initializing' | 'login' | 'interests' | 'ready' | 'admin'>('initializing');
@@ -312,11 +319,12 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
             try {
                 const list = await getNotifications();
                 if (!list || list.length === 0) return;
-                const lastSeen = localStorage.getItem('mahfel_last_notif_id') || '';
+                const lastKey = notifLastSeenKey();
+                const lastSeen = localStorage.getItem(lastKey) || '';
                 const latest = list[0];
                 const latestId = String((latest as any)._id || '');
                 if (!latestId || latestId === lastSeen) return;
-                localStorage.setItem('mahfel_last_notif_id', latestId);
+                localStorage.setItem(lastKey, latestId);
                 setNotif({ id: latestId, title: latest.title || 'محفل', body: latest.body || '', link: (latest as any).link || '' });
                 sendNativeNotification(latest.title || 'محفل', latest.body || '', (latest as any).link || '');
                 if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
@@ -329,6 +337,7 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
         checkNotifications();
         const notifTimer = setInterval(checkNotifications, 30000);
         window.addEventListener('focus', checkNotifications);
+        window.addEventListener('user-login-changed', checkNotifications);
 
         // چک‌آپدیت نسخه (فقط در اپ اندروید یا دسکتاپ)
         const checkForUpdate = async () => {
@@ -522,8 +531,9 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
                 const myId = String((user as any)?._id ?? (user as any)?.id ?? '');
                 if (item.userId && myId && String(item.userId) !== myId) return;
                 const id = String(item._id || '');
-                if (id && id !== localStorage.getItem('mahfel_last_notif_id')) {
-                    localStorage.setItem('mahfel_last_notif_id', id);
+                const lastKey = notifLastSeenKey();
+                if (id && id !== localStorage.getItem(lastKey)) {
+                    localStorage.setItem(lastKey, id);
                     setNotif({ id, title: item.title || 'محفل', body: item.body || '', link: item.link || '' });
                     sendNativeNotification(item.title || 'محفل', item.body || '', item.link || '');
                 }
@@ -663,6 +673,40 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
 
     // Close sidebar when image/video lightbox opens
     const prevCollapsedRef = useRef(desktopSidebarCollapsed);
+
+    // Swipe between tabs on mobile (horizontal drag) — ترتیب همان منوی بار پایینی موبایل است (RTL: راست ← چپ)
+    const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
+    const TAB_SWIPE_ORDER: Page[] = ['sowt', 'library', 'mahfel', 'videos', 'nashr'];
+    const canSwipeTabs = () =>
+        appState === 'ready' &&
+        !isWriting &&
+        !selectedPodcast &&
+        !selectedBook &&
+        !selectedPublishedBook &&
+        !selectedAuthor &&
+        !isPlayerExpanded &&
+        !isSearchOpen &&
+        !mahfelSidebarOpen &&
+        !isSidebarOpen &&
+        !activeVideo;
+    const handleTouchStart = (e: React.TouchEvent) => {
+        if (!canSwipeTabs()) { swipeStartRef.current = null; return; }
+        const t = e.touches[0];
+        swipeStartRef.current = { x: t.clientX, y: t.clientY };
+    };
+    const handleTouchEnd = (e: React.TouchEvent) => {
+        const start = swipeStartRef.current;
+        swipeStartRef.current = null;
+        if (!start || !canSwipeTabs()) return;
+        const t = e.changedTouches[0];
+        const dx = t.clientX - start.x;
+        const dy = t.clientY - start.y;
+        if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+        const idx = TAB_SWIPE_ORDER.indexOf(activeTab);
+        if (idx < 0) return;
+        const next = dx < 0 ? TAB_SWIPE_ORDER[idx + 1] : TAB_SWIPE_ORDER[idx - 1];
+        if (next) setActiveTab(next);
+    };
     useEffect(() => {
         const handler = (e: Event) => {
             const detail = (e as CustomEvent).detail;
@@ -683,6 +727,7 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
         setIsAuthenticated(true);
         if (token) localStorage.setItem('soha_token', token);
         localStorage.setItem('user_data', JSON.stringify(u));
+        window.dispatchEvent(new Event('user-login-changed'));
         if (u.role === 'admin') { setAppState('admin'); }
         else { setAppState(u.interests && u.interests.length > 0 ? 'ready' : 'interests'); }
         const welcomeKey = `welcome_seen_${u.id || u.name}`;
@@ -699,6 +744,7 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
         setIsAuthenticated(false);
         localStorage.removeItem('soha_token');
         localStorage.removeItem('user_data');
+        window.dispatchEvent(new Event('user-login-changed'));
         setAppState('login');
         setIsProfileOpen(false);
     };
@@ -1032,20 +1078,43 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
         const pm = l.match(/\/mahfel\/post\/([^/?#]+)/);
         if (pm) {
             const id = pm[1];
+            const openPost = (p: any) => setSelectedPostForComments(p);
             const p = posts.find(x => String((x as any).id || (x as any)._id) === id);
-            if (p) setSelectedPostForComments(p);
+            if (p) { openPost(p); return; }
+            getPosts().then((list) => {
+                const p2 = (list || []).find(x => String((x as any).id || (x as any)._id) === id);
+                if (p2) openPost(p2);
+            }).catch(() => {});
             return;
         }
-        const podm = l.match(/\/mahfel\/podcast\/([^/?#]+)/);
+        const podm = l.match(/\/mahfel\/podcast\/([^/?#]+)(?:\?ep=(\d+))?/);
         if (podm) {
             const id = podm[1];
+            const ep = podm[2] != null ? parseInt(podm[2], 10) : undefined;
+            const openP = (p: any) => { setSelectedPodcast(p); if (ep != null) setPlaylistEpisodeIndex(ep); };
             const p = podcasts.find(x => String((x as any).id || (x as any)._id) === id);
-            if (p) setSelectedPodcast(p);
+            if (p) { openP(p); return; }
+            getPodcasts().then((list) => {
+                const p2 = (list || []).find(x => String((x as any).id || (x as any)._id) === id);
+                if (p2) openP(p2);
+            }).catch(() => {});
+            return;
+        }
+        const bm = l.match(/\/mahfel\/book\/([^/?#]+)/);
+        if (bm) {
+            const id = bm[1];
+            const openB = (b: any) => { setSelectedPublishedBook(b); setActiveTab('nashr'); };
+            const b = publishedBooks.find(x => String((x as any).id || (x as any)._id) === id);
+            if (b) { openB(b); return; }
+            getPublishedBooks().then((list) => {
+                const b2 = (list || []).find(x => String((x as any).id || (x as any)._id) === id);
+                if (b2) openB(b2);
+            }).catch(() => {});
             return;
         }
         if (l === '/' || l === '/mahfel' || l === '/mahfel/videos') { setActiveTab('videos'); return; }
         setActiveTab('mahfel');
-    }, [videos, posts, podcasts, handlePlayVideo]);
+    }, [videos, posts, podcasts, publishedBooks, handlePlayVideo]);
 
     // رویداد نیتیو: باز شدن اپ از نوتیفیکیشن APK → همان صفحه/ویدیو باز شود
     useEffect(() => {
@@ -1061,6 +1130,15 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
         setSelectedAttachment({ type, data, timestamp });
         setIsPublicPost(true);
         setIsWriting(true);
+    };
+
+    const handleAddBookComment = async (text: string, book: any, parentId?: string, quotedText?: string) => {
+        if (!text.trim()) return;
+        const newComment = await addComment({ type: 'book', bookId: book.id || (book as any)._id, author: user?.name || 'کاربر', text: text.trim(), parentId, quotedText, authorAvatarUrl: user?.avatar });
+        if (newComment) {
+            setComments(prev => insertCommentIntoTree(prev, newComment));
+            refreshComments();
+        }
     };
 
     const handlePublishPost = async () => {
@@ -1527,7 +1605,7 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
                 }
             }} onDeleteComment={handleDeleteComment} onLikeComment={handleLikeComment} onUpdateComment={handleUpdateComment} publishedBooks={publishedBooks} onShowBook={(book) => {}} onPlayEpisode={playEpisode} miniPlayerProps={currentTrack ? { track: currentTrack, isPlaying: isPlaying, progress: audioProgress, duration: audioDuration, onPlayPause: togglePlay, onNext: playNext, onPrev: playPrev, onExpand: () => setIsPlayerExpanded(true), onClose: handleClosePlayer, onSelectPodcast: setSelectedPodcast, isVisible: !isPlayerExpanded, theme } : undefined} />;
         }
-        if (selectedPodcast) return <PlaylistPage podcast={selectedPodcast} author={authors.find(a => String(a.id) === String(selectedPodcast.speakerId))} comments={comments} onBack={() => { setSelectedPodcast(null); setSelectedAuthor(null); }} onPlayEpisode={playEpisode} onAuthorSelect={setSelectedAuthor} initialTab={playlistTab} initialEpisodeIndex={playlistEpisodeIndex} onEpisodeIndexChange={setPlaylistEpisodeIndex} onAddComment={async (text, p, episodeIndex, parentId, audioTimestamp) => { const newComment = await addComment({ type: 'podcast', podcastId: p.id || (p as any)._id, author: user?.name || 'کاربر', text, episodeIndex, parentId, audioTimestamp, authorAvatarUrl: user?.avatar }); if (newComment) { setComments(prev => insertCommentIntoTree(prev, newComment)); refreshComments(); } }} onDeleteComment={handleDeleteComment} onLikeComment={handleLikeComment} onUpdateComment={handleUpdateComment} currentUserName={user?.name} currentUserAvatar={user?.avatar} currentAudioTime={audioProgress * audioDuration} onSeekToTime={(s) => { if(audioRef.current) { audioRef.current.currentTime = s; audioRef.current.play().catch(()=>{}); } }} onPlayEpisodeAtTime={(p, epIdx, seekTime) => {
+        if (selectedPodcast) return <PlaylistPage podcast={selectedPodcast} author={authors.find(a => String(a.id) === String(selectedPodcast.speakerId))} comments={comments} onBack={() => { setSelectedPodcast(null); setSelectedAuthor(null); }} onPlayEpisode={playEpisode} onAuthorSelect={setSelectedAuthor} initialTab={playlistTab} initialEpisodeIndex={playlistEpisodeIndex} onEpisodeIndexChange={setPlaylistEpisodeIndex} onAddComment={async (text, p, episodeIndex, parentId, audioTimestamp, quotedText) => { const newComment = await addComment({ type: 'podcast', podcastId: p.id || (p as any)._id, author: user?.name || 'کاربر', text, episodeIndex, parentId, audioTimestamp, quotedText, authorAvatarUrl: user?.avatar }); if (newComment) { setComments(prev => insertCommentIntoTree(prev, newComment)); refreshComments(); } }} onDeleteComment={handleDeleteComment} onLikeComment={handleLikeComment} onUpdateComment={handleUpdateComment} currentUserName={user?.name} currentUserAvatar={user?.avatar} currentAudioTime={audioProgress * audioDuration} onSeekToTime={(s) => { if(audioRef.current) { audioRef.current.currentTime = s; audioRef.current.play().catch(()=>{}); } }} onPlayEpisodeAtTime={(p, epIdx, seekTime) => {
   const episode = p.episodes[epIdx];
   if (!episode || !episode.audioUrl) return;
   setCurrentTrack({ podcast: p, episode, episodeIndex: epIdx });
@@ -1549,8 +1627,8 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
         if (selectedAuthor) return <AuthorPage author={selectedAuthor} allBooks={books} allPodcasts={podcasts} allVideos={videos} onBack={() => setSelectedAuthor(null)} onBookSelect={setSelectedBook} onPlayEpisode={playEpisode} />;
         if (selectedBook) return <BookPage book={selectedBook} allPodcasts={podcasts} authors={authors} onBack={() => setSelectedBook(null)} onPlayEpisode={playEpisode} onAuthorSelect={setSelectedAuthor} />;
         if (selectedPublishedBook) {
-            if (selectedPublishedBook.type === 'note') return <NoteDetailView note={selectedPublishedBook} allPodcasts={podcasts} comments={comments} onAddComment={(text, n) => openWriteModalWithAttachment('book', n)} onClose={() => setSelectedPublishedBook(null)} />;
-            return <BookDetailView book={selectedPublishedBook} allPodcasts={podcasts} onClose={() => setSelectedPublishedBook(null)} comments={comments} onAddComment={(text, b) => openWriteModalWithAttachment('book', b)} />;
+            if (selectedPublishedBook.type === 'note') return <NoteDetailView note={selectedPublishedBook} allPodcasts={podcasts} comments={comments} onAddComment={(text, n, parentId, quotedText) => { if (parentId || quotedText) handleAddBookComment(text, n, parentId, quotedText); else openWriteModalWithAttachment('book', n); }} onClose={() => setSelectedPublishedBook(null)} />;
+            return <BookDetailView book={selectedPublishedBook} allPodcasts={podcasts} onClose={() => setSelectedPublishedBook(null)} comments={comments} onAddComment={(text, b, parentId, quotedText) => { if (parentId || quotedText) handleAddBookComment(text, b, parentId, quotedText); else openWriteModalWithAttachment('book', b); }} />;
         }
         const currentVideoId = activeVideo ? (activeVideo.id || (activeVideo as any)._id) : null;
         const renderVideoInitialTime = currentVideoId === activeVideoId ? videoCurrentTimeRef.current : 0;
@@ -1563,8 +1641,8 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
                 } else {
                     setIsVideoMini(true);
                 }
-            }} onVideoSelect={handlePlayVideo} onAddComment={async (text, v, videoTimestamp, parentId, _audioTimestamp) => {
-                const newComment = await addComment({ type: 'video', videoId: v.id || (v as any)._id, author: user?.name || 'کاربر', text, videoTimestamp, parentId, authorAvatarUrl: user?.avatar });
+            }} onVideoSelect={handlePlayVideo} onAddComment={async (text, v, videoTimestamp, parentId, _audioTimestamp, quotedText) => {
+                const newComment = await addComment({ type: 'video', videoId: v.id || (v as any)._id, author: user?.name || 'کاربر', text, videoTimestamp, parentId, quotedText, authorAvatarUrl: user?.avatar });
                 if (newComment) {
                     setComments(prev => insertCommentIntoTree(prev, newComment));
                     refreshComments();
@@ -1597,16 +1675,16 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
                 }).catch(()=>{});
               }
               if (expandPlayer) setIsPlayerExpanded(true);
-            }} onShowComments={(p: Post, podcast?: Podcast) => { setSelectedPostForComments(p); setSelectedPostPodcast(podcast || null); }} onShowVideoDiscussion={(c: Comment, v: Video) => setSelectedVideoComment({ comment: c, video: v })} onDeletePost={handleDeletePost} onShowBook={(b: PublishedBook) => { setSelectedPublishedBook(b); }} onShowInstantView={(title: string, content: string) => setInstantView({ title, content })} onDeleteComment={handleDeleteComment} onLikeComment={handleLikeComment} onUpdateComment={handleUpdateComment} onAddComment={async (text: string, v: any, videoTimestamp?: number, parentId?: string, audioTimestamp?: number) => {
+            }} onShowComments={(p: Post, podcast?: Podcast) => { setSelectedPostForComments(p); setSelectedPostPodcast(podcast || null); }} onShowVideoDiscussion={(c: Comment, v: Video) => setSelectedVideoComment({ comment: c, video: v })} onDeletePost={handleDeletePost} onShowBook={(b: PublishedBook) => { setSelectedPublishedBook(b); }} onShowInstantView={(title: string, content: string) => setInstantView({ title, content })} onDeleteComment={handleDeleteComment} onLikeComment={handleLikeComment} onUpdateComment={handleUpdateComment} onAddComment={async (text: string, v: any, videoTimestamp?: number, parentId?: string, audioTimestamp?: number, quotedText?: string) => {
                 const findComment = (list: any[], id: string): any => { for (const c of list) { if (String((c as any)._id || c.id) === id) return c; if (c.replies?.length) { const found = findComment(c.replies, id); if (found) return found; } } return null; };
                 const parentComment = parentId ? findComment(comments, String(parentId)) : null;
                 const isPodcast = parentComment?.type === 'podcast' || v?.episodes;
                 if (isPodcast) {
                     const pid = parentComment?.podcastId || v?.id || v?._id;
-                    const nc = await addComment({ type: 'podcast', podcastId: String(pid), author: user?.name || 'کاربر', text, episodeIndex: parentComment?.episodeIndex ?? 0, parentId, authorAvatarUrl: user?.avatar, audioTimestamp } as any);
+                    const nc = await addComment({ type: 'podcast', podcastId: String(pid), author: user?.name || 'کاربر', text, episodeIndex: parentComment?.episodeIndex ?? 0, parentId, authorAvatarUrl: user?.avatar, audioTimestamp, quotedText } as any);
                     if (nc) { setComments(prev => insertCommentIntoTree(prev, nc)); refreshComments(); }
                 } else {
-                    const nc = await addComment({ type: 'video', videoId: (v as any)._id || v.id, author: user?.name || 'کاربر', text, videoTimestamp, parentId, authorAvatarUrl: user?.avatar, audioTimestamp });
+                    const nc = await addComment({ type: 'video', videoId: (v as any)._id || v.id, author: user?.name || 'کاربر', text, videoTimestamp, parentId, authorAvatarUrl: user?.avatar, audioTimestamp, quotedText });
                     if (nc) { setComments(prev => insertCommentIntoTree(prev, nc)); refreshComments(); }
                 }}} onNewPost={(p: Post) => setPosts([p, ...posts])} onUpdatePost={(p: Post) => setPosts(posts.map(post => post.id === p.id ? p : post))} user={user} onOpenSearch={() => setIsSearchOpen(true)} onOpenProfile={() => setIsProfileOpen(true)}             onToggleSidebar={() => {
               if (window.innerWidth >= 1024) {
@@ -1628,7 +1706,7 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
             case 'sowt': return <SowtPage podcasts={podcasts} authors={authors} liveStream={{ isLive: false, title: '', url: '' }} onPodcastSelect={setSelectedPodcast} onPlay={playEpisode} userInterests={user?.interests || []} isHeaderVisible={true} onAuthorSelect={setSelectedAuthor} userLibrary={user?.library?.podcasts || []} onToggleLibrary={(id: number) => {}} onShare={(t: string, s: string) => {}} onToggleSidebar={() => setDesktopSidebarCollapsed(v => !v)} theme={theme} onToggleTheme={toggleTheme} onOpenProfile={() => setIsProfileOpen(true)} user={user} />;
             case 'matn': return <MatnPage authors={authors} books={books} onBookSelect={setSelectedBook} onAuthorSelect={setSelectedAuthor} />;
             case 'videos': return <VideoVaultPage videos={videos} onVideoSelect={(v) => { setIsVideoMini(false); handlePlayVideo(v); }} user={user} theme={theme} onToggleTheme={toggleTheme} onProfileClick={() => setIsProfileOpen(true)} onOpenSidebar={() => setDesktopSidebarCollapsed(v => !v)} onPlaylistOpen={setVaultPlaylistOpen} vaultBackSignal={vaultBackSignal} />;
-            case 'nashr': return <NashrPage publishedBooks={publishedBooks} allPodcasts={podcasts} comments={comments} onAddComment={(text, book) => openWriteModalWithAttachment('book', book)} user={user} onUpdateUser={(u) => { setUser(u); localStorage.setItem('user_data', JSON.stringify(u)); }} onDeleteComment={handleDeleteComment} onLikeComment={handleLikeComment} onUpdateComment={handleUpdateComment} onToggleSidebar={() => setDesktopSidebarCollapsed(v => !v)} myNotes={myNotes} onSaveNote={handleSaveNote} onUpdateNote={handleUpdateNote} onDeleteNote={handleDeleteNote} onRepostToMahfel={handleRepostNoteToMahfel} onOpenAuthorProfile={handleOpenAuthorProfile} />;
+            case 'nashr': return <NashrPage publishedBooks={publishedBooks} allPodcasts={podcasts} comments={comments} onAddComment={(text, book, parentId, quotedText) => { if (parentId || quotedText) handleAddBookComment(text, book, parentId, quotedText); else openWriteModalWithAttachment('book', book); }} user={user} onUpdateUser={(u) => { setUser(u); localStorage.setItem('user_data', JSON.stringify(u)); }} onDeleteComment={handleDeleteComment} onLikeComment={handleLikeComment} onUpdateComment={handleUpdateComment} onToggleSidebar={() => setDesktopSidebarCollapsed(v => !v)} myNotes={myNotes} onSaveNote={handleSaveNote} onUpdateNote={handleUpdateNote} onDeleteNote={handleDeleteNote} onRepostToMahfel={handleRepostNoteToMahfel} onOpenAuthorProfile={handleOpenAuthorProfile} />;
             case 'library': return <LibraryPage savedVideoIds={user?.library?.videos || localVideoLibrary} allVideos={videos} onPlayVideo={(v) => { setIsVideoMini(false); handlePlayVideo(v); }} onRemoveVideo={(id) => handleToggleLibrary(id)} savedPodcastIds={user?.library?.podcasts || []} savedEpisodes={user?.library?.episodes || []} allPodcasts={podcasts} authors={authors} onSelectPodcast={setSelectedPodcast} onRemovePodcast={(p) => togglePodcastLibrary(p)} onRemoveEpisode={(podcastId, episodeIndex) => toggleEpisodeLibrary(podcastId, episodeIndex)} onPlayPodcast={(podcast, idx) => playEpisode(podcast, idx)} theme={theme} onToggleTheme={toggleTheme} user={user} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} onToggleSidebar={() => setDesktopSidebarCollapsed(v => !v)} />;
             case 'support': return <SupportPage user={user} theme={theme} onToggleTheme={toggleTheme} onOpenProfile={() => setIsProfileOpen(true)} onToggleSidebar={() => setDesktopSidebarCollapsed(v => !v)} />;
             case 'ai': return <AiAssistantPage podcasts={podcasts} videos={videos} posts={posts} books={publishedBooks} authors={authors} onPlayPodcast={playEpisode} onPlayVideo={(v) => { setIsVideoMini(false); handlePlayVideo(v); }} onShowBook={(b) => { setSelectedPublishedBook(b); }} />;
@@ -1655,7 +1733,7 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
               <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); setSelectedPodcast(null); setSelectedAuthor(null); setSelectedBook(null); setSelectedPublishedBook(null); setSelectedPostForComments(null); setSelectedPostPodcast(null); setSelectedVideoComment(null); setIsPlayerExpanded(false); setIsVideoMini(true); }} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} theme={theme} onToggleTheme={toggleTheme} onOpenSearch={() => setIsSearchOpen(true)} onOpenAdmin={() => setAppState('admin')} onOpenProfile={() => setIsProfileOpen(true)} user={user} isAuthenticated={isAuthenticated} collapsed={desktopSidebarCollapsed} onToggleCollapsed={setDesktopSidebarCollapsed} />
 
               {/* Main Content */}
-               <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+               <div className="flex-1 flex flex-col min-w-0 overflow-y-auto" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
 
               
                <div className={`flex-1 ${activeTab === 'mahfel' ? 'pb-0' : 'pb-16 lg:pb-0'}`}>
@@ -1809,8 +1887,8 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
                   onBack={() => setIsVideoMini(false)}
                   onCloseMini={() => { setActiveVideo(null); setIsVideoMini(false); }}
                   onVideoSelect={(v) => { setIsVideoMini(false); handlePlayVideo(v); }}
-                  onAddComment={async (text, v, videoTimestamp, parentId, _audioTimestamp) => {
-                    const newComment = await addComment({ type: 'video', videoId: v.id || (v as any)._id, author: user?.name || 'کاربر', text, videoTimestamp, parentId, authorAvatarUrl: user?.avatar });
+                  onAddComment={async (text, v, videoTimestamp, parentId, _audioTimestamp, quotedText) => {
+                    const newComment = await addComment({ type: 'video', videoId: v.id || (v as any)._id, author: user?.name || 'کاربر', text, videoTimestamp, parentId, quotedText, authorAvatarUrl: user?.avatar });
                     if (newComment) {
                       setComments(prev => insertCommentIntoTree(prev, newComment));
                       refreshComments();
