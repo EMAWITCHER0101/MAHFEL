@@ -562,19 +562,14 @@ const PostBubble: React.FC<{
                    <span className="font-black text-[11px] cursor-pointer hover:opacity-70 transition-opacity" style={{ color: isAdminPost ? 'var(--primary)' : 'var(--text-1)' }} onClick={(e) => { e.stopPropagation(); onOpenProfile?.(post.userId, post.author, post.authorAvatarUrl); }}>{post.author}</span>
                    <span className="text-[8px]" style={{ color: 'var(--text-3)' }}>{formatTimeFromISO(post.isoDate)}</span>
                  </div>
-                  {currentUser && post.author === currentUser && (
-                    <button onClick={(e) => { e.stopPropagation(); setIsEditingPost(true); setEditPostText(post.text || ''); }}
-                      className="w-6 h-6 rounded-lg flex items-center justify-center transition-all hover:bg-black/5 active:scale-90 opacity-50 hover:opacity-80"
-                      style={{ color: 'var(--text-3)' }}>
-                      <i className="fas fa-pen text-[8px]"></i>
-                    </button>
-                  )}
-                  <button onClick={menu.openAt}
-                    className="w-6 h-6 rounded-lg flex items-center justify-center transition-all hover:bg-black/5 active:scale-90 opacity-50 hover:opacity-80"
-                    style={{ color: 'var(--text-3)' }}>
-                    <i className="fas fa-ellipsis-vertical text-[8px]"></i>
-                  </button>
-               </div>
+{currentUser && post.author === currentUser && (
+                     <button onClick={(e) => { e.stopPropagation(); setIsEditingPost(true); setEditPostText(post.text || ''); }}
+                       className="w-6 h-6 rounded-lg flex items-center justify-center transition-all hover:bg-black/5 active:scale-90 opacity-50 hover:opacity-80"
+                       style={{ color: 'var(--text-3)' }}>
+                       <i className="fas fa-pen text-[8px]"></i>
+                     </button>
+                   )}
+                </div>
 
                {/* Text */}
                {post.text && (
