@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import type { Podcast, Episode, Video, PublishedBook, Author, Book } from '../types';
 import { toPersianDigits } from '../utils/helpers';
-import { uploadFile, getAdminStats, getAdminUsers, updateUserRole, deleteUser, getAdminPosts, adminDeletePost, adminUpdatePost, getAdminComments, adminDeleteComment, adminUpdateComment, getPodcasts, getBooks, getAuthors, getVideos, getComments, getPosts, getPublishedBooks, getAdminAnalytics, getAdminAnalyticsSegments, getAdminInsights, getAdminActivity, adminExportData, adminSearchGlobal, adminBulkUsers, adminBulkPosts, adminBulkComments, muteUser, unmuteUser, unbanUser, resetUserWarnings, getNotifications, adminSendNotification, adminDeleteNotification, getAICorpus, getAdminVideoPlaylists, createVideoPlaylist, updateVideoPlaylist, deleteVideoPlaylist, adminGetNotes, adminCreateNote, adminUpdateNote, adminDeleteNote, adminGetAuthors, getAppUpdate, adminSaveAppUpdate, adminUploadApk, AppUpdateInfo, adminGetPurchaseRequests, adminUpdatePurchaseRequest, getCommunitySettings, updateCommunitySettings, getSupportMessages, markSupportMessageRead, deleteSupportMessage } from '../services/api';
+import { uploadFile, getAdminStats, getAdminUsers, updateUserRole, deleteUser, getAdminPosts, adminDeletePost, adminUpdatePost, getAdminComments, adminDeleteComment, adminUpdateComment, getPodcasts, getBooks, getAuthors, getVideos, getComments, getPosts, getPublishedBooks, getAdminAnalytics, getAdminAnalyticsSegments, getAdminInsights, getAdminActivity, adminExportData, adminSearchGlobal, adminBulkUsers, adminBulkPosts, adminBulkComments, muteUser, unmuteUser, unbanUser, resetUserWarnings, getNotifications, adminSendNotification, adminDeleteNotification, getAICorpus, getAdminVideoPlaylists, createVideoPlaylist, updateVideoPlaylist, deleteVideoPlaylist, adminGetNotes, adminCreateNote, adminUpdateNote, adminDeleteNote, adminGetAuthors, getAppUpdate, adminSaveAppUpdate, adminUploadApk, AppUpdateInfo, adminGetPurchaseRequests, adminUpdatePurchaseRequest, getCommunitySettings, updateCommunitySettings, getSupportMessages, markSupportMessageRead, deleteSupportMessage, adminPurgePosts } from '../services/api';
 import { fetchAparatVideoDetails, extractAparatId } from '../utils/aparatApi';
 import { GoogleGenAI } from "@google/genai";
 import { AreaTrendChart, StackedDailyBars, RankBars } from '../components/AdminCharts';
@@ -373,6 +373,12 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
     const [notifItemType, setNotifItemType] = useState('');
     const [notifItemId, setNotifItemId] = useState('');
     const [notifLink, setNotifLink] = useState('');
+    const [notifUserId, setNotifUserId] = useState('');
+    const [notifUserLabel, setNotifUserLabel] = useState('');
+    const [notifUserAvatar, setNotifUserAvatar] = useState('');
+    const [notifUserSearch, setNotifUserSearch] = useState('');
+    const [notifUserResults, setNotifUserResults] = useState<any[] | null>(null);
+    const [notifUsersLoading, setNotifUsersLoading] = useState(false);
 
     const [supportMessages, setSupportMessages] = useState<any[]>([]);
     const [supportTotal, setSupportTotal] = useState(0);
@@ -561,6 +567,37 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
     const [chatMessage, setChatMessage] = useState('');
     const [chatSettingsLoading, setChatSettingsLoading] = useState(false);
     const [readingBook, setReadingBook] = useState<PublishedBook | null>(null);
+    const [purgeBusy, setPurgeBusy] = useState(false);
+
+    // سوییپ چپ/راست بین تب‌های پنل (موبایل)
+    const ADMIN_TAB_ORDER: AdminTab[] = ['dashboard', 'users', 'posts', 'comments', 'analytics', 'sowt', 'library', 'nashr', 'notes', 'authors', 'videos', 'notifications', 'versions', 'purchases', 'sales', 'support'];
+    const adminSwipeStartRef = useRef<{ x: number; y: number } | null>(null);
+    const handleAdminTouchStart = (e: React.TouchEvent) => {
+        if (isEditing || typeof window === 'undefined' || window.innerWidth >= 1024) { adminSwipeStartRef.current = null; return; }
+        let node: HTMLElement | null = e.target as HTMLElement | null;
+        const container = e.currentTarget as HTMLElement;
+        try {
+            while (node && node !== container) {
+                if (node.scrollWidth > node.clientWidth + 4) { adminSwipeStartRef.current = null; return; }
+                node = node.parentElement;
+            }
+        } catch { /* ignore */ }
+        const t = e.touches[0];
+        adminSwipeStartRef.current = { x: t.clientX, y: t.clientY };
+    };
+    const handleAdminTouchEnd = (e: React.TouchEvent) => {
+        const start = adminSwipeStartRef.current;
+        adminSwipeStartRef.current = null;
+        if (!start || isEditing) return;
+        const t = e.changedTouches[0];
+        const dx = t.clientX - start.x;
+        const dy = t.clientY - start.y;
+        if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+        const idx = ADMIN_TAB_ORDER.indexOf(activeTab);
+        if (idx < 0) return;
+        const next = dx < 0 ? ADMIN_TAB_ORDER[idx + 1] : ADMIN_TAB_ORDER[idx - 1];
+        if (next) setActiveTab(next);
+    };
 
     const showAdminToast = (message: string, type: 'error' | 'success' | 'warning' = 'success') => {
         setAdminToast({ message, type });
@@ -569,6 +606,22 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
 
     const showConfirmToast = (message: string, onConfirm: () => void, type: 'danger' | 'warning' = 'danger') => {
         setConfirmToast({ message, onConfirm, type });
+    };
+
+    const handlePurgeChat = async () => {
+        setPurgeBusy(true);
+        try {
+            const res = await adminPurgePosts();
+            if (res?.success) {
+                showAdminToast(`تمام پیام‌های محفل پاک شد — ${toPersianDigits(res.deleted || 0)} پیام حذف شد`, 'success');
+            } else {
+                showAdminToast('خطا در پاکسازی محفل', 'error');
+            }
+        } catch {
+            showAdminToast('خطا در پاکسازی محفل', 'error');
+        } finally {
+            setPurgeBusy(false);
+        }
     };
 
     const updateTable = (key: keyof typeof localData, val: any) => setLocalData(prev => ({ ...prev, [key]: val }));
@@ -671,12 +724,32 @@ if (activeTab === 'versions') loadVersions();
         if (activeTab === 'authors') loadAdminAuthors();
     }, [activeTab, loadStats, loadUsers, loadPosts, loadComments, loadAnalytics, loadActivity, loadInsights, loadAICorpus, loadNotifications, loadAdminNotes, loadAdminAuthors, loadVersions]);
 
+    // رفرش لحظه‌ای لیست نوتیفیکیشن‌ها وقتی پیام/پست/ریپلای حذف می‌شود یا نوتیفیکیشن جدید می‌رسد
+    useEffect(() => {
+        const onRefresh = () => { if (activeTab === 'notifications') loadNotifications(); };
+        window.addEventListener('mahfel-notifs-refresh', onRefresh);
+        return () => window.removeEventListener('mahfel-notifs-refresh', onRefresh);
+    }, [activeTab, loadNotifications]);
+
     // ریل‌تایم مدیریت کاربران: هر تغییر کاربر (ثبت‌نام/نقش/حذف) → ری‌فچ لحظه‌ای صفحهٔ فعلی بدون رفرش
     useEffect(() => {
         if (activeTab !== 'users' || currentUsersVersion <= 0) return;
         const t = setTimeout(() => loadUsers(usersPage), 250);
         return () => clearTimeout(t);
     }, [currentUsersVersion, activeTab, usersPage, loadUsers]);
+
+    // جستجوی کاربر برای ارسال نوتیفیکیشن شخصی
+    useEffect(() => {
+        if (notifTarget !== 'user') return;
+        if (notifUserSearch.trim().length < 2) { setNotifUserResults(null); return; }
+        let alive = true;
+        setNotifUsersLoading(true);
+        const t = setTimeout(async () => {
+            const r = await getAdminUsers({ search: notifUserSearch.trim() });
+            if (alive) { setNotifUserResults(r ? r.users : []); setNotifUsersLoading(false); }
+        }, 400);
+        return () => { alive = false; clearTimeout(t); };
+    }, [notifUserSearch, notifTarget]);
 
     const sortedPodcasts = useMemo(() => {
         let list = [...localData.podcasts].filter(p => p.title.includes(podcastSearch));
@@ -708,6 +781,27 @@ if (activeTab === 'versions') loadVersions();
                 <StatCard icon="fa-play-circle" label="بازدید ویدیو" value={stats?.videoViews || 0} color="#2e86c1" />
                 <StatCard icon="fa-heart" label="لایک پادکست‌ها" value={stats?.podcastLikes || 0} color="#f43f5e" />
                 <StatCard icon="fa-heart" label="لایک ویدیوها" value={stats?.videoLikes || 0} color="#ec4899" />
+            </div>
+
+            <div className="bg-gradient-to-r from-red-50 to-rose-50 rounded-2xl border border-red-200 p-4 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-start gap-2.5 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
+                            <i className="fas fa-broom text-red-500 text-sm"></i>
+                        </div>
+                        <div className="min-w-0">
+                            <h3 className="text-[10px] font-black text-red-600">دستور پاکسازی محفل</h3>
+                            <p className="text-[9px] font-bold text-red-400 leading-relaxed mt-0.5">تمام پیام‌های داخل محفل برای همیشه حذف می‌شوند — این عمل قابل بازگشت نیست!</p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => showConfirmToast('آیا از پاکسازی کامل تمام پیام‌های محفل مطمئن هستید؟ این عمل غیرقابل بازگشت است.', handlePurgeChat, 'danger')}
+                        disabled={purgeBusy}
+                        className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-white text-[10px] font-black shadow-sm">
+                        {purgeBusy ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-broom"></i>}
+                        <span>{purgeBusy ? 'در حال پاکسازی…' : 'دستور پاکسازی'}</span>
+                    </button>
+                </div>
             </div>
 
             <div className="bg-gradient-to-br from-indigo-50/80 to-purple-50/80 rounded-2xl border p-4 shadow-sm">
@@ -1354,6 +1448,8 @@ const renderPostsPanel = () => (
                                         <span className="text-[11px] font-black text-gray-800">{n.title || 'بی‌عنوان'}</span>
                                         {n.isDraft ? (
                                             <span className="text-[7px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-600 font-black whitespace-nowrap"><i className="fas fa-pen-alt"></i> پیش‌نویس</span>
+                                        ) : n.pendingApproval ? (
+                                            <span className="text-[7px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600 font-black whitespace-nowrap"><i className="fas fa-hourglass-half"></i> در انتظار تأیید</span>
                                         ) : (
                                             <span className="text-[7px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-600 font-black whitespace-nowrap"><i className="fas fa-globe"></i> منتشر شده</span>
                                         )}
@@ -1362,6 +1458,14 @@ const renderPostsPanel = () => (
                                     <p className="text-[9px] text-gray-400 leading-relaxed line-clamp-2 text-right">{String(n.description || '').replace(/<[^>]*>/g, '') || n.title}</p>
                                 </div>
                                 <div className="flex items-center gap-1 flex-shrink-0">
+                                    {n.pendingApproval && (
+                                        <button onClick={async () => {
+                                            const r = await adminUpdateNote(n._id, { isDraft: false, pendingApproval: false });
+                                            if (r) { showAdminToast('یادداشت تأیید و منتشر شد', 'success'); loadAdminNotes(adminNotesPage); }
+                                        }} className="w-8 h-8 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 shadow-md transition-all flex items-center justify-center" title="تأیید و انتشار">
+                                            <i className="fas fa-check text-[9px]"></i>
+                                        </button>
+                                    )}
                                     <button onClick={() => { setEditingNote(n); setNoteTitle(n.title || ''); setNoteContent((n.contentHtml || n.description || '').replace(/<[^>]*>/g, '')); setNoteAuthorName(n.authorName || n.user?.name || ''); setNoteIsDraft(!!n.isDraft); setNoteComposer({ open: true }); }} className="w-8 h-8 rounded-xl bg-blue-50 text-blue-500 hover:bg-blue-100 transition-all flex items-center justify-center"><i className="fas fa-pen text-[9px]"></i></button>
                                     <button onClick={async () => {
                                         const r = await adminUpdateNote(n._id, { isDraft: !n.isDraft });
@@ -1581,7 +1685,8 @@ const renderPostsPanel = () => (
                             <FormField label="لینک فایل PDF"><div className="flex gap-2"><TextInput value={b.pdfUrl} onChange={(e:any)=>setField('pdfUrl', e.target.value)} /><UploadButton accept=".pdf" icon="fa-file-pdf" onUpload={(url:string)=>setField('pdfUrl', url)} /></div></FormField>
                         </div>
                         <FormField label="فهرست مطالب"><TextArea value={b.tableOfContents} onChange={(e:any)=>setField('tableOfContents', e.target.value)} rows={4} /></FormField>
-                        <FormField label="مقدمه / متن محصول"><div className="flex gap-2"><TextArea value={b.contentHtml || b.description} onChange={(e:any)=>setField('contentHtml', e.target.value)} /><WordToHtmlButton onConverted={(html:string)=>setField('contentHtml', html)} /></div></FormField>
+                        <FormField label="درباره کتاب (متن کوتاه ۲-۳ خط)"><TextArea value={b.description || ''} onChange={(e:any)=>setField('description', e.target.value)} rows={2} /></FormField>
+                        <FormField label="مقدمه / متن محصول"><div className="flex gap-2"><TextArea value={b.contentHtml || ''} onChange={(e:any)=>setField('contentHtml', e.target.value)} /><WordToHtmlButton onConverted={(html:string)=>setField('contentHtml', html)} /></div></FormField>
                     </div>
                 </div>
             );
@@ -2277,12 +2382,58 @@ const renderPostsPanel = () => (
                         <TextArea placeholder="متن نوتیفیکیشن…" rows={3} value={notifBody} onChange={(e: any) => setNotifBody(e.target.value)} />
                     </FormField>
                     <FormField label="مخاطب">
-                        <select value={notifTarget} onChange={(e) => setNotifTarget(e.target.value)}
+                        <select value={notifTarget} onChange={(e) => { setNotifTarget(e.target.value); if (e.target.value !== 'user') { setNotifUserId(''); setNotifUserLabel(''); setNotifUserAvatar(''); setNotifUserSearch(''); setNotifUserResults(null); } }}
                             className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-xs text-gray-700 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all shadow-sm">
                             <option value="all">همه کاربران</option>
                             <option value="users">کاربران عادی</option>
                             <option value="authors">نویسندگان</option>
+                            <option value="user">کاربر خاص</option>
                         </select>
+                        {notifTarget === 'user' && (
+                            <div className="mt-2 flex flex-col gap-2">
+                                {notifUserId ? (
+                                    <div className="flex items-center justify-between gap-2 px-3 py-2 bg-primary/5 border border-primary/20 rounded-xl">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            {notifUserAvatar ? (
+                                                <img src={notifUserAvatar} className="w-6 h-6 rounded-full object-cover flex-shrink-0" alt="" />
+                                            ) : (
+                                                <div className="w-6 h-6 rounded-full bg-primary/15 text-primary flex items-center justify-center flex-shrink-0"><i className="fas fa-user text-[9px]"></i></div>
+                                            )}
+                                            <span className="text-xs font-black text-gray-700 truncate">{notifUserLabel}</span>
+                                            <span className="text-[9px] text-primary font-bold flex-shrink-0">کاربر انتخاب شد</span>
+                                        </div>
+                                        <button onClick={() => { setNotifUserId(''); setNotifUserLabel(''); setNotifUserAvatar(''); setNotifUserSearch(''); setNotifUserResults(null); }}
+                                            className="w-6 h-6 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 flex items-center justify-center transition-all flex-shrink-0" title="تغییر کاربر">
+                                            <i className="fas fa-times text-[10px]"></i>
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <TextInput placeholder="جستجوی نام کاربر…" value={notifUserSearch} onChange={(e: any) => setNotifUserSearch(e.target.value)} />
+                                        {notifUsersLoading && <p className="text-[10px] text-gray-400"><i className="fas fa-spinner fa-spin"></i> در حال جستجو…</p>}
+                                        {!notifUsersLoading && notifUserResults && notifUserResults.length === 0 && (
+                                            <p className="text-[10px] text-gray-400">کاربری یافت نشد</p>
+                                        )}
+                                        {notifUserResults && notifUserResults.length > 0 && (
+                                            <div className="max-h-40 overflow-auto rounded-xl border border-gray-200 divide-y divide-gray-100 bg-white shadow-sm">
+                                                {notifUserResults.map((u: any) => (
+                                                    <button key={String(u._id)} onClick={() => { setNotifUserId(String(u._id)); setNotifUserLabel(u.name || 'کاربر'); setNotifUserAvatar(u.avatar || ''); setNotifUserSearch(''); setNotifUserResults(null); }}
+                                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-primary/5 transition-all text-right">
+                                                        {u.avatar ? (
+                                                            <img src={u.avatar} className="w-6 h-6 rounded-full object-cover flex-shrink-0" alt="" />
+                                                        ) : (
+                                                            <div className="w-6 h-6 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center flex-shrink-0"><i className="fas fa-user text-[9px]"></i></div>
+                                                        )}
+                                                        <span className="font-bold truncate">{u.name || 'کاربر'}</span>
+                                                        <span className="text-[9px] text-gray-400 ml-auto flex-shrink-0">{u.role === 'admin' ? 'مدیر' : u.role === 'author' ? 'نویسنده' : 'کاربر'}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        )}
                     </FormField>
                     <FormField label="انتخاب مورد (اختیاری — با کلیک روی نوتیفیکیشن به آن هدایت می‌شود)">
                         <div className="flex flex-col gap-2">
@@ -2319,10 +2470,10 @@ const renderPostsPanel = () => (
                         </div>
                     </FormField>
                     <button
-                        disabled={notifSending || !notifTitle.trim() || !notifBody.trim()}
+                        disabled={notifSending || !notifTitle.trim() || !notifBody.trim() || (notifTarget === 'user' && !notifUserId)}
                         onClick={async () => {
                             setNotifSending(true);
-                            const res = await adminSendNotification(notifTitle, notifBody, notifTarget, notifLink || undefined);
+                            const res = await adminSendNotification(notifTitle, notifBody, notifTarget, notifLink || undefined, undefined, notifTarget === 'user' ? notifUserId : undefined);
                             setNotifSending(false);
                             if (res && (res as any)._id) {
                                 setAdminToast({ type: 'success', message: 'نوتیفیکیشن با موفقیت ارسال شد ✅' });
@@ -2331,13 +2482,18 @@ const renderPostsPanel = () => (
                                 setNotifItemType('');
                                 setNotifItemId('');
                                 setNotifLink('');
+                                setNotifUserId('');
+                                setNotifUserLabel('');
+                                setNotifUserAvatar('');
+                                setNotifUserSearch('');
+                                setNotifUserResults(null);
                                 loadNotifications();
                             } else {
                                 setAdminToast({ type: 'error', message: 'خطا در ارسال نوتیفیکیشن' });
                             }
                         }}
-                        className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-white text-xs font-black transition-all active:scale-95 shadow-lg ${notifSending || !notifTitle.trim() || !notifBody.trim() ? 'bg-gray-300 cursor-not-allowed' : 'bg-primary hover:opacity-90'}`}>
-                        {notifSending ? <><i className="fas fa-spinner fa-spin"></i> در حال ارسال…</> : <><i className="fas fa-bell"></i> ارسال برای همه</>}
+                        className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-white text-xs font-black transition-all active:scale-95 shadow-lg ${notifSending || !notifTitle.trim() || !notifBody.trim() || (notifTarget === 'user' && !notifUserId) ? 'bg-gray-300 cursor-not-allowed' : 'bg-primary hover:opacity-90'}`}>
+                        {notifSending ? <><i className="fas fa-spinner fa-spin"></i> در حال ارسال…</> : <><i className="fas fa-bell"></i> {notifTarget === 'user' ? 'ارسال برای کاربر خاص' : 'ارسال برای همه'}</>}
                     </button>
                 </div>
             </div>
@@ -2358,7 +2514,12 @@ const renderPostsPanel = () => (
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center justify-between gap-2">
                                         <p className="text-xs font-black text-gray-700 truncate">{n.title}</p>
-                                        <span className="text-[9px] text-gray-400 flex-shrink-0">{n.createdAt ? new Date(n.createdAt).toLocaleDateString('fa-IR') : ''}</span>
+                                        <span className="flex items-center gap-1.5 flex-shrink-0">
+                                            {n.userId && (
+                                                <span className="text-[9px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 font-bold">شخصی</span>
+                                            )}
+                                            <span className="text-[9px] text-gray-400">{n.createdAt ? new Date(n.createdAt).toLocaleDateString('fa-IR') : ''}</span>
+                                        </span>
                                     </div>
                                     <p className="text-[10px] text-gray-500 mt-0.5 leading-relaxed whitespace-pre-line">{n.body}</p>
                                 </div>
@@ -2511,14 +2672,14 @@ const renderPostsPanel = () => (
                         </div>
                     </div>
                     <div className="flex items-center gap-3">
-                        <div className="relative hidden sm:block">
+                        <div className="relative hidden sm:block flex-1 min-w-0">
                             <input
                                 type="text"
                                 value={globalSearch}
                                 onChange={(e) => setGlobalSearch(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleGlobalSearch()}
                                 placeholder="جستجوی سراسری..."
-                                className="w-48 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-[10px] text-gray-700 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-[10px] text-gray-700 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                             />
                             <i className={`fas ${isSearching ? 'fa-spinner fa-spin' : 'fa-search'} absolute left-3 top-2.5 text-gray-300 text-[10px]`}></i>
                         </div>
@@ -2539,7 +2700,7 @@ const renderPostsPanel = () => (
                     ))}
                 </div>
 
-                <div className="flex-grow overflow-y-auto no-scrollbar bg-[#f8f9fa] pb-40">
+                <div className="flex-grow overflow-y-auto no-scrollbar bg-[#f8f9fa] pb-40" onTouchStart={handleAdminTouchStart} onTouchEnd={handleAdminTouchEnd}>
                     <div className="max-w-2xl mx-auto">
                         {globalSearchResults && (
                             <div className="p-4 space-y-4 animate-fadeIn border-b bg-white">

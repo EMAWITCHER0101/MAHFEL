@@ -31,6 +31,7 @@ import expenseRoutes from './routes/expenses.js';
 import communityRoutes from './routes/community.js';
 import userProfileRoutes from './routes/users.js';
 import supportRoutes from './routes/support.js';
+import albumRoutes from './routes/albums.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -111,6 +112,7 @@ app.use('/api/expenses', expenseRoutes);
 app.use('/api/community', communityRoutes);
 app.use('/api/users', userProfileRoutes);
 app.use('/api/support', supportRoutes);
+app.use('/api/albums', albumRoutes);
 app.use('/uploads', express.static(path.resolve('uploads')));
 
 app.use((err, req, res, next) => {

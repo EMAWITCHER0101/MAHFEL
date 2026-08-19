@@ -21,7 +21,7 @@ const NotificationBanner: React.FC<NotificationBannerProps> = ({ title, body, li
   useEffect(() => {
     if (title) {
       setIsVisible(true);
-      const timer = setTimeout(dismiss, 10000);
+      const timer = setTimeout(dismiss, 2000);
       return () => clearTimeout(timer);
     }
   }, [title, body]);
@@ -64,7 +64,7 @@ const NotificationBanner: React.FC<NotificationBannerProps> = ({ title, body, li
           مشاهده
         </button>
         <style>{`
-          .progress-notif { animation: notifbar 10s linear forwards; transform-origin: right; }
+          .progress-notif { animation: notifbar 2s linear forwards; transform-origin: right; }
           @keyframes notifbar { from { transform: scaleX(1); } to { transform: scaleX(0); } }
         `}</style>
       </div>

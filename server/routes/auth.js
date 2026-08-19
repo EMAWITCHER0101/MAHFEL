@@ -90,7 +90,7 @@ router.post('/register', async (req, res) => {
       avatar: generateDefaultAvatar(name),
       role: 'user',
       interests: [],
-      library: { podcasts: [], episodes: [], videos: [], books: [], notes: [] },
+      library: { podcasts: [], episodes: [], videos: [], books: [], notes: [], posts: [] },
     });
     await user.save();
 
@@ -288,7 +288,7 @@ router.post('/verify-otp', async (req, res) => {
           avatar: generateDefaultAvatar(''),
           role: 'user',
           interests: [],
-          library: { podcasts: [], episodes: [], videos: [], books: [], notes: [] },
+          library: { podcasts: [], episodes: [], videos: [], books: [], notes: [], posts: [] },
         });
         await user.save();
       }

@@ -15,12 +15,15 @@ const userSchema = new mongoose.Schema({
   mutedReason: { type: String, default: '' },
   interests: [{ type: String }],
   securityKey: String,
+  fcmTokens: [{ type: String }],
   library: {
     podcasts: [{ type: String }],
     episodes: [{ podcastId: String, episodeIndex: Number }],
     videos: [{ type: String }],
     books: [{ type: Number }],
     notes: [{ type: Number }],
+    posts: [{ type: String }],
+    bookmarks: [{ bookId: String, bookTitle: String, page: Number, text: String }],
   },
 }, { timestamps: true });
 

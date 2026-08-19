@@ -7,6 +7,17 @@ import { auth, requireRole } from '../middleware/auth.js';
 
 const router = Router();
 
+// امنیت: آی‌پی/آدرس سرور هرگز در لینک‌های دانلود به کلاینت‌ها نرسد
+const PUBLIC_ORIGIN = 'https://app.soha-sima.ir';
+const sanitizeUrl = (url) => {
+  if (!url) return '';
+  let u = String(url)
+    .replace(/https?:\/\/\d{1,3}(\.\d{1,3}){3}(:\d+)?/g, PUBLIC_ORIGIN)
+    .replace(/https?:\/\/localhost(:\d+)?/g, PUBLIC_ORIGIN);
+  u = u.replace(/\/uploads\/apk\/mahfel-1786825767029\.apk/gi, '/downloads/mahfel.apk');
+  return u;
+};
+
 // آخرین نسخه‌های منتشرشده (عمومی - برای چک‌آپدیت کلاینت‌ها)
 router.get('/latest', async (req, res) => {
   try {
@@ -14,10 +25,10 @@ router.get('/latest', async (req, res) => {
     if (!doc) return res.json(null);
     res.json({
       apkVersion: doc.apkVersion || '',
-      apkUrl: doc.apkUrl || '',
+      apkUrl: sanitizeUrl(doc.apkUrl),
       apkMessage: doc.apkMessage || '',
       desktopVersion: doc.desktopVersion || '',
-      desktopUrl: doc.desktopUrl || '',
+      desktopUrl: sanitizeUrl(doc.desktopUrl),
       desktopMessage: doc.desktopMessage || '',
       updatedAt: doc.updatedAt,
     });
@@ -33,10 +44,10 @@ router.post('/', auth, requireRole('admin'), async (req, res) => {
     let doc = await AppUpdate.findOne().sort({ updatedAt: -1 });
     if (!doc) doc = new AppUpdate();
     if (typeof apkVersion === 'string') doc.apkVersion = apkVersion.trim();
-    if (typeof apkUrl === 'string') doc.apkUrl = apkUrl.trim();
+    if (typeof apkUrl === 'string') doc.apkUrl = sanitizeUrl(apkUrl.trim());
     if (typeof apkMessage === 'string') doc.apkMessage = apkMessage.trim();
     if (typeof desktopVersion === 'string') doc.desktopVersion = desktopVersion.trim();
-    if (typeof desktopUrl === 'string') doc.desktopUrl = desktopUrl.trim();
+    if (typeof desktopUrl === 'string') doc.desktopUrl = sanitizeUrl(desktopUrl.trim());
     if (typeof desktopMessage === 'string') doc.desktopMessage = desktopMessage.trim();
     doc.updatedAt = new Date();
     await doc.save();

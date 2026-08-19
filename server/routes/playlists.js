@@ -2,6 +2,7 @@ import { Router } from 'express';
 import VideoPlaylist from '../models/VideoPlaylist.js';
 import Video from '../models/Video.js';
 import Notification from '../models/Notification.js';
+import { sendWebPushToAll } from '../utils/webpush.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { broadcast } from '../utils/broadcast.js';
 
@@ -117,12 +118,13 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
     broadcast('data-changed', { type: 'playlists', action: 'create', item: playlist.toObject() });
     // نوتیفیکیشن همگانی: پلی‌لیست جدید
     try {
-      await Notification.create({
+      const notif = await Notification.create({
         title: '📺 پلی‌لیست جدید',
         body: playlist.name || 'پلی‌لیست جدید اضافه شد',
         link: '/mahfel/videos',
         type: 'playlist',
       });
+      await sendWebPushToAll({ title: notif.title, body: notif.body, url: notif.link, id: String(notif._id) });
     } catch (ignored) {}
     res.status(201).json(playlist);
   } catch (error) {

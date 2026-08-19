@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="fa">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>خطا</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0F172A;color:#fff;font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,Tahoma,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+.card{text-align:center;max-width:340px;width:100%}
+.icon{font-size:64px;margin-bottom:20px}
+h1{font-size:20px;margin-bottom:12px}
+p{color:#94A3B8;font-size:14px;line-height:1.8;margin-bottom:28px}
+button{background:#2563EB;color:#fff;border:none;padding:14px 40px;border-radius:12px;font-size:16px;font-weight:bold;cursor:pointer;transition:background .2s;width:100%}
+button:hover{background:#1D4ED8}
+.appurl{font-size:11px;color:#64748B;word-break:break-all;margin-bottom:16px}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">📡</div>
+  <h1>اتصال برقرار نشد</h1>
+  <p>اینترنت یا شبکه خود را بررسی کنید<br>و دوباره تلاش کنید.</p>
+  <p class="appurl" id="appUrl"></p>
+  <button id="retry">تلاش مجدد</button>
+</div>
+<script>
+  var url = new URLSearchParams(location.search).get('url') || 'https://app.soha-sima.ir';
+  document.getElementById('appUrl').textContent = 'در حال بارگذاری:\n' + url;
+  document.getElementById('retry').onclick = function () { location.href = url; };
+  window.addEventListener('online', function () { location.href = url; });
+</script>
+</body>
+</html>

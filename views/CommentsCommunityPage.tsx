@@ -8,6 +8,9 @@ import TimestampThumbnail from '../components/TimestampThumbnail';
 import { createPost, addPostComment, getCommunitySettings } from '../services/api';
 import UserProfileModal from '../components/UserProfileModal';
 import { ImageLightbox, VideoLightbox } from '../components/MediaLightbox';
+import ConfirmToast from '../components/ConfirmToast';
+
+const BRAND_AVATAR = '/images/brand-avatar.jpg';
 
 const formatTimestamp = (sec: number) => {
   const h = Math.floor(sec / 3600);
@@ -100,11 +103,37 @@ const MediaCard: React.FC<{
     podcast?: Podcast;
     episode?: Episode | null;
     book?: PublishedBook;
+    album?: any;
     onPlayVideo: (video: Video) => void;
     onPlayPodcast: (podcast: Podcast, episodeIndex: number) => void;
     onShowBook: (book: PublishedBook) => void;
+    onPlayAlbum?: (album: any) => void;
+    onOpenAlbum?: (album: any) => void;
     onShowDiscussion?: () => void;
-}> = React.memo(({ video, podcast, episode, book, onPlayVideo, onPlayPodcast, onShowBook, onShowDiscussion }) => {
+}> = React.memo(({ video, podcast, episode, book, album, onPlayVideo, onPlayPodcast, onShowBook, onPlayAlbum, onOpenAlbum, onShowDiscussion }) => {
+    if (album) return (
+        <div className="my-2 rounded-xl overflow-hidden" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+            <div onClick={(e) => { e.stopPropagation(); onOpenAlbum?.(album); }}
+              className="flex items-center gap-3 p-2.5 cursor-pointer transition-all duration-300 hover:shadow-md active:scale-[0.98]">
+                <div className="relative w-10 h-10 rounded-xl overflow-hidden flex-shrink-0">
+                    <img src={album.cover || album.items?.[0]?.cover || DEFAULT_COVER} className="w-full h-full object-cover" alt={album.title} />
+                    <span className="absolute bottom-0.5 left-0.5 px-1 rounded text-[6px] font-black text-white" style={{ background: 'rgba(0,0,0,0.6)' }}>
+                        {toPersianDigits(album.items?.length || 0)}
+                    </span>
+                </div>
+                <div className="flex-1 min-w-0 text-right">
+                    <p className="font-black text-[10px] truncate" style={{ color: 'var(--text)' }}>{album.title}</p>
+                    <p className="text-[8px] font-bold mt-0.5" style={{ color: '#14b8a6' }}>
+                        <i className="fas fa-palette text-[7px] ml-1" />
+                        {album.type === 'video' ? 'آلبوم ویدیویی' : 'آلبوم صوتی'}
+                    </p>
+                </div>
+                <div className="w-8 h-8 rounded-full flex items-center justify-center text-[9px] shadow-sm" style={{ background: 'linear-gradient(135deg, #14b8a6, #0d9488)', color: 'white' }}>
+                    <i className="fas fa-play ml-0.5"></i>
+                </div>
+            </div>
+        </div>
+    );
     if (video) return (
         <div className="my-2 rounded-xl overflow-hidden group cursor-pointer transition-all duration-300 hover:shadow-lg" onClick={(e) => { e.stopPropagation(); onPlayVideo(video); }}
           style={{ background: 'var(--surface-3)', border: '1px solid var(--border)' }}>
@@ -274,12 +303,12 @@ const RenderReply = React.memo<RenderReplyProps>(({ comment, depth, postId, loca
             {comment.media && comment.media.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-1 mb-1.5">
                 {comment.media.map((m, i) => {
-                  const isSingle = comment.media!.length === 1;
-                  const imgWidth = m.type === 'image' ? (isSingle ? '100%' : 'calc(50% - 3px)') : '100%';
+                  const isSingleImage = m.type === 'image' && comment.media!.length === 1;
+                  const imgWidth = m.type === 'image' ? (isSingleImage ? 'fit-content' : 'calc(50% - 3px)') : '100%';
                   return (
-                  <div key={i} className="rounded-xl overflow-hidden shadow-sm" style={{ border: '1px solid var(--border)', width: imgWidth, background: 'var(--surface-3)' }}>
+                  <div key={i} className="rounded-xl overflow-hidden shadow-sm" style={{ boxShadow: '0 0 0 1px var(--border)', width: imgWidth, maxWidth: 'min(100%, 420px)', margin: isSingleImage ? '0 auto' : undefined, background: 'var(--surface-3)' }}>
                     {m.type === 'image' ? (
-                      <img src={m.url} className="w-full h-auto object-cover cursor-pointer hover:opacity-90 transition-opacity duration-300" alt="" loading="lazy" onClick={(e) => { e.stopPropagation(); setImgLightbox({ src: m.url, text: comment.text, author: comment.author, authorAvatar: comment.authorAvatarUrl, time: formatTimeFromISO(comment.isoDate) }); }} />
+                      <img src={m.url} className="w-full h-auto object-cover cursor-pointer hover:opacity-90 transition-opacity duration-300" alt="" loading="lazy" style={{ display: 'block', width: '100%', height: 'auto' }} onClick={(e) => { e.stopPropagation(); setImgLightbox({ src: m.url, text: comment.text, author: comment.author, authorAvatar: comment.authorAvatarUrl, time: formatTimeFromISO(comment.isoDate) }); }} />
                     ) : m.type === 'audio' ? (
                       <div onClick={(e) => e.stopPropagation()}>
                         <AudioPlayer src={m.url} compact />
@@ -392,7 +421,13 @@ const PostBubble: React.FC<{
   post: Post;
   video?: Video;
   podcast?: Podcast;
+  episode?: Episode | null;
   publishedBook?: PublishedBook;
+  album?: any;
+  saved?: boolean;
+  onToggleSave?: (post: Post) => void;
+  onPlayAlbum?: (album: any) => void;
+  onOpenAlbum?: (album: any) => void;
   onShowComments: (post: Post, podcast?: Podcast) => void;
   onPlayVideo: (video: Video) => void;
   onPlayPodcast: (podcast: Podcast, episodeIndex: number) => void;
@@ -408,7 +443,7 @@ const PostBubble: React.FC<{
   currentUser?: string;
   onSwipeReply?: (target: { postId: number; author: string; text: string; commentId?: string; quotedText?: string }) => void;
   onOpenProfile?: (userId?: string, name?: string, avatar?: string) => void;
-}> = React.memo(({ post, video, podcast, publishedBook, onShowComments, onPlayVideo, onPlayPodcast, onShowBook, onOpenMenu, isFirstInGroup, isLastInGroup, onShowInstantView, onAddComment, onNewPost, onUpdatePost, onDeletePost, currentUser, onSwipeReply, onOpenProfile }) => {
+}> = React.memo(({ post, video, podcast, episode, publishedBook, album, saved, onToggleSave, onPlayAlbum, onOpenAlbum, onShowComments, onPlayVideo, onPlayPodcast, onShowBook, onOpenMenu, isFirstInGroup, isLastInGroup, onShowInstantView, onAddComment, onNewPost, onUpdatePost, onDeletePost, currentUser, onSwipeReply, onOpenProfile }) => {
   const isAdminPost = post.author === 'سرای هنر و اندیشه' || post.author?.includes('مجموعه:');
   const [liked, setLiked] = useState(() => {
     try { return JSON.parse(localStorage.getItem('soha_liked_posts') || '[]').includes(String(post.id)); } catch { return false; }
@@ -602,11 +637,12 @@ const PostBubble: React.FC<{
                  {post.media && post.media.length > 0 && (
                   <div className="flex flex-wrap gap-1 mb-1.5">
                     {post.media.map((m, i) => {
-                      const imgWidth = m.type === 'image' ? (post.media!.length === 1 ? '100%' : 'calc(50% - 2px)') : '100%';
+                      const isSingleImage = m.type === 'image' && post.media!.length === 1;
+                      const imgWidth = m.type === 'image' ? (isSingleImage ? 'fit-content' : 'calc(50% - 2px)') : '100%';
                       return (
-                      <div key={i} className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)', width: imgWidth, background: 'var(--surface-3)' }}>
+                      <div key={i} className="rounded-xl overflow-hidden" style={{ boxShadow: '0 0 0 1px var(--border)', width: imgWidth, maxWidth: 'min(100%, 420px)', margin: isSingleImage ? '0 auto' : undefined, background: 'var(--surface-3)' }}>
                          {m.type === 'image' ? (
-                           <img src={m.url} className="w-full h-auto object-cover cursor-pointer hover:opacity-90 transition-opacity" alt="" loading="lazy" onClick={(e) => { e.stopPropagation(); setImgLightbox({ src: m.url, text: post.text, author: post.author, authorAvatar: post.authorAvatarUrl, time: formatTimeFromISO(post.isoDate) }); }} />
+                           <img src={m.url} className="w-full h-auto object-cover cursor-pointer hover:opacity-90 transition-opacity" alt="" loading="lazy" style={{ display: 'block', width: '100%', height: 'auto' }} onClick={(e) => { e.stopPropagation(); setImgLightbox({ src: m.url, text: post.text, author: post.author, authorAvatar: post.authorAvatarUrl, time: formatTimeFromISO(post.isoDate) }); }} />
                           ) : m.type === 'audio' ? (
                            <div onClick={(e) => e.stopPropagation()}>
                              <AudioPlayer src={m.url} compact />
@@ -623,45 +659,40 @@ const PostBubble: React.FC<{
                    })}
                  </div>
                )}
-               <MediaCard video={video} podcast={podcast} book={publishedBook} onPlayVideo={onPlayVideo} onPlayPodcast={onPlayPodcast} onShowBook={onShowBook} onShowDiscussion={podcast ? () => onShowComments(post) : undefined} />
+               <MediaCard video={video} podcast={podcast} episode={episode} book={publishedBook} album={album} onPlayVideo={onPlayVideo} onPlayPodcast={onPlayPodcast} onShowBook={onShowBook} onPlayAlbum={onPlayAlbum} onOpenAlbum={onOpenAlbum} onShowDiscussion={podcast ? () => onShowComments(post) : undefined} />
            </div>
 
              {/* Action buttons */}
             <div className="flex items-center gap-2 px-3 pb-2 pt-1" onClick={(e) => e.stopPropagation()}>
-               <button onClick={(e) => { e.stopPropagation(); onSwipeReply?.({ postId: post.id, author: post.author, text: post.text || '' }); }}
-                 className="flex items-center gap-1.5 rounded-lg py-1 px-2 transition-all active:scale-90"
-                 style={{ color: '#475569' }}>
-                 <i className="fas fa-reply text-[11px]"></i>
-                 <span className="text-[10px] font-bold">پاسخ</span>
-               </button>
+<button onClick={(e) => { e.stopPropagation(); onSwipeReply?.({ postId: post.id, author: post.author, text: post.text || '' }); }}
+                  className="flex items-center gap-1.5 rounded-lg py-1 px-2 transition-all active:scale-90"
+                  style={{ color: '#475569' }}>
+                  <i className="fas fa-reply text-[11px]"></i>
+                  <span className="text-[10px] font-bold">پاسخ</span>
+                </button>
+                {currentUser && onToggleSave && (
+                <button onClick={(e) => { e.stopPropagation(); onToggleSave(post); }}
+                  className="flex items-center gap-1.5 rounded-lg py-1 px-2 transition-all active:scale-90"
+                  title={saved ? 'حذف از کتابخانه' : 'ذخیره در کتابخانه'}
+                  style={{ color: saved ? 'var(--primary)' : '#475569' }}>
+                  <i className={`${saved ? 'fas' : 'far'} fa-bookmark text-[11px]`}></i>
+                  <span className="text-[10px] font-bold">{saved ? 'ذخیره شد' : 'ذخیره'}</span>
+                </button>
+                )}
                <button onClick={toggleLike}
                  className="flex items-center gap-1.5 rounded-lg py-1 px-2 transition-all active:scale-90"
                  style={{ color: liked ? '#ef4444' : '#475569' }}>
                  <i className={`${liked ? 'fas' : 'far'} fa-heart text-[11px]`}></i>
                  <span className="text-[10px] font-bold">{toPersianDigits(post.likes + (liked ? 1 : 0))}</span>
                </button>
-               {currentUser && post.author === currentUser && (
+{currentUser && post.author === currentUser && (
                <button onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
                  className="rounded-lg py-1 px-2 transition-all active:scale-90"
                  style={{ color: '#475569' }}>
                  <i className="fas fa-trash text-[11px]"></i>
                </button>
                )}
-               {showDeleteConfirm && (
-                 <div className="flex items-center gap-1.5 animate-fadeIn">
-                   <button onClick={handleDelete}
-                     className="px-2.5 py-1 rounded-lg text-[9px] font-bold transition-all active:scale-90 hover:opacity-80"
-                     style={{ background: '#ef4444', color: 'white' }}>
-                     حذف
-                   </button>
-                    <button onClick={() => setShowDeleteConfirm(false)}
-                      className="px-2.5 py-1 rounded-lg text-[9px] font-bold transition-all active:scale-90 hover:opacity-80"
-                      style={{ background: 'var(--surface-3)', color: 'var(--text-2)' }}>
-                      انصراف
-            </button>
-           </div>
-                )}
-                <button onClick={(e) => { e.stopPropagation(); onShowComments(post); }}
+               <button onClick={(e) => { e.stopPropagation(); onShowComments(post); }}
                  className="flex items-center gap-1.5 rounded-lg py-1 px-2 transition-all active:scale-90 mr-auto"
                  style={{ color: 'var(--primary)' }}>
                  <i className="fas fa-comments text-[11px]"></i>
@@ -704,6 +735,9 @@ const PostBubble: React.FC<{
           { icon: 'fas fa-trash-alt', label: 'حذف', color: '#ef4444', onClick: () => setShowDeleteConfirm(true) },
         ] : []),
       ]} />
+    )}
+    {showDeleteConfirm && (
+      <ConfirmToast open message="این پست حذف شود؟" bottom={120} onConfirm={handleDelete} onCancel={() => setShowDeleteConfirm(false)} />
     )}
   </>
   );
@@ -1825,7 +1859,7 @@ const PodcastCommentItem: React.FC<{
   return null;
 };
 
-const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts, videos, podcasts, authors, publishedBooks, comments, currentUser, userRole, onPlayVideoFromFeed, onPlayPodcastFromFeed, onPlayPodcastComment, onShowComments, onShowVideoDiscussion, onDeletePost, onShowBook, onShowInstantView, onDeleteComment, onAddComment, onLikeComment, onUpdateComment, onNewPost, onUpdatePost, onToggleSidebar, user, onOpenSearch, onOpenProfile, miniPlayerProps }) => {
+const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts, videos, podcasts, authors, publishedBooks, comments, currentUser, userRole, onPlayVideoFromFeed, onPlayPodcastFromFeed, onPlayPodcastComment, onShowComments, onShowVideoDiscussion, onDeletePost, onShowBook, onShowInstantView, onDeleteComment, onAddComment, onLikeComment, onUpdateComment, onNewPost, onUpdatePost, onToggleSidebar, user, onOpenSearch, onOpenProfile, miniPlayerProps, albums = { mine: [], shared: [] }, savedPostIds = [], onToggleSavePost, onPlayAlbum, onOpenAlbum }) => {
   const [menuState, setMenuState] = useState<{ post: Post | null, rect: DOMRect | null }>({ post: null, rect: null });
   const [feedMode, setFeedMode] = useState<'all' | 'posts' | 'video-comments' | 'podcast-comments'>('all');
   const [likedComments, setLikedComments] = useState<Set<string>>(() => {
@@ -1839,9 +1873,15 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [postAttachment, setPostAttachment] = useState<{ type: 'podcast' | 'video' | 'album'; podcastId?: string; episodeIndex?: number; videoId?: string; albumId?: string; title: string; cover?: string } | null>(null);
+  const [attachTab, setAttachTab] = useState<'audio' | 'video' | 'album'>('audio');
+  const [attachSearch, setAttachSearch] = useState('');
+  const [openPodcastList, setOpenPodcastList] = useState<string | null>(null);
   const [replyTarget, setReplyTarget] = useState<{ postId: number; author: string; text: string; commentId?: string; quotedText?: string } | null>(null);
   const [podcastReplyTarget, setPodcastReplyTarget] = useState<{ commentId: string; author: string; text: string; podcastId: string; episodeIndex: number; audioTimestamp?: number; quotedText?: string } | null>(null);
   const [markAudioTimestamp, setMarkAudioTimestamp] = useState(false);
+  const [adminBrandMode, setAdminBrandMode] = useState(false);
   const [chatEnabled, setChatEnabled] = useState(true);
   const [chatMessage, setChatMessage] = useState('');
   const [profileTarget, setProfileTarget] = useState<{ userId?: string; name?: string; avatar?: string } | null>(null);
@@ -1883,7 +1923,7 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
   }, [replyTarget]);
 
   const handleCreatePost = async () => {
-    if ((!inputText.trim() && !inputMedia) || sending || !currentUser) return;
+    if ((!inputText.trim() && !inputMedia && !postAttachment) || sending || !currentUser) return;
     if (!chatEnabled && userRole !== 'admin') {
       setToastMessage('🚫 چت محفل توسط ادمین بسته شده است — فعلاً فقط میتوانید پیامها را ببینید');
       setToastVisible(true);
@@ -1944,7 +1984,16 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
       }
     } else {
       const media = inputMedia ? [{ type: inputMedia.type, url: inputMedia.url }] : [];
-      const postData = { text: inputText.trim(), media: media.length > 0 ? media : undefined };
+      const postData: any = {
+        text: inputText.trim(),
+        media: media.length > 0 ? media : undefined,
+        author: userRole === 'admin' && adminBrandMode ? 'سرای هنر و اندیشه' : undefined,
+        authorAvatarUrl: userRole === 'admin' && adminBrandMode ? BRAND_AVATAR : undefined,
+        podcastId: postAttachment?.type === 'podcast' ? postAttachment.podcastId : undefined,
+        episodeIndex: postAttachment?.type === 'podcast' ? postAttachment.episodeIndex : undefined,
+        videoId: postAttachment?.type === 'video' ? postAttachment.videoId : undefined,
+        albumId: postAttachment?.type === 'album' ? postAttachment.albumId : undefined,
+      };
       let newPost;
       try {
         newPost = await createPost(postData);
@@ -1969,6 +2018,7 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
         if (onNewPost) onNewPost(newPost);
         setInputText('');
         setInputMedia(null);
+        setPostAttachment(null);
         if (inputRef.current) inputRef.current.style.height = 'auto';
         setTimeout(() => {
           const main = messagesEndRef.current?.closest('main');
@@ -1996,7 +2046,13 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const type = file.type.startsWith('image/') ? 'image' : file.type.startsWith('audio/') ? 'audio' : 'video';
+    const type = file.type.startsWith('image/') ? 'image' : file.type.startsWith('audio/') ? 'audio' : null;
+    if (!type) {
+      setToastMessage('فقط ارسال عکس و صوت مجاز است');
+      setToastVisible(true);
+      e.target.value = '';
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (ev) => {
       setInputMedia({ type, url: ev.target?.result as string });
@@ -2210,7 +2266,7 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
             if (item.itemType === 'post') {
               return (
                 <div key={item.id}>
-                    <PostBubble post={item} video={item.videoId ? videos.find((v:any) => String(v.id) === String(item.videoId)) : undefined} podcast={item.podcastId ? podcasts.find((p:any) => String(p.id) === String(item.podcastId)) : undefined} publishedBook={item.bookId ? publishedBooks.find((b:any) => String(b.id) === String(item.bookId)) : undefined} onShowComments={onShowComments} onPlayVideo={onPlayVideoFromFeed} onPlayPodcast={onPlayPodcastFromFeed} onShowBook={onShowBook} onOpenMenu={(post, rect) => setMenuState({ post, rect })} isFirstInGroup={item.isFirst} isLastInGroup={item.isLast} onShowInstantView={onShowInstantView} onNewPost={onNewPost} onUpdatePost={onUpdatePost} onDeletePost={onDeletePost} currentUser={currentUser} onSwipeReply={(t) => { setReplyTarget(t); inputRef.current?.focus(); }} onOpenProfile={openProfile} />
+                    <PostBubble post={item} video={item.videoId ? videos.find((v:any) => String(v.id) === String(item.videoId)) : undefined} podcast={item.podcastId ? podcasts.find((p:any) => String(p.id) === String(item.podcastId)) : undefined} episode={item.episodeIndex != null && item.podcastId ? (() => { const p = podcasts.find((pp:any) => String(pp.id) === String(item.podcastId)); return p?.episodes[item.episodeIndex] || null; })() : null} publishedBook={item.bookId ? publishedBooks.find((b:any) => String(b.id) === String(item.bookId)) : undefined} album={item.albumId ? albums.mine.find((a:any) => String(a._id || a.id) === String(item.albumId)) || albums.shared.find((a:any) => String(a._id || a.id) === String(item.albumId)) : undefined} saved={savedPostIds.some((sid: string) => String(sid) === String(item.id || (item as any)._id))} onToggleSave={onToggleSavePost} onPlayAlbum={onPlayAlbum} onOpenAlbum={onOpenAlbum} onShowComments={onShowComments} onPlayVideo={onPlayVideoFromFeed} onPlayPodcast={onPlayPodcastFromFeed} onShowBook={onShowBook} onOpenMenu={(post, rect) => setMenuState({ post, rect })} isFirstInGroup={item.isFirst} isLastInGroup={item.isLast} onShowInstantView={onShowInstantView} onNewPost={onNewPost} onUpdatePost={onUpdatePost} onDeletePost={onDeletePost} currentUser={currentUser} onSwipeReply={(t) => { setReplyTarget(t); inputRef.current?.focus(); }} onOpenProfile={openProfile} />
                 </div>
               );
             }
@@ -2368,15 +2424,80 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
               <span className="text-[10px] font-bold" style={{ color: 'var(--text-3)' }}>
                 {inputMedia.type === 'image' ? 'تصویر' : inputMedia.type === 'audio' ? 'صوت' : 'ویدیو'}
               </span>
+              <button onClick={() => setInputMedia(null)}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black transition-all active:scale-95"
+                style={{ background: 'color-mix(in srgb, #ef4444 10%, var(--surface-2))', color: '#ef4444', border: '1px solid color-mix(in srgb, #ef4444 30%, transparent)' }}>
+                <i className="fas fa-times text-[8px]"></i> بستن انتخاب
+              </button>
             </div>
           )}
-          <div className="flex items-end gap-2">
-            {(userRole === 'author' || userRole === 'admin') && (
-            <button onClick={() => fileInputRef.current?.click()}
-              className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 active:scale-90 transition-all hover:opacity-70"
-              style={{ color: 'var(--text-2)', border: '1.5px solid var(--border)', background: 'var(--surface-2)' }}>
+          {postAttachment && (
+            <div className="flex items-center gap-2 mb-2 px-1">
+              <div className="relative rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+                <div className="w-12 h-12 flex items-center justify-center" style={{ background: 'var(--surface-3)' }}>
+                  {postAttachment.cover ? <img src={postAttachment.cover} className="w-12 h-12 object-cover" alt="" /> : <i className={`fas ${postAttachment.type === 'video' ? 'fa-video' : postAttachment.type === 'album' ? 'fa-palette' : 'fa-headphones'}`} style={{ color: 'var(--primary)' }}></i>}
+                </div>
+                <button onClick={() => setPostAttachment(null)}
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center shadow-md text-[8px]"
+                  style={{ background: 'var(--surface)', color: 'var(--text-3)', border: '1px solid var(--border)' }}>
+                  <i className="fas fa-times"></i>
+                </button>
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="text-[9px] font-bold" style={{ color: 'var(--primary)' }}>
+                  {postAttachment.type === 'podcast' ? (postAttachment.episodeIndex != null ? 'صوت از آرشیو' : 'پلی‌لیست از آرشیو') : postAttachment.type === 'video' ? 'ویدیو از آرشیو' : 'آلبوم'}
+                </span>
+                <p className="text-[10px] font-black truncate" style={{ color: 'var(--text)' }}>{postAttachment.title}</p>
+              </div>
+              <button onClick={() => setPostAttachment(null)}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black transition-all active:scale-95 flex-shrink-0"
+                style={{ background: 'color-mix(in srgb, #ef4444 10%, var(--surface-2))', color: '#ef4444', border: '1px solid color-mix(in srgb, #ef4444 30%, transparent)' }}>
+                <i className="fas fa-times text-[8px]"></i> بستن انتخاب
+              </button>
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            {(userRole === 'admin' || userRole === 'author') && (
+            <div className="relative flex-shrink-0">
+            <button onClick={() => setAttachMenuOpen(v => !v)}
+              className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 active:scale-90 transition-all ${attachMenuOpen ? 'opacity-80' : ''}`}
+              title="افزودن فایل یا پیوست آرشیو"
+              style={{ color: attachMenuOpen ? 'white' : 'var(--text-2)', border: '1.5px solid var(--border)', background: attachMenuOpen ? 'var(--primary)' : 'var(--surface-2)' }}>
               <i className="fas fa-plus text-sm"></i>
             </button>
+            {attachMenuOpen && (
+              <div className="absolute bottom-11 right-0 z-[2600] w-44 rounded-2xl shadow-2xl p-1.5 animate-fadeIn" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
+                {userRole === 'admin' && (
+                  <button onClick={() => { setAttachMenuOpen(false); setAdminBrandMode(!adminBrandMode); }}
+                    className="w-full text-right px-3 py-2.5 rounded-xl hover:bg-white/5 transition-colors flex items-center gap-2.5">
+                    <span className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${adminBrandMode ? 'text-white' : ''}`} style={adminBrandMode ? { background: 'linear-gradient(135deg, var(--primary), #0d9488)' } : { background: 'var(--surface-3)', border: '1px solid var(--border)' }}>
+                      <i className="fas fa-mask text-[10px]"></i>
+                    </span>
+                    <span className="text-[11px] font-black flex-1" style={{ color: 'var(--text)' }}>
+                      {adminBrandMode ? 'ارسال با نام سرای هنر و اندیشه' : 'ارسال با نام خودتان'}
+                    </span>
+                    {adminBrandMode && <i className="fas fa-check text-[10px]" style={{ color: 'var(--primary)' }}></i>}
+                  </button>
+                )}
+                {userRole === 'admin' && (
+                  <button onClick={() => { setAttachMenuOpen(false); fileInputRef.current?.click(); }}
+                    className="w-full text-right px-3 py-2.5 rounded-xl hover:bg-white/5 transition-colors flex items-center gap-2.5">
+                    <span className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 text-white" style={{ background: 'linear-gradient(135deg, var(--primary), #0d9488)' }}>
+                      <i className="fas fa-file-upload text-[10px]"></i>
+                    </span>
+                    <span className="text-[11px] font-black" style={{ color: 'var(--text)' }}>ارسال فایل (عکس و صوت)</span>
+                  </button>
+                )}
+                <button onClick={() => { setAttachMenuOpen(false); setAttachSearch(''); setAttachTab('audio'); setShowAttachMenu(true); }}
+                  className="w-full text-right px-3 py-2.5 rounded-xl hover:bg-white/5 transition-colors flex items-center gap-2.5">
+                  <span className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 text-white" style={{ background: 'linear-gradient(135deg, #14b8a6, #0d9488)' }}>
+                    <i className="fas fa-paperclip text-[10px]"></i>
+                  </span>
+                  <span className="text-[11px] font-black" style={{ color: 'var(--text)' }}>پیوست از آرشیو</span>
+                </button>
+              </div>
+            )}
+            </div>
             )}
             {replyTarget && (() => {
               const replyPost = posts.find((p: Post) => String(p.id) === String(replyTarget.postId));
@@ -2393,9 +2514,9 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
               style={{ border: `1.5px solid var(--border)`, background: 'var(--surface-2)' }}>
               <input value={inputText} onChange={(e) => setInputText(e.target.value)} onKeyDown={handleKeyDown} readOnly={!chatEnabled && userRole !== 'admin'} placeholder={!chatEnabled && userRole !== 'admin' ? 'چت محفل بسته شده است...' : podcastReplyTarget ? `پاسخ به ${podcastReplyTarget.author}...` : "پیام..."} className="w-full bg-transparent outline-none px-3.5 py-2.5 text-[13px] font-medium" style={{ color: 'var(--text)', direction: 'rtl', opacity: !chatEnabled && userRole !== 'admin' ? 0.5 : 1 }} />
             </div>
-            <button onClick={handleCreatePost} disabled={(!inputText.trim() && !inputMedia) || sending || !currentUser || (!chatEnabled && userRole !== 'admin')}
+            <button onClick={handleCreatePost} disabled={(!inputText.trim() && !inputMedia && !postAttachment) || sending || !currentUser || (!chatEnabled && userRole !== 'admin')}
               className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 active:scale-90 transition-all disabled:opacity-40 shadow-md"
-              style={{ background: (inputText.trim() || inputMedia) && !sending ? 'linear-gradient(135deg, var(--primary), #0d9488)' : 'var(--surface-2)', color: (inputText.trim() || inputMedia) && !sending ? 'white' : 'var(--text-2)', border: `1.5px solid ${(inputText.trim() || inputMedia) && !sending ? 'transparent' : 'var(--border)'}` }}>
+              style={{ background: (inputText.trim() || inputMedia || postAttachment) && !sending ? 'linear-gradient(135deg, var(--primary), #0d9488)' : 'var(--surface-2)', color: (inputText.trim() || inputMedia || postAttachment) && !sending ? 'white' : 'var(--text-2)', border: `1.5px solid ${(inputText.trim() || inputMedia || postAttachment) && !sending ? 'transparent' : 'var(--border)'}` }}>
               <i className={`fas ${sending ? 'fa-spinner fa-spin' : 'fa-paper-plane'} text-sm`}></i>
             </button>
           </div>
@@ -2409,7 +2530,147 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
         )}
 
         {/* Hidden file input */}
-        <input ref={fileInputRef} type="file" accept="image/*,audio/*,video/*" className="hidden" onChange={handleFileChange} />
+        <input ref={fileInputRef} type="file" accept="image/*,audio/*" className="hidden" onChange={handleFileChange} />
+
+        {/* مودال انتخاب پیوست آرشیو */}
+        {showAttachMenu && (
+          <div className="fixed inset-0 z-[3000] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm animate-fadeIn" onClick={() => setShowAttachMenu(false)}>
+            <div className="w-full sm:max-w-lg max-h-[85vh] overflow-hidden rounded-t-3xl sm:rounded-3xl flex flex-col animate-slideUp" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 pt-4 pb-3">
+                <h3 className="text-sm font-black" style={{ color: 'var(--text)' }}><i className="fas fa-paperclip ml-1.5" style={{ color: 'var(--primary)' }}></i> پیوست از آرشیو</h3>
+                <button onClick={() => setShowAttachMenu(false)} className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ color: 'var(--text-3)' }}><i className="fas fa-times"></i></button>
+              </div>
+              <div className="flex gap-2 px-5 pb-3">
+                <button onClick={() => setAttachTab('audio')}
+                  className={`flex-1 py-2 rounded-xl text-[10px] font-black transition-all ${attachTab === 'audio' ? 'text-white' : ''}`}
+                  style={attachTab === 'audio' ? { background: 'linear-gradient(135deg, var(--primary), #0d9488)' } : { background: 'var(--surface-2)', color: 'var(--text-3)', border: '1px solid var(--border)' }}>
+                  <i className="fas fa-headphones ml-1 text-[9px]"></i> صوت (سها)
+                </button>
+                <button onClick={() => setAttachTab('video')}
+                  className={`flex-1 py-2 rounded-xl text-[10px] font-black transition-all ${attachTab === 'video' ? 'text-white' : ''}`}
+                  style={attachTab === 'video' ? { background: 'linear-gradient(135deg, var(--primary), #0d9488)' } : { background: 'var(--surface-2)', color: 'var(--text-3)', border: '1px solid var(--border)' }}>
+                  <i className="fas fa-video ml-1 text-[9px]"></i> ویدیو (سیما)
+                </button>
+                <button onClick={() => setAttachTab('album')}
+                  className={`flex-1 py-2 rounded-xl text-[10px] font-black transition-all ${attachTab === 'album' ? 'text-white' : ''}`}
+                  style={attachTab === 'album' ? { background: 'linear-gradient(135deg, #14b8a6, #0d9488)' } : { background: 'var(--surface-2)', color: 'var(--text-3)', border: '1px solid var(--border)' }}>
+                  <i className="fas fa-palette ml-1 text-[9px]"></i> آلبوم
+                </button>
+              </div>
+              <div className="px-5 pb-5 overflow-y-auto flex-1 min-h-0">
+                <div className="relative mb-3">
+                  <i className="fas fa-search absolute right-3 top-1/2 -translate-y-1/2 text-[9px]" style={{ color: 'var(--text-3)' }} />
+                  <input value={attachSearch} onChange={e => setAttachSearch(e.target.value)} placeholder={`جستجو در ${attachTab === 'audio' ? 'صوت‌ها' : attachTab === 'video' ? 'ویدیوها' : 'آلبوم‌ها'}...`}
+                    className="w-full pr-8 pl-8 py-2 rounded-xl text-[10px] font-bold outline-none transition-all focus:ring-2"
+                    style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text)', '--tw-ring-color': 'color-mix(in srgb, var(--primary) 30%, transparent)' } as any} />
+                  {attachSearch && <button onClick={() => setAttachSearch('')} className="absolute left-2.5 top-1/2 -translate-y-1/2"><i className="fas fa-times text-[8px]" style={{ color: 'var(--text-3)' }} /></button>}
+                </div>
+                {attachTab === 'audio' && (
+                  <div className="space-y-2">
+                    {podcasts.length === 0 && <p className="text-[10px] text-center py-8" style={{ color: 'var(--text-3)' }}>آرشیو صوتی خالی است</p>}
+                    {(() => {
+                      const query = attachSearch.trim().toLowerCase();
+                      const filtered = query
+                        ? podcasts.filter((p: any) => String(p.title || '').toLowerCase().includes(query) || (p.episodes || []).some((ep: any) => String(ep.title || '').toLowerCase().includes(query)))
+                        : podcasts;
+                      if (query && filtered.length === 0) return <p className="text-[10px] text-center py-8" style={{ color: 'var(--text-3)' }}>چیزی یافت نشد</p>;
+                      return filtered.map((p: any) => {
+                        const pid = String(p.id || p._id);
+                        const open = openPodcastList === pid;
+                        const eps = query ? (p.episodes || []).filter((ep: any) => String(ep.title || '').toLowerCase().includes(query)) : (p.episodes || []);
+                        return (
+                          <div key={pid} className="rounded-2xl overflow-hidden" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                            <div className="flex items-stretch">
+                            <button onClick={() => setOpenPodcastList(open ? null : pid)}
+                              className="flex-1 min-w-0 flex items-center gap-2.5 px-3 py-2.5 text-right active:scale-[0.99] transition-all">
+                              <img src={String(p.cover || DEFAULT_COVER)} className="w-9 h-9 rounded-xl object-cover" alt="" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[11px] font-black truncate" style={{ color: 'var(--text)' }}>{String(p.title)}</p>
+                                <p className="text-[8px] font-bold mt-0.5" style={{ color: 'var(--text-3)' }}>{toPersianDigits(p.episodes?.length || 0)} جلسه</p>
+                              </div>
+                              <i className={`fas fa-chevron-${open ? 'up' : 'down'} text-[8px] transition-transform duration-300`} style={{ color: 'var(--text-3)' }}></i>
+                            </button>
+                            <button onClick={() => { setPostAttachment({ type: 'podcast', podcastId: pid, title: String(p.title || ''), cover: p.cover || '' }); setShowAttachMenu(false); }}
+                              className="flex-shrink-0 flex items-center gap-1 px-2.5 my-2 mr-1 rounded-lg text-[8px] font-black text-white active:scale-95 transition-all"
+                              title="انتخاب کل پلی‌لیست"
+                              style={{ background: 'linear-gradient(135deg, var(--primary), #0d9488)' }}>
+                              <i className="fas fa-plus text-[7px]"></i> انتخاب پلی‌لیست
+                            </button>
+                            </div>
+                            {open && (
+                              <div className="space-y-1 px-2 pb-2">
+                                {eps.length === 0 && <p className="text-[9px] text-center py-3" style={{ color: 'var(--text-3)' }}>جلسه‌ای نیست</p>}
+                                {eps.map((ep: any, idx: number) => (
+                                  <button key={idx} onClick={() => { setPostAttachment({ type: 'podcast', podcastId: pid, episodeIndex: idx, title: String(ep.title || ''), cover: ep.cover || p.cover || '' }); setShowAttachMenu(false); }}
+                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-right active:scale-[0.98] transition-all"
+                                    style={{ background: 'var(--surface-3)', border: '1px solid color-mix(in srgb, var(--border) 50%, transparent)' }}>
+                                    <i className="fas fa-headphones text-[9px]" style={{ color: '#f59e0b' }}></i>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-[10px] font-bold truncate" style={{ color: 'var(--text)' }}>{String(ep.title)}</p>
+                                      <p className="text-[8px] font-bold" style={{ color: 'var(--text-3)' }}>جلسه {toPersianDigits(idx + 1)}</p>
+                                    </div>
+                                    <i className="fas fa-plus text-[8px]" style={{ color: 'var(--primary)' }}></i>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                )}
+                {attachTab === 'video' && (
+                  <div className="space-y-1.5">
+                    {videos.length === 0 && <p className="text-[10px] text-center py-8" style={{ color: 'var(--text-3)' }}>آرشیو ویدیویی خالی است</p>}
+                    {(() => {
+                      const query = attachSearch.trim().toLowerCase();
+                      const filtered = query ? videos.filter((v: any) => String(v.title || '').toLowerCase().includes(query)) : videos;
+                      if (query && filtered.length === 0) return <p className="text-[10px] text-center py-8" style={{ color: 'var(--text-3)' }}>چیزی یافت نشد</p>;
+                      return filtered.map((v: any) => (
+                      <button key={String(v.id || v._id)} onClick={() => { setPostAttachment({ type: 'video', videoId: String(v.id || v._id), title: String(v.title || ''), cover: v.thumbnailUrl || '' }); setShowAttachMenu(false); }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-right active:scale-[0.98] transition-all"
+                        style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                        <img src={v.thumbnailUrl} className="w-12 h-8 rounded-lg object-cover" alt="" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] font-bold truncate" style={{ color: 'var(--text)' }}>{String(v.title)}</p>
+                          <p className="text-[8px] font-bold" style={{ color: 'var(--text-3)' }}>{toPersianDigits(v.viewCount || 0)} بازدید</p>
+                        </div>
+                        <i className="fas fa-plus text-[8px]" style={{ color: 'var(--primary)' }}></i>
+                      </button>
+                      ));
+                    })()}
+                  </div>
+                )}
+                {attachTab === 'album' && (
+                  <div className="space-y-1.5">
+                    {albums.mine.length === 0 && albums.shared.length === 0 && <p className="text-[10px] text-center py-8" style={{ color: 'var(--text-3)' }}>هنوز آلبومی ساخته نشده — از کتابخانه بساز</p>}
+                    {(() => {
+                      const query = attachSearch.trim().toLowerCase();
+                      const all = [...albums.mine, ...albums.shared];
+                      const filtered = query ? all.filter((a: any) => String(a.title || '').toLowerCase().includes(query)) : all;
+                      if (query && filtered.length === 0) return <p className="text-[10px] text-center py-8" style={{ color: 'var(--text-3)' }}>چیزی یافت نشد</p>;
+                      return filtered.map((a: any) => (
+                      <button key={String(a._id || a.id)} onClick={() => { setPostAttachment({ type: 'album', albumId: String(a._id || a.id), title: String(a.title || ''), cover: a.cover || a.items?.[0]?.cover || '' }); setShowAttachMenu(false); }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-right active:scale-[0.98] transition-all"
+                        style={{ background: 'color-mix(in srgb, #14b8a6 4%, var(--surface-2))', border: '1px solid color-mix(in srgb, #14b8a6 16%, var(--border))' }}>
+                        <img src={a.cover || a.items?.[0]?.cover || DEFAULT_COVER} className="w-12 h-8 rounded-lg object-cover" alt="" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] font-bold truncate" style={{ color: 'var(--text)' }}>{String(a.title)}</p>
+                          <p className="text-[8px] font-bold" style={{ color: '#14b8a6' }}>
+                            <i className="fas fa-palette text-[7px] ml-1" />{a.type === 'video' ? 'آلبوم ویدیویی' : 'آلبوم صوتی'} · {toPersianDigits(a.items?.length || 0)} قطعه
+                          </p>
+                        </div>
+                        <i className="fas fa-plus text-[8px]" style={{ color: '#14b8a6' }}></i>
+                      </button>
+                      ));
+                    })()}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Toast */}
         {toastVisible && toastMessage && (

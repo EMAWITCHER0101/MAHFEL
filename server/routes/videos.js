@@ -4,6 +4,7 @@ import Notification from '../models/Notification.js';
 import { auth, requireAuth, requireRole } from '../middleware/auth.js';
 import { trackEvent } from '../utils/analyticsEvent.js';
 import { broadcast } from '../utils/broadcast.js';
+import { sendWebPushToAll } from '../utils/webpush.js';
 
 const router = Router();
 
@@ -69,12 +70,13 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
     broadcast('data-changed', { type: 'videos', action: 'create', item: video.toObject() });
     // نوتیفیکیشن همگانی: ویدیوی جدید — کلیک → باز شدن صفحه همان ویدیو
     try {
-      await Notification.create({
+      const notif = await Notification.create({
         title: '🎬 ویدیوی جدید',
         body: video.title || 'ویدیوی جدید اضافه شد',
         link: `/mahfel/video/${video._id}`,
         type: 'video',
       });
+      await sendWebPushToAll({ title: notif.title, body: notif.body, url: notif.link, id: String(notif._id) });
     } catch (ignored) {}
     res.status(201).json(video);
   } catch (error) {

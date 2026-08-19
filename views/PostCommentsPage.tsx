@@ -193,11 +193,11 @@ const PostHeader: React.FC<{
                         {authorMedia.map((m: any, i: number) => (
                           m.type === 'image' ? (
                             <div key={i} className="group relative cursor-pointer rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 active:scale-[0.99]"
-                              style={{ background: 'var(--surface-3)' }}
+                              style={{ background: 'var(--surface-3)', width: 'fit-content', maxWidth: 'min(100%, 420px)', margin: '0 auto' }}
                               onClick={() => onImageClick?.({ src: m.url, text: authorText || undefined, author: authorName, authorAvatar: authorAvatar || undefined, time: formatTimeFromISO(type === 'video-comment' ? (comment as Comment).isoDate : (post as Post).isoDate) })}>
                               <img src={m.url}
                                 className="w-full h-auto rounded-xl"
-                                alt="" loading="lazy" />
+                                alt="" loading="lazy" style={{ display: 'block', width: '100%', height: 'auto' }} />
                               {i === lastImageIndex && authorText && !isEditing && (
                                 <div className="px-3 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words" style={{ color: 'var(--text)' }}>
                                   {authorText}

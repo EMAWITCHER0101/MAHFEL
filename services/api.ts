@@ -306,6 +306,24 @@ export const likePodcast = async (id: string): Promise<number | null> => {
   return res?.likes ?? null;
 };
 
+// --- Albums (بوم شخصی) ---
+export const getAlbums = async (): Promise<{ mine: any[]; shared: any[] }> => {
+  const data = await apiFetch<any>('/albums');
+  return { mine: data?.mine || [], shared: data?.shared || [] };
+};
+
+export const createAlbum = async (data: { type: 'audio' | 'video'; title: string; items: any[] }): Promise<any | null> => {
+  return apiFetch<any>('/albums', { method: 'POST', body: JSON.stringify(data) });
+};
+
+export const updateAlbum = async (id: string, data: any): Promise<any | null> => {
+  return apiFetch<any>(`/albums/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+};
+
+export const deleteAlbum = async (id: string): Promise<any | null> => {
+  return apiFetch<any>(`/albums/${id}`, { method: 'DELETE' });
+};
+
 // --- Posts ---
 export const getPosts = async (): Promise<Post[]> => {
   const data = await apiFetch<any[]>('/posts');
@@ -428,6 +446,11 @@ export const updatePublishedBook = async (id: string, data: Partial<PublishedBoo
 export const deletePublishedBook = async (id: string): Promise<boolean> => {
   const res = await apiFetch<any>(`/published-books/${id}`, { method: 'DELETE' });
   return !!res;
+};
+
+export const toggleNoteLike = async (id: string): Promise<{ liked: boolean; likes: any[] } | null> => {
+  const res = await apiFetch<any>(`/published-books/${id}/like`, { method: 'POST' });
+  return res;
 };
 
 // Public: get another author's published notes (public profile)
@@ -603,6 +626,11 @@ export const adminBulkPosts = async (ids: string[], action: string): Promise<any
   });
 };
 
+// دستور پاکسازی: حذف تمام پیام‌های محفل
+export const adminPurgePosts = async (): Promise<any> => {
+  return apiFetch('/admin/posts/purge', { method: 'POST' });
+};
+
 export const adminBulkComments = async (ids: string[], action: string): Promise<any> => {
   return apiFetch('/admin/comments/bulk', {
     method: 'POST',
@@ -635,10 +663,19 @@ export const getNotifications = async (): Promise<any[] | null> => {
   return apiFetch<any[]>('/notifications');
 };
 
-export const adminSendNotification = async (title: string, body: string, target: string = 'all', link?: string, type?: string): Promise<any> => {
+// ثبت توکن FCM گوشی (اندروید) — برای push وقتی اپ بسته است
+export const registerFcmToken = async (token: string): Promise<any> => {
+  return apiFetch('/notifications/push/register', { method: 'POST', body: JSON.stringify({ token }) });
+};
+
+export const unregisterFcmToken = async (token: string): Promise<any> => {
+  return apiFetch('/notifications/push/unregister', { method: 'POST', body: JSON.stringify({ token }) });
+};
+
+export const adminSendNotification = async (title: string, body: string, target: string = 'all', link?: string, type?: string, userId?: string): Promise<any> => {
   return apiFetch('/notifications', {
     method: 'POST',
-    body: JSON.stringify({ title, body, target, link: link || '', type: type || 'admin' }),
+    body: JSON.stringify({ title, body, target, link: link || '', type: type || 'admin', userId: userId || null }),
   });
 };
 

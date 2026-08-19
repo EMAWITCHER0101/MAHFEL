@@ -10,6 +10,8 @@ const notificationSchema = new mongoose.Schema({
   link: { type: String, default: '' },
   // نوع: admin | reply | video | playlist
   type: { type: String, default: 'admin' },
+  // آیدی منبع (پست/نظر) — برای حذف نوتیفیکیشن هنگام حذف منبع
+  sourceId: { type: mongoose.Schema.Types.ObjectId, default: null },
   createdAt: { type: Date, default: Date.now },
 });
 

@@ -1,15 +1,40 @@
 import { Router } from 'express';
+import mongoose from 'mongoose';
 import Notification from '../models/Notification.js';
 import User from '../models/User.js';
+import PushSubscription from '../models/PushSubscription.js';
 import { auth, requireAuth, requireRole } from '../middleware/auth.js';
 import { broadcast } from '../utils/broadcast.js';
-import { sendWebPushToAll, getPublicKey } from '../utils/webpush.js';
+import { sendWebPushToAll, sendWebPushToUser, getPublicKey } from '../utils/webpush.js';
 
 const router = Router();
 
 router.get('/public-key', async (req, res) => {
   try {
     res.json({ publicKey: getPublicKey() });
+  } catch (e) {
+    res.status(500).json({ error: 'خطا' });
+  }
+});
+
+// Client registers an FCM token (APK device) — push حتی وقتی اپ بسته است
+router.post('/push/register', requireAuth, async (req, res) => {
+  try {
+    const token = String(req.body.token || '').trim();
+    if (!token) return res.status(400).json({ error: 'token required' });
+    await User.findByIdAndUpdate(req.user._id, { $addToSet: { fcmTokens: token } });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: 'خطا' });
+  }
+});
+
+// Remove FCM token (logout)
+router.post('/push/unregister', requireAuth, async (req, res) => {
+  try {
+    const token = String(req.body.token || '').trim();
+    if (token) await User.findByIdAndUpdate(req.user._id, { $pull: { fcmTokens: token } });
+    res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: 'خطا' });
   }
@@ -53,8 +78,16 @@ router.post('/unsubscribe', requireAuth, async (req, res) => {
 
 router.get('/', auth, async (req, res) => {
   try {
-    // همگانی + اختصاصیِ کاربرِ لاگین‌شده (مثل پاسخ به نظر)
-    const filter = req.user ? { $or: [{ userId: null }, { userId: req.user._id }] } : { userId: null };
+    // همه‌گانی (target: all) + اختصاصیِ کاربرِ لاگین‌شده (userId) + فعالیت‌های ادمین (target: admins فقط برای ادمین)
+    const filter = req.user
+      ? {
+          $or: [
+            { userId: req.user._id },
+            { userId: null, target: 'all' },
+            ...(req.user.role === 'admin' ? [{ userId: null, target: 'admins' }] : []),
+          ],
+        }
+      : { userId: null, target: 'all' };
     const notifications = await Notification.find(filter).sort({ createdAt: -1 }).limit(30);
     res.json(notifications);
   } catch (e) {
@@ -64,27 +97,33 @@ router.get('/', auth, async (req, res) => {
 
 router.post('/', auth, requireRole('admin'), async (req, res) => {
   try {
-    const { title, body, target, link, type } = req.body;
+    const { title, body, target, link, type, userId } = req.body;
     if (!title || !body || !title.trim() || !body.trim()) {
       return res.status(400).json({ error: 'عنوان و متن نوتیفیکیشن الزامی است' });
     }
+    const targeted = !!userId && mongoose.isValidObjectId(userId);
     const notification = await Notification.create({
       title: title.trim(),
       body: body.trim(),
-      target: target || 'all',
+      target: targeted ? 'user' : (target || 'all'),
+      userId: targeted ? userId : null,
       link: link || '',
       type: type || 'admin',
     });
 
     // Web-push delivery to subscribed devices (fire-and-forget)
-    broadcast('data-changed', { type: 'notifications', action: 'create', item: notification.toObject() });
     res.status(201).json(notification);
-    sendWebPushToAll({
+    const pushData = {
       title: notification.title,
       body: notification.body,
       url: notification.link || '/',
       id: String(notification._id || ''),
-    });
+    };
+    if (targeted) {
+      sendWebPushToUser(userId, pushData);
+    } else {
+      sendWebPushToAll(pushData);
+    }
   } catch (e) {
     res.status(500).json({ error: 'خطا در ارسال نوتیفیکیشن' });
   }
@@ -93,7 +132,6 @@ router.post('/', auth, requireRole('admin'), async (req, res) => {
 router.delete('/:id', auth, requireRole('admin'), async (req, res) => {
   try {
     await Notification.findByIdAndDelete(req.params.id);
-    broadcast('data-changed', { type: 'notifications', action: 'delete', id: req.params.id });
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: 'خطا در حذف نوتیفیکیشن' });

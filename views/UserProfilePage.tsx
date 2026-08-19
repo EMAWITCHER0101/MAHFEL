@@ -3,20 +3,31 @@ import React, { useState, useEffect } from 'react';
 import { User, Podcast, Video, Post, PublishedBook } from '../types';
 import { toPersianDigits } from '../utils/helpers';
 import { getPosts, updateProfile } from '../services/api';
-import { getPushEnabled, isPushSecureContext, toggleWebPush, syncWebPushSubscription } from '../services/webPush';
+import { getPushEnabled, isPushSecureContext, toggleWebPush, syncWebPushSubscription, getAppNotifEnabled,
+  setAppNotifEnabled } from '../services/webPush';
+import ConfirmToast from '../components/ConfirmToast';
 
 const PushToggleButton = () => {
-    const [enabled, setEnabled] = useState(false);
+    const [enabled, setEnabled] = useState(getAppNotifEnabled());
     const [busy, setBusy] = useState(false);
 
-    useEffect(() => { setEnabled(getPushEnabled()); }, []);
+    useEffect(() => { setEnabled(getAppNotifEnabled()); }, []);
 
     const handleClick = async () => {
         if (busy) return;
         setBusy(true);
         try {
-            const next = await toggleWebPush();
+            const next = !enabled;
+            setAppNotifEnabled(next);
             setEnabled(next);
+            if (next) {
+                await toggleWebPush().catch(() => {});
+                const on = getPushEnabled();
+                setEnabled(on || next);
+            } else {
+                await toggleWebPush().catch(() => {});
+                setEnabled(false);
+            }
         } finally {
             setBusy(false);
         }
@@ -29,8 +40,8 @@ const PushToggleButton = () => {
                 <i className={`fas ${enabled ? 'fa-bell' : 'fa-bell-slash'} text-sm`}></i>
             </div>
             <div className="flex-1">
-                <span className="font-black text-gray-700 text-sm">اعلان‌های سیستم</span>
-                <p className="text-[10px] text-gray-400 font-bold mt-0.5">{enabled ? 'فعال — روی گوشی شما نمایش داده می‌شود' : 'غیرفعال — نوتفیکیشن به گوشی می‌آید'}</p>
+                <span className="font-black text-gray-700 text-sm">نوتیفیکیشن‌ها</span>
+                <p className="text-[10px] text-gray-400 font-bold mt-0.5">{enabled ? 'فعال — نوتیفیکیشن‌ها برای شما نمایش داده می‌شود' : 'غیرفعال — نوتیفیکیشن‌ها نمایش داده نمی‌شود'}</p>
             </div>
             <div className={`w-11 h-6 rounded-full transition-colors relative flex-shrink-0 ${enabled ? 'bg-emerald-500' : 'bg-gray-300'}`}>
                 <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${enabled ? 'left-0.5' : 'left-[22px]'}`}></div>
@@ -68,6 +79,7 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ onClose, onLogout, us
     const [editAvatar, setEditAvatar] = useState(user.avatar || '');
     const [isSaving, setIsSaving] = useState(false);
     const [composerNote, setComposerNote] = useState<{ open: boolean; note?: PublishedBook }>({ open: false });
+  const [confirmDeleteNote, setConfirmDeleteNote] = useState<PublishedBook | null>(null);
     const [pushUnsupported, setPushUnsupported] = useState(false);
 
     useEffect(() => { if (!isPushSecureContext()) setPushUnsupported(true); }, []);
@@ -86,12 +98,12 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ onClose, onLogout, us
     const isAuthor = user.role === 'author' || user.role === 'admin';
 
     useEffect(() => {
-        if (isAuthor && view === 'myPosts') {
+        if (view === 'myPosts') {
             getPosts().then(allPosts => {
                 setMyPosts(allPosts.filter((p: Post) => p.author === user.name));
             });
         }
-    }, [isAuthor, view, user.name]);
+    }, [view, user.name]);
 
     return (
         <div className="fixed inset-0 bg-black/60 z-[1000] flex items-end sm:items-center sm:justify-center p-0 sm:p-4 backdrop-blur-md animate-fadeIn" onClick={onClose}>
@@ -194,7 +206,7 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ onClose, onLogout, us
                                     <p className="text-[9px] text-gray-400 font-bold px-2 -mt-2">برای دریافت اعلان، سایت باید روی HTTPS باز شود</p>
                                 )}
 
-                                {isAuthor && (
+                                {user && (
                                     <button onClick={() => setView('myPosts')} className="w-full text-right p-4 rounded-3xl hover:bg-gray-50 transition-colors flex items-center gap-4 bg-white border border-gray-100 shadow-sm group">
                                         <div className="w-10 h-10 rounded-2xl bg-secondary/10 text-secondary flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
                                             <i className="fas fa-pen-fancy text-sm"></i>
@@ -234,14 +246,14 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ onClose, onLogout, us
                         </>
                     ) : view === 'myPosts' ? (
                         <div className="p-6 space-y-4 animate-fadeIn">
-                            {isAuthor && (
+                            {user && (
                                 <button onClick={() => setComposerNote({ open: true, note: undefined })} className="w-full py-3 rounded-2xl text-[11px] font-black text-white transition-all active:scale-95 shadow-lg bg-gradient-to-l from-primary to-secondary flex items-center justify-center gap-2 mb-4">
                                     <i className="fas fa-pen-nib" /> نوشتن یادداشت جدید
                                 </button>
                             )}
 
                             {/* My Notes (PublishedBook type=note) */}
-                            {isAuthor && myNotes && myNotes.length > 0 && (
+                            {myNotes && myNotes.length > 0 && (
                                 <div className="mb-2">
                                     <h4 className="font-black text-primary text-[10px] uppercase tracking-widest border-r-4 border-primary pr-3 mb-3">یادداشت‌های نشر ({toPersianDigits(myNotes.length)})</h4>
                                     <div className="space-y-3">
@@ -251,6 +263,8 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ onClose, onLogout, us
                                                     <span className="text-[10px] font-black text-gray-700">{note.title}</span>
                                                     {note.isDraft ? (
                                                         <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200">پیش‌نویس</span>
+                                                    ) : note.pendingApproval ? (
+                                                        <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-200">در انتظار تأیید مدیر</span>
                                                     ) : (
                                                         <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200">منتشر شده</span>
                                                     )}
@@ -265,7 +279,7 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ onClose, onLogout, us
                                                     <button onClick={() => setComposerNote({ open: true, note })} className="flex items-center gap-1 text-[10px] font-bold text-primary hover:bg-primary/5 transition-colors px-2 py-1 rounded-lg flex-1 justify-center">
                                                         <i className="fas fa-edit" /> ویرایش
                                                     </button>
-                                                    <button onClick={() => { if (confirm('این یادداشت حذف شود؟')) onDeleteNote?.(String(note.id)); }} className="flex items-center gap-1 text-[10px] font-bold text-red-400 hover:bg-red-50 transition-colors px-2 py-1 rounded-lg flex-1 justify-center">
+                                                    <button onClick={() => setConfirmDeleteNote(note)} className="flex items-center gap-1 text-[10px] font-bold text-red-400 hover:bg-red-50 transition-colors px-2 py-1 rounded-lg flex-1 justify-center">
                                                         <i className="fas fa-trash" /> حذف
                                                     </button>
                                                     {!note.isDraft && onRepostToMahfel && (
@@ -443,16 +457,30 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ onClose, onLogout, us
                     </button>
                 </footer>
 
-                {composerNote.open && isAuthor && (
+                {composerNote.open && (
                     <NoteComposer
                         note={composerNote.note}
                         onSave={onSaveNote}
                         onUpdate={onUpdateNote}
                         onDelete={onDeleteNote}
+                        onRequestDelete={(n) => { setComposerNote({ open: false }); setConfirmDeleteNote(n); }}
                         onClose={() => setComposerNote({ open: false })}
                     />
                 )}
             </div>
+
+            <ConfirmToast
+                open={!!confirmDeleteNote}
+                message={confirmDeleteNote ? `یادداشت «${String(confirmDeleteNote.title || 'بدون عنوان')}» حذف شود؟` : ''}
+                onConfirm={async () => {
+                    if (!confirmDeleteNote) return;
+                    if (await onDeleteNote?.(String(confirmDeleteNote.id))) {
+                        setConfirmDeleteNote(null);
+                        setComposerNote({ open: false });
+                    }
+                }}
+                onCancel={() => setConfirmDeleteNote(null)}
+            />
         </div>
     );
 };
@@ -462,8 +490,9 @@ const NoteComposer: React.FC<{
     onSave?: (data: { title: string; content: string; isDraft: boolean }) => Promise<PublishedBook | null>;
     onUpdate?: (id: string, data: { title: string; content: string; isDraft?: boolean }) => Promise<PublishedBook | null>;
     onDelete?: (id: string) => Promise<boolean>;
+    onRequestDelete?: (note: PublishedBook) => void;
     onClose: () => void;
-}> = ({ note, onSave, onUpdate, onDelete, onClose }) => {
+}> = ({ note, onSave, onUpdate, onDelete, onRequestDelete, onClose }) => {
     const [title, setTitle] = useState(note?.title || '');
     const [content, setContent] = useState(note?.contentHtml || note?.description || '');
     const [saving, setSaving] = useState(false);
@@ -506,7 +535,7 @@ const NoteComposer: React.FC<{
                     </button>
                 </div>
                 {note && onDelete && (
-                    <button onClick={async () => { if (confirm('این یادداشت حذف شود؟') && await onDelete(String(note.id))) onClose(); }} className="w-full mt-3 py-2.5 rounded-2xl text-[10px] font-black text-red-500 bg-red-50 hover:bg-red-100 transition-all active:scale-95">
+                    <button onClick={() => { if (note) onRequestDelete?.(note); }} className="w-full mt-3 py-2.5 rounded-2xl text-[10px] font-black text-red-500 bg-red-50 hover:bg-red-100 transition-all active:scale-95">
                         <i className="fas fa-trash ml-1.5" /> حذف یادداشت
                     </button>
                 )}

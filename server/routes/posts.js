@@ -6,6 +6,7 @@ import Setting from '../models/Setting.js';
 import { requireAuth, requireRole, auth } from '../middleware/auth.js';
 import { containsProfanity } from '../utils/profanityFilter.js';
 import { broadcast } from '../utils/broadcast.js';
+import { sendWebPushToAdmins, sendWebPushToUser } from '../utils/webpush.js';
 
 const router = Router();
 
@@ -18,16 +19,18 @@ async function isChatClosed() {
   }
 }
 
-async function notifyAdminsOfCommunityMessage(name, text, kind) {
+async function notifyAdminsOfCommunityMessage(name, text, kind, sourceId) {
   try {
     const snippet = String(text || '').slice(0, 60);
-    await Notification.create({
+    const notif = await Notification.create({
       title: kind === 'post' ? '💬 پیام جدید در محفل' : '💬 نظر جدید در محفل',
       body: `${name}${snippet ? ' — ' + snippet : ''}`,
       type: 'admin',
+      target: 'admins',
+      sourceId: sourceId || null,
       link: '',
     });
-    broadcast('data-changed', { type: 'notifications', action: 'create' });
+    await sendWebPushToAdmins({ title: notif.title, body: notif.body, url: '/mahfel', id: String(notif._id) });
   } catch (e) {
     console.error('COMMUNITY MSG NOTIFY ERROR', e);
   }
@@ -116,14 +119,15 @@ router.post('/', requireAuth, async (req, res) => {
     }
     const clientAvatar = body.authorAvatarUrl || '';
     delete body.authorAvatarUrl;
-    const avatarUrl = req.user.avatar || clientAvatar || '';
+    const isBrandMode = req.user.role === 'admin' && body.author === 'سرای هنر و اندیشه';
+    const avatarUrl = isBrandMode ? '/images/brand-avatar.jpg' : (req.user.avatar || clientAvatar || '');
     if (avatarUrl && !req.user.avatar) {
       req.user.avatar = avatarUrl;
       await req.user.save();
     }
     const post = new Post({
       ...body,
-      author: req.user.name,
+      author: isBrandMode ? 'سرای هنر و اندیشه' : req.user.name,
       authorAvatarUrl: avatarUrl,
       userId: req.user._id,
       isoDate: new Date().toISOString(),
@@ -132,20 +136,8 @@ router.post('/', requireAuth, async (req, res) => {
     await post.save();
     broadcast('data-changed', { type: 'posts', action: 'create', item: post.toObject() });
     if (req.user.role !== 'admin') {
-      await notifyAdminsOfCommunityMessage(req.user.name, req.body.text, 'post');
+      await notifyAdminsOfCommunityMessage(req.user.name, req.body.text, 'post', post._id);
     }
-    // نوتیفیکیشن همگانی «پیام جدید در محفل» برای همه کاربران
-    try {
-      if (req.user.role !== 'admin') {
-        const notif = await Notification.create({
-          title: '💬 پیام جدید در محفل',
-          body: `${req.user.name}: ${(req.body.text || 'پیام').slice(0, 90)}`,
-          type: 'community',
-          link: `/mahfel/post/${post._id}`,
-        });
-        broadcast('data-changed', { type: 'notifications', action: 'create', item: notif.toObject() });
-      }
-    } catch (ignored) {}
     res.status(201).json(post);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -195,7 +187,9 @@ router.delete('/:id', requireAuth, async (req, res) => {
     if (post.author !== req.user.name && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'دسترسی غیرمجاز' });
     }
+    const commentIds = (post.comments || []).map((c) => String(c._id));
     await Post.findByIdAndDelete(req.params.id);
+    try { await Notification.deleteMany({ sourceId: { $in: [req.params.id, ...commentIds] } }); } catch (ignored) {}
     broadcast('data-changed', { type: 'posts', action: 'delete', id: req.params.id });
     res.json({ success: true });
   } catch (error) {
@@ -227,17 +221,21 @@ router.delete('/:id/comments/:commentId', requireAuth, async (req, res) => {
 
     const getCommentId = (c) => String(c._id);
 
+    const deletedIds = [String(req.params.commentId)];
+
     const deleteReplies = (parentId) => {
       const replies = post.comments.filter(c => c.replyTo === parentId);
       replies.forEach(r => {
         deleteReplies(getCommentId(r));
         post.comments.pull(r._id);
+        deletedIds.push(getCommentId(r));
       });
     };
 
     deleteReplies(req.params.commentId);
     post.comments.pull(req.params.commentId);
     await post.save();
+    try { await Notification.deleteMany({ sourceId: { $in: deletedIds } }); } catch (ignored) {}
     res.json({ success: true });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -343,7 +341,7 @@ router.post('/:id/comments', requireAuth, async (req, res) => {
 
     // نوتیفیکیشن پیام جدید به ادمین
     if (req.user.role !== 'admin') {
-      await notifyAdminsOfCommunityMessage(req.user.name, req.body.text, 'comment');
+      await notifyAdminsOfCommunityMessage(req.user.name, req.body.text, 'comment', comment._id);
     }
 
     // نوتیفیکیشن پاسخ: اگر ریپلای باشد → برای صاحب نظر اصلی
@@ -352,27 +350,17 @@ router.post('/:id/comments', requireAuth, async (req, res) => {
         const parent = post.comments.find(c =>
           c._id && (String(c._id) === String(comment.replyTo) || String(c.id || '') === String(comment.replyTo)));
         if (parent && parent.userId && String(parent.userId) !== String(req.user._id)) {
-          await Notification.create({
+          const replyNotif = await Notification.create({
             title: '💬 پاسخ جدید',
             body: `${req.user.name} به نظر شما پاسخ داد`,
             userId: parent.userId,
             link: `/mahfel/post/${req.params.id}`,
             type: 'reply',
+            target: 'user',
+            sourceId: comment._id,
           });
+          await sendWebPushToUser(parent.userId, { title: replyNotif.title, body: replyNotif.body, url: replyNotif.link, id: String(replyNotif._id) });
         }
-      }
-    } catch (ignored) {}
-
-    // نوتیفیکیشن همگانی «پیام جدید در محفل» برای همه کاربران
-    try {
-      if (req.user.role !== 'admin') {
-        const notif = await Notification.create({
-          title: '💬 پیام جدید در محفل',
-          body: `${req.user.name}: ${(req.body.text || 'پیام').slice(0, 90)}`,
-          type: 'community',
-          link: `/mahfel/post/${req.params.id}`,
-        });
-        broadcast('data-changed', { type: 'notifications', action: 'create', item: notif.toObject() });
       }
     } catch (ignored) {}
 

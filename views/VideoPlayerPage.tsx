@@ -35,13 +35,14 @@ interface VideoPlayerPageProps {
   onVideoTimeUpdate?: (time: number) => void;
   onVideoPlay?: () => void;
   onVideoPause?: () => void;
+  onVideoEnded?: () => void;
   onVideoLike?: (videoId: string, newLikes: number) => void;
 }
 
 const VideoPlayerPage: React.FC<VideoPlayerPageProps> = (props) => {
   const { video, allVideos, comments, authors, isMini = false, initialTime, onBack, onCloseMini, onVideoSelect, onAddComment,
     onAuthorSelect, onPlayVideo, userLibrary, onToggleLibrary, onShare,
-    onShowInstantView, userRole, currentUserName, onLikeComment, onDeleteComment, onUpdateComment, onVideoTimeUpdate, onVideoPlay, onVideoPause, onVideoLike } = props;
+    onShowInstantView, userRole, currentUserName, onLikeComment, onDeleteComment, onUpdateComment, onVideoTimeUpdate, onVideoPlay, onVideoPause, onVideoEnded, onVideoLike } = props;
 
   const [isDescExpanded, setIsDescExpanded] = useState(false);
   const [liked, setLiked] = useState(() => {
@@ -507,10 +508,11 @@ const VideoPlayerPage: React.FC<VideoPlayerPageProps> = (props) => {
       onTimeUpdate={handleTimeUpdate}
       onPlay={handlePlay}
       onPause={handlePause}
+      onEnded={onVideoEnded}
       isMini={isMini}
       initialTime={initialTimeMountRef.current}
     />
-  ), [video.id, video.embedId, video.title, video.thumbnailUrl, isMini, handleTimeUpdate, handlePlay, handlePause]);
+  ), [video.id, video.embedId, video.title, video.thumbnailUrl, isMini, handleTimeUpdate, handlePlay, handlePause, onVideoEnded]);
 
   // ── پخش پس‌زمینه مثل یوتیوب ──
   const [bgActive, setBgActive] = useState(false);

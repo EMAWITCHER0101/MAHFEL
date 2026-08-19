@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mahfel-v2-nocache-api';
+const CACHE_NAME = 'mahfel-v3-nocache-api';
 const STATIC_ASSETS = [
   '/',
   '/logo.png',
@@ -28,6 +28,22 @@ self.addEventListener('fetch', (event) => {
   const reqUrl = event.request.url || '';
   if (reqUrl.includes('/api/') || reqUrl.includes('/ws')) return;
 
+  // صفحه‌ها (نویگیشن): اول شبکه → آپدیت‌ها بلافاصله دیده شوند (فقط آفلاین کش)
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((cached) => {
       const fetched = fetch(event.request)
@@ -53,20 +69,24 @@ self.addEventListener('push', (event) => {
     data = { title: 'محفل', body: 'اعلان جدید' };
   }
   const title = data.title || 'محفل';
+  const id = data.id || '';
   const options = {
     body: data.body || '',
     icon: data.icon || '/logo.png',
     badge: '/logo.png',
-    data: { url: data.url || '/' },
+    data: { url: data.url || '/', id },
     vibrate: [100, 50, 100],
   };
+  if (id) options.tag = id;
   event.waitUntil((async () => {
-    // اگر صفحهٔ اپ باز است (حتی در تب پس‌زمینه) → به او بگو فوراً رفرش کند
     try {
       const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const visible = clients.some((c) => c.visibilityState === 'visible');
       for (const client of clients) {
         client.postMessage({ type: 'mahfel-refresh' });
       }
+      // اگر اپ باز و در فوکوس است → بنر داخل اپ نشان داده می‌شود (یک‌بار، نه دوبار)
+      if (visible) return;
     } catch { /* ignore */ }
     return self.registration.showNotification(title, options);
   })());

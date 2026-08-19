@@ -3,6 +3,7 @@ import Setting from '../models/Setting.js';
 import Notification from '../models/Notification.js';
 import { auth, requireRole } from '../middleware/auth.js';
 import { broadcast } from '../utils/broadcast.js';
+import { sendWebPushToAll } from '../utils/webpush.js';
 
 const router = Router();
 
@@ -32,13 +33,14 @@ router.put('/settings', auth, requireRole('admin'), async (req, res) => {
 
     // اعلان به همه کاربران
     try {
-      await Notification.create({
+      const notif = await Notification.create({
         title: chatEnabled ? '💬 چت محفل باز شد' : '🔒 چت محفل بسته شد',
         body: chatEnabled ? 'ادمین چت محفل را باز کرد — می‌توانید پیام بفرستید' : (chatMessage || 'ادمین چت محفل را بسته است — فعلاً فقط می‌توانید پیام‌ها را ببینید'),
         type: 'community',
+        target: 'all',
         link: '',
       });
-      broadcast('data-changed', { type: 'notifications', action: 'create' });
+      await sendWebPushToAll({ title: notif.title, body: notif.body, url: '/mahfel', id: String(notif._id) });
     } catch (e) {
       console.error('COMMUNITY NOTIFY ERROR', e);
     }

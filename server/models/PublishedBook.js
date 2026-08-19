@@ -19,6 +19,8 @@ const publishedBookSchema = new mongoose.Schema({
   relatedAudioIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Podcast' }],
   authorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   isDraft: { type: Boolean, default: false },
+  pendingApproval: { type: Boolean, default: false },
+  likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 }, { timestamps: true, suppressReservedKeysWarning: true });
 
 publishedBookSchema.index({ title: 'text', description: 'text' });

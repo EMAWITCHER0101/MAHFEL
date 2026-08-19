@@ -33,6 +33,7 @@ const postSchema = new mongoose.Schema({
   podcastId: { type: mongoose.Schema.Types.ObjectId, ref: 'Podcast' },
   episodeIndex: Number,
   bookId: { type: mongoose.Schema.Types.ObjectId, ref: 'PublishedBook' },
+  albumId: { type: mongoose.Schema.Types.ObjectId, ref: 'Album' },
   timestamp: Number,
   comments: [postCommentSchema],
   likes: { type: Number, default: 0 },

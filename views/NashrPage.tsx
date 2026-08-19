@@ -10,6 +10,7 @@ import OrdersPage, { type Order } from './OrdersPage';
 import BookReader from '../components/BookReader';
 import { getMyPurchaseRequests } from '../services/api';
 import { useActionMenu, ActionMenu, QuoteBlock, QuoteChip, QuoteBar, useSelectionQuote } from '../components/QuoteActions';
+import ConfirmToast from '../components/ConfirmToast';
 
 // ─── Wallet Payment Page ──────────────────────────────────────────────────────
 const WalletPaymentPage: React.FC<{
@@ -751,12 +752,6 @@ export const BookDetailView: React.FC<{
                         {/* Tab Content */}
                         {activeTab === 'info' && (
                             <div className="space-y-4 animate-fadeIn">
-                                <div className="p-5 rounded-2xl" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                                    <h4 className="text-[10px] font-black mb-3 flex items-center gap-2 " style={{ color: 'var(--text-3)' }}>
-                                        <i className="fas fa-book-open text-primary" /> درباره کتاب
-                                    </h4>
-                                    <p className="text-sm leading-[2.2] text-justify " style={{ color: 'var(--text-2)' }}>{book.description}</p>
-                                </div>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="p-4 rounded-2xl" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
                                         <p className="text-[9px] font-black mb-1 " style={{ color: 'var(--text-3)' }}>نویسنده</p>
@@ -971,9 +966,15 @@ interface NashrPageProps {
   onDeleteNote?: (id: string) => Promise<boolean>;
   onRepostToMahfel?: (note: PublishedBook) => Promise<void> | void;
   onOpenAuthorProfile?: (author: { name: string; avatar?: string; authorId?: string }) => void;
+  onToggleSaveNote?: (note: any) => void;
+  savedNoteIds?: (string | number)[];
+  bookmarks?: any[];
+  onSaveBookmark?: (book: PublishedBook, text: string, page: number) => void;
+  onRemoveBookmark?: (bookId: string, text: string) => void;
+  onToggleNoteLike?: (note: PublishedBook) => void;
 }
 
-const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comments, onAddComment, user, onUpdateUser, onDeleteComment, onLikeComment, onUpdateComment, onToggleSidebar, myNotes, onSaveNote, onUpdateNote, onDeleteNote, onRepostToMahfel, onOpenAuthorProfile }) => {
+const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comments, onAddComment, user, onUpdateUser, onDeleteComment, onLikeComment, onUpdateComment, onToggleSidebar, myNotes, onSaveNote, onUpdateNote, onDeleteNote, onRepostToMahfel, onOpenAuthorProfile, onToggleSaveNote, savedNoteIds = [], bookmarks = [], onSaveBookmark, onRemoveBookmark, onToggleNoteLike }) => {
   const [selectedItem, setSelectedItem] = useState<PublishedBook | null>(null);
   const [isNoteComposerOpen, setIsNoteComposerOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<PublishedBook | null>(null);
@@ -1027,6 +1028,7 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
   const [readingBook, setReadingBook] = useState<PublishedBook | null>(null);
   const [readingStartPage, setReadingStartPage] = useState(0);
   const [toast, setToast] = useState<{ message: string; icon: string } | null>(null);
+  const [confirmNote, setConfirmNote] = useState<any | null>(null);
   const [walletBalance, setWalletBalance] = useState<number>(() => {
     try { return Number(localStorage.getItem('soha_wallet') || '0'); } catch { return 0; }
   });
@@ -1271,7 +1273,7 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
     return <BookDetailView book={selectedItem} allPodcasts={allPodcasts} comments={comments} onAddComment={onAddComment} onClose={() => setSelectedItem(null)} onAddToCart={addToCart} onReadBook={setReadingBook} onDeleteComment={onDeleteComment} onLikeComment={onLikeComment} onUpdateComment={onUpdateComment} currentUserName={user?.name} purchased={isBookPurchased(selectedItem)} />;
   }
   if (showOrders) return <OrdersPage orders={orders} publishedBooks={publishedBooks} onBack={() => setShowOrders(false)} onReadBook={(book, page) => { setReadingBook(book); setReadingStartPage(page || 0); setShowOrders(false); }} />;
-  if (readingBook) return <BookReader book={readingBook} startPage={readingStartPage} onClose={() => { setReadingBook(null); setReadingStartPage(0); }} />;
+  if (readingBook) return <BookReader book={readingBook} startPage={readingStartPage} onClose={() => { setReadingBook(null); setReadingStartPage(0); }} bookmarks={bookmarks} onSaveBookmark={onSaveBookmark} onRemoveBookmark={onRemoveBookmark} />;
 
   return (
     <>
@@ -1477,6 +1479,14 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
 
                 {/* Info */}
                 <h3 className="text-[13px] font-black line-clamp-2 text-right leading-snug mb-1 " style={{ color: 'var(--text)' }}>{book.title}</h3>
+                {book.description && String(book.description).trim() && (
+                    <div className="mb-2 rounded-xl px-3 py-2" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                        <p className="text-[9px] font-black mb-1 flex items-center gap-1 " style={{ color: 'var(--text-3)' }}>
+                            <i className="fas fa-book-open text-[8px]" style={{ color: 'var(--primary)' }} /> درباره کتاب
+                        </p>
+                        <p className="text-[10px] leading-relaxed line-clamp-3 text-right" style={{ color: 'var(--text-2)' }}>{String(book.description)}</p>
+                    </div>
+                )}
                 <div className="flex items-center justify-between mt-auto mb-2">
                   <span className="text-[10px] font-bold truncate " style={{ color: 'var(--text-3)' }}>{book.authorName}</span>
                   {book.price && book.price !== '۰' && (
@@ -1518,6 +1528,15 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
       </section>
 
       {/* ═══════════════ NOTES SECTION ═══════════════ */}
+      {user && (
+        <section className="max-w-6xl mx-auto px-4 mb-6">
+          <button onClick={() => { setEditingNote(null); setNoteTitle(''); setNoteContent(''); setIsNoteComposerOpen(true); }}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-[11px] font-black text-white transition-all active:scale-95 shadow-lg"
+            style={{ background: 'linear-gradient(135deg, var(--primary), var(--secondary))' }}>
+            <i className="fas fa-pen-nib text-[10px]" /> ایجاد یادداشت
+          </button>
+        </section>
+      )}
       {notes.length > 0 && (
         <section className="max-w-6xl mx-auto px-4 mb-12">
           {/* Header */}
@@ -1533,10 +1552,10 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
                 <p className="text-[11px] font-bold mt-0.5 " style={{ color: 'var(--text-3)' }}>مجموعه نوشته‌های تخصصی و الهام‌بخش</p>
               </div>
               <div className="mr-auto flex items-center gap-2">
-                {(user?.role === 'author' || user?.role === 'admin') && (
+                {(user) && (
                   <button onClick={() => { setEditingNote(null); setNoteTitle(''); setNoteContent(''); setIsNoteComposerOpen(true); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black text-white transition-all active:scale-95 shadow-lg" style={{ background: 'linear-gradient(135deg, var(--primary), var(--secondary))' }}>
                     <i className="fas fa-pen-nib text-[8px]" />
-                    نوشتن یادداشت
+                    ایجاد یادداشت
                   </button>
                 )}
                 <div className="px-3 py-1 rounded-full text-[10px] font-black" style={{ background: 'color-mix(in srgb, var(--accent) 15%, transparent)', color: 'var(--accent)' }}>
@@ -1565,6 +1584,46 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
                   {name}
                 </button>
               ))}
+            </div>
+          )}
+
+          {/* یادداشتهای من (پیشنویس + منتشرشده) */}
+          {user && myNotes && myNotes.length > 0 && (
+            <div className="mb-5 rounded-2xl p-4" style={{ background: 'color-mix(in srgb, var(--primary) 4%, var(--surface-2))', border: '1px solid color-mix(in srgb, var(--primary) 15%, transparent)' }}>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-[12px] font-black" style={{ color: 'var(--text)' }}><i className="fas fa-pen-fancy ml-1.5 text-[10px]" style={{ color: 'var(--primary)' }}></i> یادداشت‌های من ({toPersianDigits(myNotes.length)})</h3>
+                <span className="text-[8px] font-black px-2 py-1 rounded-full" style={{ background: 'color-mix(in srgb, var(--primary) 10%, transparent)', color: 'var(--primary)' }}>
+                  {toPersianDigits(myNotes.filter(n => n.isDraft).length)} پیش‌نویس
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {myNotes.map(note => (
+                  <div key={String(note.id)} className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: note.isDraft ? 'color-mix(in srgb, #f59e0b 12%, transparent)' : 'color-mix(in srgb, #10b981 12%, transparent)', color: note.isDraft ? '#f59e0b' : '#10b981' }}>
+                      <i className={`fas ${note.isDraft ? 'fa-lock' : 'fa-globe'} text-[9px]`}></i>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10.5px] font-black truncate" style={{ color: 'var(--text)' }}>{String(note.title || 'بدون عنوان')}</p>
+                      <p className="text-[8px] font-bold mt-0.5" style={{ color: 'var(--text-3)' }}>{note.isDraft ? 'پیش‌نویس — فقط برای شما' : note.pendingApproval ? 'در انتظار تأیید مدیر' : 'منتشر شده در صفحه نشر'}</p>
+                    </div>
+                    {note.isDraft && (
+                      <button onClick={() => onUpdateNote?.(String(note.id), { title: String(note.title || ''), content: String(note.contentHtml || note.description || ''), isDraft: false })}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[8.5px] font-black text-white active:scale-95 transition-all flex-shrink-0"
+                        style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
+                        <i className="fas fa-send text-[7px]"></i> انتشار
+                      </button>
+                    )}
+                    <button onClick={() => { setEditingNote(note); setNoteTitle(String(note.title || '')); setNoteContent(String(note.contentHtml || note.description || '')); setIsNoteComposerOpen(true); }}
+                      className="w-7 h-7 rounded-lg flex items-center justify-center active:scale-90 transition-all flex-shrink-0" style={{ background: 'var(--surface-3)', color: 'var(--text-3)' }}>
+                      <i className="fas fa-pen text-[8px]"></i>
+                    </button>
+                    <button onClick={() => setConfirmNote(note)}
+                      className="w-7 h-7 rounded-lg flex items-center justify-center active:scale-90 transition-all flex-shrink-0" style={{ background: 'var(--surface-3)', color: 'var(--text-3)' }}>
+                      <i className="fas fa-trash text-[8px]"></i>
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -1616,14 +1675,53 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
                     </p>
                   )}
 
-                  {/* Author actions: repost to Mahfel / edit */}
-                  {(user?.role === 'author' || user?.role === 'admin') && String(note.authorId || '') === String(user?._id || user?.id) && (
-                    <div className="flex items-center gap-2 mt-3">
+                  {/* Actions: like + save */}
+                  {user && (
+                    <div className="flex items-center gap-1.5 mt-3">
+                      {onToggleNoteLike && (() => {
+                        const likes: string[] = (note.likes || []).map((l: any) => String(l));
+                        const liked = likes.includes(String((user as any)._id || (user as any).id));
+                        return (
+                          <button onClick={(e) => { e.stopPropagation(); onToggleNoteLike(note); }}
+                            title={liked ? 'حذف لایک' : 'لایک'}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black transition-all active:scale-95"
+                            style={liked ? { background: 'linear-gradient(135deg, #ef4444, #f97316)', color: '#fff', boxShadow: '0 4px 12px rgba(239,68,68,0.3)' } : { background: 'var(--surface-3)', color: 'var(--text-2)', border: '1px solid var(--border)' }}>
+                            <i className={`${liked ? 'fas' : 'far'} fa-heart text-[9px]`}></i>
+                            <span>{likes.length > 0 ? toPersianDigits(likes.length) : 'لایک'}</span>
+                          </button>
+                        );
+                      })()}
+                      {(() => {
+                        const saved = savedNoteIds.some(id => String(id) === String(note.id || (note as any)._id));
+                        return (
+                          <button onClick={(e) => { e.stopPropagation(); onToggleSaveNote?.(note); }}
+                            title={saved ? 'حذف از کتابخانه' : 'ذخیره در کتابخانه'}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black transition-all active:scale-95"
+                            style={saved ? { background: 'color-mix(in srgb, #14b8a6 15%, transparent)', color: '#14b8a6', border: '1px solid color-mix(in srgb, #14b8a6 30%, transparent)' } : { background: 'var(--surface-3)', color: 'var(--text-2)', border: '1px solid var(--border)' }}>
+                            <i className={`${saved ? 'fas' : 'far'} fa-bookmark text-[9px]`}></i>
+                            <span>{saved ? 'ذخیره شد' : 'ذخیره'}</span>
+                          </button>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {/* Author actions: repost to Mahfel / edit / delete */}
+                  {user && String(note.authorId || '') === String(user?._id || user?.id) && (
+                    <div className="flex items-center gap-2 mt-2">
+                      {note.pendingApproval && (
+                        <span className="flex items-center gap-1 px-2 py-1 rounded-lg text-[8px] font-black flex-shrink-0" style={{ background: 'color-mix(in srgb, #f59e0b 15%, transparent)', color: '#f59e0b', border: '1px solid color-mix(in srgb, #f59e0b 25%, transparent)' }}>
+                          <i className="fas fa-hourglass-half text-[7px]" /> در انتظار تأیید مدیر
+                        </span>
+                      )}
                       <button onClick={(e) => { e.stopPropagation(); onRepostToMahfel?.(note); }} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-[9px] font-black transition-all active:scale-95" style={{ background: 'color-mix(in srgb, var(--primary) 12%, transparent)', color: 'var(--primary)', border: '1px solid color-mix(in srgb, var(--primary) 20%, transparent)' }}>
                         <i className="fas fa-paper-plane text-[8px]" /> بازنشر در محفل
                       </button>
                       <button onClick={(e) => { e.stopPropagation(); setEditingNote(note); setNoteTitle(note.title || ''); setNoteContent(note.contentHtml || note.description || ''); setIsNoteComposerOpen(true); }} className="w-9 h-8 rounded-xl flex items-center justify-center transition-all active:scale-90" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
                         <i className="fas fa-pen text-[9px]" style={{ color: 'var(--text-3)' }} />
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); setConfirmNote(note); }} className="w-9 h-8 rounded-xl flex items-center justify-center transition-all active:scale-90" style={{ background: 'color-mix(in srgb, #ef4444 8%, var(--surface-2))', border: '1px solid color-mix(in srgb, #ef4444 20%, transparent)' }}>
+                        <i className="fas fa-trash text-[9px]" style={{ color: '#ef4444' }} />
                       </button>
                     </div>
                   )}
@@ -1673,6 +1771,23 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
         </div>
       </div>
     )}
+
+    <ConfirmToast
+      open={!!confirmNote}
+      message={confirmNote ? `یادداشت «${String(confirmNote.title || 'بدون عنوان')}» حذف شود؟` : ''}
+      onConfirm={() => {
+        if (!confirmNote) return;
+        const id = String((confirmNote as any).id || (confirmNote as any)._id);
+        const wasEditing = editingNote && String((editingNote as any).id || (editingNote as any)._id) === id;
+        if (onDeleteNote) {
+          const r = onDeleteNote(id);
+          if (r instanceof Promise) r.then(ok => { if (ok) setToast({ message: 'یادداشت حذف شد', icon: 'fa-trash' }); });
+        }
+        if (wasEditing) { setIsNoteComposerOpen(false); setEditingNote(null); }
+        setConfirmNote(null);
+      }}
+      onCancel={() => setConfirmNote(null)}
+    />
 
     {/* ═══════════════ MODALS ═══════════════ */}
     <CartModal items={cartItems} isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} onRemove={removeFromCart} onUpdateQuantity={updateCartQuantity} onCheckout={() => { setIsCartOpen(false); setIsCheckoutOpen(true); }} />
@@ -1853,7 +1968,7 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
     )}
 
     {/* ═══ NOTE COMPOSER (author only) ═══ */}
-    {isNoteComposerOpen && (user?.role === 'author' || user?.role === 'admin') && (
+    {isNoteComposerOpen && user && (
       <div className="fixed inset-0 z-[7500] animate-fadeIn flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(6px)' }} dir="rtl">
         <div className="w-full max-w-lg rounded-3xl overflow-hidden animate-scaleIn flex flex-col max-h-[90vh]" style={{ background: 'var(--surface)', border: '1px solid var(--border)', boxShadow: '0 25px 60px rgba(0,0,0,0.3)' }}>
           {/* Header */}
@@ -1881,7 +1996,7 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
             <textarea value={noteContent} onChange={e => setNoteContent(e.target.value)} placeholder="متن یادداشت خود را بنویسید..." rows={8} className="w-full px-3.5 py-3 rounded-xl text-[12px] font-medium outline-none focus:ring-2 transition-all resize-none leading-7" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text)', '--tw-ring-color': 'var(--primary)' } as any} />
 
             {editingNote && (
-              <button onClick={async () => { if (!onDeleteNote || !window.confirm('این یادداشت حذف شود؟')) return; if (await onDeleteNote(String(editingNote.id))) { setToast({ message: 'یادداشت حذف شد', icon: 'fa-trash' }); setIsNoteComposerOpen(false); setEditingNote(null); } }} className="w-full mt-4 py-2.5 rounded-xl text-[10px] font-black transition-all active:scale-95" style={{ background: 'color-mix(in srgb, #ef4444 12%, var(--surface-2))', color: '#ef4444', border: '1px solid color-mix(in srgb, #ef4444 25%, transparent)' }}>
+              <button onClick={() => setConfirmNote(editingNote)} className="w-full mt-4 py-2.5 rounded-xl text-[10px] font-black transition-all active:scale-95" style={{ background: 'color-mix(in srgb, #ef4444 12%, var(--surface-2))', color: '#ef4444', border: '1px solid color-mix(in srgb, #ef4444 25%, transparent)' }}>
                 <i className="fas fa-trash ml-1.5" /> حذف یادداشت
               </button>
             )}

@@ -22,6 +22,8 @@ interface BridgeLike {
   // app update: current installed version + apk download/install
   getAppVersion?: () => string;
   downloadAndInstallApk?: (url: string) => void;
+  // FCM: توکن گوشی برای push وقتی اپ بسته است
+  getFcmToken?: () => string;
   // OTP auto-fill
   startOtpAutofill?: () => boolean;
 }
@@ -91,6 +93,17 @@ export const downloadAndInstallApk = (url: string) => {
   return false;
 };
 
+// --- توکن FCM (اندروید): خالی یعنی FCM در دسترس نیست ---
+export const getFcmToken = (): string => {
+  const b = getBridge();
+  if (b && typeof b.getFcmToken === 'function') {
+    try {
+      return b.getFcmToken() || '';
+    } catch { /* ignore */ }
+  }
+  return '';
+};
+
 // --- محیط دسکتاپ (Electron) ---
 export const isDesktop = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -128,6 +141,19 @@ export const desktopOpenExternal = (url: string) => {
   try {
     if ((window as any).mahfelDesktop?.openExternal) {
       (window as any).mahfelDesktop.openExternal(url);
+      return true;
+    }
+  } catch { /* ignore */ }
+  return false;
+};
+
+// --- اعلان سیستمی دسکتاپ (Electron main process) — نسخهٔ جدید EXE ---
+export const desktopShowNotification = (title: string, body: string, link?: string): boolean => {
+  if (typeof window === 'undefined') return false;
+  try {
+    const d = (window as any).mahfelDesktop;
+    if (d && typeof d.showNotification === 'function') {
+      d.showNotification(title, body, link || '');
       return true;
     }
   } catch { /* ignore */ }

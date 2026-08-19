@@ -4,6 +4,7 @@ import User from '../models/User.js';
 import Notification from '../models/Notification.js';
 import { requireAuth, auth } from '../middleware/auth.js';
 import { broadcast } from '../utils/broadcast.js';
+import { sendWebPushToUser, sendWebPushToAdmins } from '../utils/webpush.js';
 
 const router = Router();
 
@@ -101,7 +102,8 @@ router.post('/', requireAuth, async (req, res) => {
     const clientAvatar = body.authorAvatarUrl || '';
     delete body.authorAvatarUrl;
 
-    const avatarUrl = req.user.avatar || clientAvatar || '';
+    const isBrandMode = req.user.role === 'admin' && body.author === 'سرای هنر و اندیشه';
+    const avatarUrl = isBrandMode ? '/images/brand-avatar.jpg' : (req.user.avatar || clientAvatar || '');
 
     if (avatarUrl && !req.user.avatar) {
       req.user.avatar = avatarUrl;
@@ -110,7 +112,7 @@ router.post('/', requireAuth, async (req, res) => {
 
     const comment = new Comment({
       ...body,
-      author: req.user.name,
+      author: isBrandMode ? 'سرای هنر و اندیشه' : req.user.name,
       authorAvatarUrl: avatarUrl,
       userId: req.user._id,
       isoDate: new Date().toISOString(),
@@ -133,31 +135,36 @@ router.post('/', requireAuth, async (req, res) => {
           if (comment.podcastId) link = `/mahfel/podcast/${comment.podcastId}`;
           else if (comment.videoId) link = `/mahfel/video/${comment.videoId}`;
           else if (comment.bookId) link = `/mahfel/book/${comment.bookId}`;
-          await Notification.create({
+          const replyNotif = await Notification.create({
             title: '💬 پاسخ جدید',
             body: `${req.user.name} به نظر شما پاسخ داد`,
             userId: parent.userId,
             link,
             type: 'reply',
+            target: 'user',
+            sourceId: comment._id,
           });
+          await sendWebPushToUser(parent.userId, { title: replyNotif.title, body: replyNotif.body, url: replyNotif.link, id: String(replyNotif._id) });
         }
       }
     } catch (ignored) {}
 
-    // نوتیفیکیشن همگانی «پیام جدید در محفل» برای همه کاربران
+    // نوتیفیکیشن فعالیت کاربر → فقط برای ادمین‌ها (نه خود کاربر، نه بقیه)
     try {
       if (req.user.role !== 'admin') {
         let link = '/mahfel';
         if (comment.podcastId) link = `/mahfel/podcast/${comment.podcastId}`;
         else if (comment.videoId) link = `/mahfel/video/${comment.videoId}`;
         else if (comment.bookId) link = `/mahfel/book/${comment.bookId}`;
-        const notif = await Notification.create({
+                const notif = await Notification.create({
           title: '💬 پیام جدید در محفل',
           body: `${req.user.name}: ${(body.text || 'پیام').slice(0, 90)}`,
           type: 'community',
+          target: 'admins',
+          sourceId: comment._id,
           link,
         });
-        broadcast('data-changed', { type: 'notifications', action: 'create', item: notif.toObject() });
+        await sendWebPushToAdmins({ title: notif.title, body: notif.body, url: link || '/mahfel', id: String(notif._id) });
       }
     } catch (ignored) {}
 
@@ -197,11 +204,13 @@ router.delete('/:id', requireAuth, async (req, res) => {
       const children = await Comment.find({ parentId });
       for (const child of children) {
         await deleteRecursive(String(child._id));
+        try { await Notification.deleteMany({ sourceId: child._id }); } catch (ignored) {}
         await Comment.findByIdAndDelete(child._id);
       }
     };
     await deleteRecursive(req.params.id);
     await Comment.findByIdAndDelete(req.params.id);
+    try { await Notification.deleteMany({ sourceId: req.params.id }); } catch (ignored) {}
     broadcast('data-changed', { type: 'comments', action: 'delete', id: req.params.id });
     res.json({ success: true });
   } catch (error) {

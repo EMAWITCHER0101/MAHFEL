@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "614447159371",
+    "project_id": "mahfel-a9ec2",
+    "storage_bucket": "mahfel-a9ec2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:614447159371:android:20f8d6409a93e90ddd55ce",
+        "android_client_info": {
+          "package_name": "com.mahfel.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCyws06-9zSJoglqRGYzx5M9v5B1RdPpOU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

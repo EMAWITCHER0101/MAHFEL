@@ -19,6 +19,7 @@ interface CustomVideoPlayerProps {
   onTimeUpdate?: (time: number) => void;
   onPlay?: () => void;
   onPause?: () => void;
+  onEnded?: () => void;
   isMini?: boolean;
   initialTime?: number;
 }
@@ -33,7 +34,7 @@ export interface CustomVideoPlayerHandle {
 }
 
 const CustomVideoPlayer = forwardRef<CustomVideoPlayerHandle, CustomVideoPlayerProps>(({
-  videoId, title, poster, onTimeUpdate, onPlay, onPause, isMini = false, initialTime = 0,
+  videoId, title, poster, onTimeUpdate, onPlay, onPause, onEnded, isMini = false, initialTime = 0,
 }, ref) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -149,6 +150,7 @@ const CustomVideoPlayer = forwardRef<CustomVideoPlayerHandle, CustomVideoPlayerP
     const onLoadedData = () => tryApplyPendingSeek();
     const onCanPlay = () => tryApplyPendingSeek();
     const onProgress = () => { if (v.buffered.length > 0) setBuffered(v.buffered.end(v.buffered.length - 1)); };
+    const handleEnded = () => { onEnded?.(); };
 
     v.addEventListener('play', handlePlay);
     v.addEventListener('pause', handlePause);
@@ -157,6 +159,7 @@ const CustomVideoPlayer = forwardRef<CustomVideoPlayerHandle, CustomVideoPlayerP
     v.addEventListener('loadeddata', onLoadedData);
     v.addEventListener('canplay', onCanPlay);
     v.addEventListener('progress', onProgress);
+    v.addEventListener('ended', handleEnded);
 
     return () => {
       v.removeEventListener('play', handlePlay);
@@ -166,8 +169,9 @@ const CustomVideoPlayer = forwardRef<CustomVideoPlayerHandle, CustomVideoPlayerP
       v.removeEventListener('loadeddata', onLoadedData);
       v.removeEventListener('canplay', onCanPlay);
       v.removeEventListener('progress', onProgress);
+      v.removeEventListener('ended', handleEnded);
     };
-  }, [videoUrl, onTimeUpdate, onPlay, onPause]);
+  }, [videoUrl, onTimeUpdate, onPlay, onPause, onEnded]);
 
   useEffect(() => {
     if (isMini || !isPlaying) return;

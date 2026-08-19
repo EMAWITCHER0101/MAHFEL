@@ -63,8 +63,31 @@ public class MainActivity extends BridgeActivity {
     private boolean vpnWarningShown = false;
     private String appUrl = null;
     private LinearLayout overlay;
-    public static Bridge staticBridge;
+        public static Bridge staticBridge;
     private String pendingNotifLink = null;
+    // ── FCM ──
+
+    /** توکن FCM تازه شد (یا اپ هنگام راه‌اندازی دارد) → به WebView بگو ثبت کند */
+    public static void forwardFcmToken() {
+        Bridge b = staticBridge;
+        if (b == null) return;
+        try {
+            android.webkit.WebView wv = b.getWebView();
+            if (wv != null) {
+                wv.post(() -> wv.evaluateJavascript(
+                        "window.dispatchEvent(new CustomEvent('mahfel-fcm-token'))", null));
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    public String getStoredFcmToken() {
+        try {
+            return getSharedPreferences("mahfel_prefs", MODE_PRIVATE).getString("fcm_token", "");
+        } catch (Exception e) {
+            return "";
+        }
+    }
     private boolean videoPlaying = false;
     // متادیتای ویدیو برای مینی‌پلیر PiP (عنوان + ابعاد واقعی برای نسبت تصویر)
     private String pipTitle = "پخش ویدیو";
@@ -819,6 +842,12 @@ public class MainActivity extends BridgeActivity {
             } catch (Exception e) {
                 return "";
             }
+        }
+
+        // توکن FCM برای ثبت روی سرور (خالی = FCM در دسترس نیست)
+        @JavascriptInterface
+        public String getFcmToken() {
+            return getStoredFcmToken();
         }
 
         @JavascriptInterface

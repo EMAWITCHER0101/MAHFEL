@@ -3,6 +3,7 @@ import User from '../models/User.js';
 import Video from '../models/Video.js';
 import Post from '../models/Post.js';
 import Comment from '../models/Comment.js';
+import Notification from '../models/Notification.js';
 import Podcast from '../models/Podcast.js';
 import Author from '../models/Author.js';
 import Book from '../models/Book.js';
@@ -12,11 +13,25 @@ import AnalyticsEvent from '../models/AnalyticsEvent.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { generateText } from '../utils/aiClient.js';
 import { deleteUserContent } from '../utils/deleteUserContent.js';
+import { sendWebPushToAll } from '../utils/webpush.js';
 
 const router = Router();
 router.use(requireAuth, requireRole('admin'));
 
 const DAY = 24 * 60 * 60 * 1000;
+
+// نوتیفیکیشن همگانی + پوش وقتی یادداشت/کتابی تازه منتشر می‌شود (ادمین تأیید کرد یا خودش منتشر کرد)
+async function notifyPublishedNote(note) {
+  try {
+    const notif = await Notification.create({
+      title: note.type === 'book' ? '📚 کتاب جدید' : '📝 یادداشت جدید',
+      body: (note.title || 'محتوا') + (note.authorName ? ' — ' + note.authorName : ''),
+      link: `/mahfel/book/${note._id}`,
+      type: note.type === 'book' ? 'book' : 'note',
+    });
+    await sendWebPushToAll({ title: notif.title, body: notif.body, url: notif.link, id: String(notif._id) });
+  } catch (ignored) {}
+}
 
 function periodRange(period = '7d') {
   const days = period === '30d' ? 30 : period === '90d' ? 90 : 7;
@@ -552,6 +567,7 @@ router.post('/notes', async (req, res) => {
     if (!note.authorId) note.authorId = req.user._id;
     await note.save();
     broadcast('data-changed', { type: 'publishedBooks', action: 'create', item: note.toObject() });
+    if (!note.isDraft) await notifyPublishedNote(note);
     res.status(201).json(note);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -561,8 +577,13 @@ router.post('/notes', async (req, res) => {
 // Update any note (admin overrides ownership)
 router.put('/notes/:id', async (req, res) => {
   try {
+    const prev = await PublishedBook.findById(req.params.id);
+    if (!prev) return res.status(404).json({ error: 'یادداشت یافت نشد' });
     const note = await PublishedBook.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
     if (!note) return res.status(404).json({ error: 'یادداشت یافت نشد' });
+    if (!note.isDraft && !note.pendingApproval && (prev.isDraft || prev.pendingApproval)) {
+      await notifyPublishedNote(note);
+    }
     broadcast('data-changed', { type: 'publishedBooks', action: 'update', item: note.toObject() });
     res.json(note);
   } catch (error) {
@@ -703,8 +724,23 @@ router.get('/posts', async (req, res) => {
 
 router.delete('/posts/:id', async (req, res) => {
   try {
-    const post = await Post.findByIdAndDelete(req.params.id);
+    const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ error: 'پست یافت نشد' });
+    const commentIds = (post.comments || []).map((c) => String(c._id));
+    await Post.findByIdAndDelete(req.params.id);
+    try { await Notification.deleteMany({ sourceId: { $in: [req.params.id, ...commentIds] } }); } catch (ignored) {}
+    // هماهنگی: حذف پست محفل برای یک کتاب → نظرات گفتگوی همان کتاب هم حذف شوند
+    try {
+      if (post.bookId) {
+        const bookComments = await Comment.find({ type: 'book', bookId: post.bookId }).select('_id').lean();
+        const bookCommentIds = bookComments.map((c) => String(c._id));
+        if (bookCommentIds.length) {
+          await Comment.deleteMany({ type: 'book', bookId: post.bookId });
+          try { await Notification.deleteMany({ sourceId: { $in: bookCommentIds } }); } catch (ignored) {}
+          broadcast('data-changed', { type: 'comments', action: 'ids-delete', ids: bookCommentIds });
+        }
+      }
+    } catch (ignored) {}
     broadcast('data-changed', { type: 'posts', action: 'delete', id: req.params.id });
     res.json({ success: true });
   } catch (error) {
@@ -733,7 +769,14 @@ router.post('/posts/bulk', async (req, res) => {
     const { ids, action } = req.body;
     if (!ids || !Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'لیست پست‌ها خالی است' });
     if (action === 'delete') {
+      const posts = await Post.find({ _id: { $in: ids } }).select('comments').lean();
+      const notifIds = [];
+      posts.forEach((p) => {
+        notifIds.push(String(p._id));
+        (p.comments || []).forEach((c) => notifIds.push(String(c._id)));
+      });
       await Post.deleteMany({ _id: { $in: ids } });
+      try { if (notifIds.length) await Notification.deleteMany({ sourceId: { $in: notifIds } }); } catch (ignored) {}
       broadcast('data-changed', { type: 'posts', action: 'ids-delete', ids });
       return res.json({ success: true, deleted: ids.length });
     }
@@ -748,6 +791,23 @@ router.post('/posts/bulk', async (req, res) => {
       return res.json({ success: true, updated: ids.length });
     }
     res.status(400).json({ error: 'عملیات نامعتبر' });
+  } catch (error) {
+    res.status(500).json({ error: 'خطای سرور' });
+  }
+});
+
+// دستور پاکسازی: حذف تمام پیام‌های محفل (فقط برای ادمین)
+router.post('/posts/purge', async (req, res) => {
+  try {
+    const postIds = await Post.find({}, '_id').lean();
+    const notifIds = [];
+    postIds.forEach((p) => notifIds.push(String(p._id)));
+    const deleted = await Post.deleteMany({});
+    try {
+      if (notifIds.length) await Notification.deleteMany({ sourceId: { $in: notifIds } });
+    } catch (ignored) {}
+    broadcast('data-changed', { type: 'posts', action: 'purge' });
+    res.json({ success: true, deleted: deleted.deletedCount || 0 });
   } catch (error) {
     res.status(500).json({ error: 'خطای سرور' });
   }
@@ -797,9 +857,31 @@ router.get('/comments', async (req, res) => {
 
 router.delete('/comments/:id', async (req, res) => {
   try {
-    const comment = await Comment.findByIdAndDelete(req.params.id);
+    const comment = await Comment.findById(req.params.id);
     if (!comment) return res.status(404).json({ error: 'نظر یافت نشد' });
-    await Comment.deleteMany({ parentId: req.params.id });
+    const deleteRecursive = async (parentId) => {
+      const children = await Comment.find({ parentId });
+      for (const child of children) {
+        await deleteRecursive(String(child._id));
+        try { await Notification.deleteMany({ sourceId: child._id }); } catch (ignored) {}
+        await Comment.findByIdAndDelete(child._id);
+      }
+    };
+    await deleteRecursive(req.params.id);
+    try { await Notification.deleteMany({ sourceId: req.params.id }); } catch (ignored) {}
+    await Comment.findByIdAndDelete(req.params.id);
+    // هماهنگی: حذف نظر کتاب در پنل ادمین → پست محفل مربوط به همان کتاب هم حذف شود
+    try {
+      if (comment.type === 'book' && comment.bookId) {
+        const relatedPost = await Post.findOne({ bookId: comment.bookId });
+        if (relatedPost) {
+          const relatedCommentIds = (relatedPost.comments || []).map((c) => String(c._id));
+          await Post.findByIdAndDelete(relatedPost._id);
+          try { await Notification.deleteMany({ sourceId: { $in: [String(relatedPost._id), ...relatedCommentIds] } }); } catch (ignored) {}
+          broadcast('data-changed', { type: 'posts', action: 'delete', id: String(relatedPost._id) });
+        }
+      }
+    } catch (ignored) {}
     broadcast('data-changed', { type: 'comments', action: 'delete', id: req.params.id });
     res.json({ success: true });
   } catch (error) {
@@ -827,7 +909,10 @@ router.post('/comments/bulk', async (req, res) => {
     const { ids, action } = req.body;
     if (!ids || !Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'لیست نظرات خالی است' });
     if (action === 'delete') {
+      const comments = await Comment.find({ _id: { $in: ids } }).select('_id').lean();
+      const notifIds = new Set(comments.map((c) => String(c._id)));
       await Comment.deleteMany({ _id: { $in: ids } });
+      try { if (notifIds.size) await Notification.deleteMany({ sourceId: { $in: [...notifIds] } }); } catch (ignored) {}
       broadcast('data-changed', { type: 'comments', action: 'ids-delete', ids });
       return res.json({ success: true, deleted: ids.length });
     }

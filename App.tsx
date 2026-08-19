@@ -1,16 +1,16 @@
 ﻿
 import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { Podcast, Episode, Comment, Page, Post, Book, Author, PublishedBook, User, Video } from './types';
-import { getPodcasts, getBooks, getAuthors, getVideos, getComments, getPosts, getPublishedBooks, createPost, deletePost as apiDeletePost, addPostComment, updatePost, deleteComment as apiDeleteComment, addComment, likeComment, updateLibrary, prefetchStream, getMe, deletePostComment, updatePostComment, getNotifications, recordPodcastPlay, getMyNotes, createPublishedBook, updatePublishedBook, deletePublishedBook, shareToMahfel, getAuthorNotes } from './services/api';
+import { getPodcasts, getBooks, getAuthors, getVideos, getComments, getPosts, getPublishedBooks, createPost, deletePost as apiDeletePost, addPostComment, updatePost, deleteComment as apiDeleteComment, addComment, likeComment, updateLibrary, prefetchStream, getMe, deletePostComment, updatePostComment, getNotifications, recordPodcastPlay, getMyNotes, createPublishedBook, updatePublishedBook, deletePublishedBook, shareToMahfel, getAuthorNotes, getAlbums, createAlbum, updateAlbum, deleteAlbum, toggleNoteLike, registerFcmToken, unregisterFcmToken } from './services/api';
 import { ThemeProvider, useTheme } from './components/ThemeProvider';
 import OnboardingGuide from './components/OnboardingGuide';
 import WelcomeVideo from './components/WelcomeVideo';
 import { ADMIN_STEPS, USER_STEPS, AUTHOR_STEPS } from './data/guideSteps';
 import ErrorBoundary from './components/ErrorBoundary';
-import { initBackgroundPlayback, isApp, sendNativeNotification, playInBackgroundAudio, stopBackgroundAudio, updateAudioBackgroundMeta, updateAudioBackgroundState, stopPlaybackService, isNativeMode, setNativeModeActive, nativeCommand, getNativeSnapshot, isVideoBackgroundActive, stopVideoBackground, getAppVersion, isDesktop, getDesktopVersion, isVersionNewer, clearWebMediaSession } from './services/backgroundPlayback';
+import { initBackgroundPlayback, isApp, sendNativeNotification, playInBackgroundAudio, stopBackgroundAudio, updateAudioBackgroundMeta, updateAudioBackgroundState, stopPlaybackService, isNativeMode, setNativeModeActive, nativeCommand, getNativeSnapshot, isVideoBackgroundActive, stopVideoBackground, getAppVersion, isDesktop, getDesktopVersion, isVersionNewer, clearWebMediaSession, getFcmToken, desktopShowNotification } from './services/backgroundPlayback';
 import { getAppUpdate, AppUpdateInfo } from './services/api';
 import UpdateDialog from './components/UpdateDialog';
-import { getPushEnabled, syncWebPushSubscription } from './services/webPush';
+import { getPushEnabled, syncWebPushSubscription, getAppNotifEnabled } from './services/webPush';
 import { OfflineDetector, NetworkErrorPage, VPNBanner, useVPNDetection } from './components/ErrorPages';
 import SearchModal from './components/SearchModal';
 
@@ -25,6 +25,7 @@ import MinimizedPlayer from './components/MinimizedPlayer';
 const FullScreenPlayer = React.lazy(() => import('./components/FullScreenPlayer'));
 import IranAccessWarning from './components/IranAccessWarning';
 import InstantView from './components/InstantView';
+import AlbumViewer from './components/AlbumViewer';
 
 const SowtPage = React.lazy(() => import('./views/SowtPage'));
 const MatnPage = React.lazy(() => import('./views/MatnPage'));
@@ -52,6 +53,32 @@ const notifLastSeenKey = (): string => {
     return uid ? `mahfel_last_notif_id_${uid}` : 'mahfel_last_notif_id_guest';
 };
 
+// کلید «نوتیفیکیشن‌های نمایش‌داده‌شده» — مجموعه‌ای از idها برای نمایش هر نوتیفیکیشن دقیقاً یک‌بار روی هر دستگاه
+const notifShownKey = (): string => {
+    let uid = '';
+    try { const u = JSON.parse(localStorage.getItem('user_data') || 'null'); uid = String(u?.id ?? u?._id ?? ''); } catch { /* ignore */ }
+    return uid ? `mahfel_shown_notifs_${uid}` : 'mahfel_shown_notifs_guest';
+};
+
+const getShownNotifs = (): string[] => {
+    try {
+        const arr = JSON.parse(localStorage.getItem(notifShownKey()) || '[]');
+        return Array.isArray(arr) ? arr : [];
+    } catch { return []; }
+};
+
+const hasShownNotif = (id: string): boolean => !!id && getShownNotifs().includes(id);
+
+const markShownNotif = (id: string) => {
+    if (!id) return;
+    try {
+        const arr = getShownNotifs();
+        if (arr.includes(id)) return;
+        arr.unshift(id);
+        localStorage.setItem(notifShownKey(), JSON.stringify(arr.slice(0, 60)));
+    } catch { /* ignore */ }
+};
+
 const AppInner: React.FC = () => {
     const { theme, toggleTheme } = useTheme();
     const [appState, setAppState] = useState<'initializing' | 'login' | 'interests' | 'ready' | 'admin'>('initializing');
@@ -73,6 +100,8 @@ const AppInner: React.FC = () => {
     const [playlistEpisodeIndex, setPlaylistEpisodeIndex] = useState(0);
     
     const [user, setUser] = useState<User | null>(null);
+    const userRef = useRef<User | null>(null);
+    userRef.current = user;
     const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
     const [showOnboarding, setShowOnboarding] = useState(false);
     const [showWelcomeVideo, setShowWelcomeVideo] = useState(false);
@@ -94,6 +123,21 @@ const AppInner: React.FC = () => {
     const [isPublicPost, setIsPublicPost] = useState(true);
     const [selectedAttachment, setSelectedAttachment] = useState<{ type: 'audio' | 'video' | 'book' | 'image', data: any, timestamp?: number } | null>(null);
     const [postMedia, setPostMedia] = useState<{ type: 'image' | 'video' | 'audio'; url: string }[]>([]);
+
+    // بوم شخصی + صف پخش (کتابخانه)
+    const [albums, setAlbums] = useState<{ mine: any[]; shared: any[] }>({ mine: [], shared: [] });
+    const [albumView, setAlbumView] = useState<any | null>(null);
+    const [playQueue, setPlayQueue] = useState<any[]>([]);
+    const [queueAuto, setQueueAuto] = useState(true);
+    const queueRef = useRef<any[]>([]);
+    const queueAlbumIdRef = useRef<string | null>(null);
+    useEffect(() => { queueRef.current = playQueue; }, [playQueue]);
+    const playQueueNextRef = useRef<() => boolean>(() => false);
+
+    useEffect(() => {
+        if (!user?._id && !user?.id) { setAlbums({ mine: [], shared: [] }); return; }
+        getAlbums().then((d) => { if (d) setAlbums(d); }).catch(() => {});
+    }, [user?._id, user?.id]);
     
     const [toast, setToast] = useState<{ id: number; message: string; image?: string; name?: string } | null>(null);
     const [notif, setNotif] = useState<{ id: string; title: string; body: string; link?: string } | null>(null);
@@ -317,28 +361,23 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
         }
         const checkNotifications = async () => {
             try {
+                const current = userRef.current;
+                if (!current) return;
+                if (!getAppNotifEnabled()) return;
                 const list = await getNotifications();
                 if (!list || list.length === 0) return;
-                const lastKey = notifLastSeenKey();
-                const lastSeen = localStorage.getItem(lastKey) || '';
                 const latest = list[0];
                 const latestId = String((latest as any)._id || '');
-                if (!latestId || latestId === lastSeen) return;
-                localStorage.setItem(lastKey, latestId);
-                setNotif({ id: latestId, title: latest.title || 'محفل', body: latest.body || '', link: (latest as any).link || '' });
-                sendNativeNotification(latest.title || 'محفل', latest.body || '', (latest as any).link || '');
-                if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-                    try {
-                        new Notification(latest.title || 'محفل', { body: latest.body || '', icon: '/logo.png' });
-                    } catch { /* ignore */ }
-                }
+                if (!latestId) return;
+                const createdAt = (latest as any).createdAt ? new Date((latest as any).createdAt).getTime() : 0;
+                if (createdAt && Date.now() - createdAt > 120000) return;
+                notifyDisplay(latestId, latest.title, latest.body, (latest as any).link || '');
             } catch { /* ignore */ }
         };
         checkNotifications();
         const notifTimer = setInterval(checkNotifications, 30000);
         window.addEventListener('focus', checkNotifications);
         window.addEventListener('user-login-changed', checkNotifications);
-
         // چک‌آپدیت نسخه (فقط در اپ اندروید یا دسکتاپ)
         const checkForUpdate = async () => {
             try {
@@ -372,6 +411,16 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
             clearInterval(updateTimer);
             window.removeEventListener('focus', checkNotifications);
         };
+    }, []);
+
+    // مهاجرت از کلید قدیمی «آخرین دیده‌شده» به مجموعهٔ نمایش‌داده‌شده — تا نوتیفیکیشن قبلاً دیده‌شده دوباره نمایش داده نشود
+    useEffect(() => {
+        try {
+            const prev = localStorage.getItem(notifLastSeenKey());
+            if (prev && getShownNotifs().length === 0) {
+                localStorage.setItem(notifShownKey(), JSON.stringify([prev]));
+            }
+        } catch { /* ignore */ }
     }, []);
 
     useEffect(() => {
@@ -467,6 +516,67 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
         refreshComments();
     }, [refreshComments]);
 
+    // نمایش یک‌بارهٔ نوتیفیکیشن: هر id فقط یک‌بار در هر دستگاه نمایش داده می‌شود
+    const notifyDisplay = useCallback((id: string, title: string, body: string, link: string) => {
+        if (hasShownNotif(id)) return;
+        markShownNotif(id);
+        const native = isApp();
+        if (native) {
+            sendNativeNotification(title || 'محفل', body || '', link || '');
+            return;
+        }
+        const visible = typeof document !== 'undefined' && document.visibilityState === 'visible';
+        if (visible) {
+            setNotif({ id, title: title || 'محفل', body: body || '', link: link || '' });
+            return;
+        }
+        // دسکتاپ (Electron): سرویس‌کار/پوش وب وجود ندارد → اعلان سیستمی از طریق پل نیتیو
+        if (isDesktop()) {
+            const sent = desktopShowNotification(title || 'محفل', body || '', link || '');
+            if (!sent) {
+                // نسخهٔ قدیمی EXE بدون پل → Notification خود Chromium (بعد از گرفتن مجوز)
+                try {
+                    if (typeof Notification !== 'undefined') {
+                        const show = () => {
+                            const n = new Notification(title || 'محفل', { body: body || '', icon: '/logo.png', tag: id });
+                            n.onclick = () => {
+                                try { window.focus(); } catch { /* ignore */ }
+                                if (link) window.dispatchEvent(new CustomEvent('mahfel-open-notif', { detail: link }));
+                                try { n.close(); } catch { /* ignore */ }
+                            };
+                        };
+                        if (Notification.permission === 'granted') show();
+                        else Notification.requestPermission().then((p) => { if (p === 'granted') show(); }).catch(() => { /* ignore */ });
+                    }
+                } catch { /* ignore */ }
+            }
+        }
+    }, []);
+
+    // ── FCM (اندروید): ثبت/حذف توکن گوشی — push وقتی اپ بسته است ──
+    const syncFcmToken = useCallback(async () => {
+        try {
+            const token = getFcmToken();
+            if (!token || !userRef.current) return;
+            await registerFcmToken(token);
+        } catch { /* ignore */ }
+    }, []);
+
+    const clearFcmToken = useCallback(async () => {
+        try {
+            const token = getFcmToken();
+            if (!token) return;
+            await unregisterFcmToken(token);
+        } catch { /* ignore */ }
+    }, []);
+
+    useEffect(() => {
+        if (isAuthenticated) syncFcmToken();
+        const onFcm = () => { if (isAuthenticated) syncFcmToken(); };
+        window.addEventListener('mahfel-fcm-token', onFcm);
+        return () => window.removeEventListener('mahfel-fcm-token', onFcm);
+    }, [isAuthenticated, syncFcmToken]);
+
     const applyRealtimePayload = useCallback((type: string, payload: any) => {
         const action = payload?.action;
         if (!action) { refreshAllData(); return; }
@@ -489,6 +599,8 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
                 const set = new Set(ids);
                 set.forEach(id => recentlyDeletedIds.current.add(id));
                 setPosts(prev => prev.filter(p => !set.has(key(p))));
+            } else if (action === 'purge') {
+                setPosts([]);
             } else if (action === 'ids-pin' || action === 'ids-unpin') {
                 const set = new Set(((payload.ids as any[]) || []).map(sid));
                 const pinned = action === 'ids-pin';
@@ -528,15 +640,15 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
         if (type === 'notifications') {
             if (action === 'create' && payload.item) {
                 const item = payload.item;
-                const myId = String((user as any)?._id ?? (user as any)?.id ?? '');
+                const current = userRef.current;
+                if (!current) return;
+                const myId = String((current as any)?._id ?? (current as any)?.id ?? '');
                 if (item.userId && myId && String(item.userId) !== myId) return;
-                const id = String(item._id || '');
-                const lastKey = notifLastSeenKey();
-                if (id && id !== localStorage.getItem(lastKey)) {
-                    localStorage.setItem(lastKey, id);
-                    setNotif({ id, title: item.title || 'محفل', body: item.body || '', link: item.link || '' });
-                    sendNativeNotification(item.title || 'محفل', item.body || '', item.link || '');
-                }
+                if (!item.userId && item.target === 'admins' && (current as any)?.role !== 'admin') return;
+                if (!getAppNotifEnabled()) return;
+                notifyDisplay(String(item._id || ''), item.title, item.body, item.link || '');
+            } else if (action === 'delete') {
+                try { window.dispatchEvent(new Event('mahfel-notifs-refresh')); } catch { /* ignore */ }
             }
             return;
         }
@@ -559,7 +671,7 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
             if (action === 'delete') return prev.filter(p => key(p) !== sid(payload.id));
             return prev;
         });
-    }, [refreshAllData]);
+    }, [refreshAllData, notifyDisplay]);
 
     useEffect(() => {
         let realtimeStarted = false;
@@ -620,11 +732,12 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
             audioRef.current.onended = () => {
                 if (repeatMode === 'one') { audioRef.current?.play(); return; }
                 if (repeatMode === 'all' || isShuffle) { playNext(); return; }
+                if (queueAuto && playQueueNextRef.current()) { setIsPlaying(true); return; }
                 setIsPlaying(false);
             };
         }
         audioRef.current.volume = volume;
-    }, [repeatMode, isShuffle, volume]);
+    }, [repeatMode, isShuffle, volume, queueAuto]);
 
     // Web Push: ثبت سرویس‌ورکر و همگام‌سازی اشتراک قبلی (در APK هیچ سرویس‌ورکری ثبت نمی‌شود)
     useEffect(() => {
@@ -678,6 +791,9 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
     const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
     const TAB_SWIPE_ORDER: Page[] = ['sowt', 'library', 'mahfel', 'videos', 'nashr'];
     const canSwipeTabs = () =>
+        typeof window !== 'undefined' &&
+        window.innerWidth < 1024 &&
+        !isDesktop() &&
         appState === 'ready' &&
         !isWriting &&
         !selectedPodcast &&
@@ -691,6 +807,15 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
         !activeVideo;
     const handleTouchStart = (e: React.TouchEvent) => {
         if (!canSwipeTabs()) { swipeStartRef.current = null; return; }
+        // اگر لمس داخل یک ناحیهٔ اسکرول افقی (کاروسل/فیلتر) شروع شده → سوییپ تب را فعال نکن
+        let node: HTMLElement | null = e.target as HTMLElement | null;
+        const container = e.currentTarget as HTMLElement;
+        try {
+            while (node && node !== container) {
+                if (node.scrollWidth > node.clientWidth + 4) { swipeStartRef.current = null; return; }
+                node = node.parentElement;
+            }
+        } catch { /* ignore */ }
         const t = e.touches[0];
         swipeStartRef.current = { x: t.clientX, y: t.clientY };
     };
@@ -728,6 +853,7 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
         if (token) localStorage.setItem('soha_token', token);
         localStorage.setItem('user_data', JSON.stringify(u));
         window.dispatchEvent(new Event('user-login-changed'));
+        syncFcmToken();
         if (u.role === 'admin') { setAppState('admin'); }
         else { setAppState(u.interests && u.interests.length > 0 ? 'ready' : 'interests'); }
         const welcomeKey = `welcome_seen_${u.id || u.name}`;
@@ -740,6 +866,7 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
     };
 
     const handleLogout = () => {
+        clearFcmToken();
         setUser(null);
         setIsAuthenticated(false);
         localStorage.removeItem('soha_token');
@@ -1055,6 +1182,134 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
         setActiveVideo(v);
     }, []);
 
+    // ── صف پخش (کتابخانه) ──
+    const playQueueItem = useCallback((item: any) => {
+        if (!item) return;
+        if (item.type === 'audio') {
+            const p = podcasts.find((x: any) => String(x.id || x._id) === String(item.podcastId));
+            if (p && p.episodes[item.episodeIndex]) playEpisode(p, item.episodeIndex);
+        } else {
+            const v = videos.find((x: any) => String(x.id || x._id) === String(item.videoId));
+            if (v) { setIsVideoMini(false); handlePlayVideo(v); }
+        }
+    }, [podcasts, videos, playEpisode, handlePlayVideo]);
+
+    const playQueueNext = useCallback(() => {
+        const q = queueRef.current;
+        if (!q || q.length === 0) return false;
+        const [next, ...rest] = q;
+        queueRef.current = rest;
+        setPlayQueue(rest);
+        playQueueItem(next);
+        return true;
+    }, [playQueueItem]);
+    playQueueNextRef.current = playQueueNext;
+
+    const addToQueue = useCallback((item: any) => {
+        setPlayQueue(q => [...q, item]);
+    }, []);
+    const removeFromQueue = useCallback((index: number) => {
+        setPlayQueue(q => q.filter((_, k) => k !== index));
+        queueRef.current = queueRef.current.filter((_, k) => k !== index);
+    }, []);
+    const clearQueue = useCallback(() => {
+        setPlayQueue([]);
+        queueRef.current = [];
+    }, []);
+
+    const playAlbum = useCallback((album: any) => {
+        const items: any[] = (album?.items || []).filter((it: any) => it.noteId == null).map((it: any) =>
+            it.podcastId != null
+                ? { type: 'audio', podcastId: String(it.podcastId), episodeIndex: it.episodeIndex ?? 0, title: it.title || '', cover: it.cover || '' }
+                : { type: 'video', videoId: String(it.videoId), title: it.title || '', cover: it.cover || '' });
+        if (items.length === 0) return;
+        queueAlbumIdRef.current = String(album?._id || album?.id || '');
+        setPlayQueue(items.slice(1));
+        queueRef.current = items.slice(1);
+        playQueueItem(items[0]);
+    }, [playQueueItem]);
+
+    const onAlbumSaved = useCallback((albumId: string, items: any[]) => {
+        if (!albumId || queueAlbumIdRef.current !== albumId) return;
+        const playable = (items || []).filter((it: any) => it.noteId == null).map((it: any) =>
+            it.podcastId != null
+                ? { type: 'audio', podcastId: String(it.podcastId), episodeIndex: it.episodeIndex ?? 0, title: it.title || '', cover: it.cover || '' }
+                : { type: 'video', videoId: String(it.videoId), title: it.title || '', cover: it.cover || '' });
+        setPlayQueue(playable.slice(1));
+        queueRef.current = playable.slice(1);
+    }, []);
+
+    const playAlbumItem = useCallback((item: any) => {
+        if (item.noteId != null) {
+            setInstantView({ title: item.title || 'یادداشت', content: item.content || '' });
+            setAlbumView(null);
+            return;
+        }
+        const it = item.podcastId != null
+            ? { type: 'audio', podcastId: String(item.podcastId), episodeIndex: item.episodeIndex ?? 0, title: item.title || '', cover: item.cover || '' }
+            : { type: 'video', videoId: String(item.videoId), title: item.title || '', cover: item.cover || '' };
+        setPlayQueue([]);
+        queueRef.current = [];
+        playQueueItem(it);
+        setAlbumView(null);
+    }, [playQueueItem]);
+
+    const toggleSavePost = useCallback(async (post: Post) => {
+        if (!user) return;
+        const id = String((post as any).id || (post as any)._id);
+        const cur: string[] = user.library?.posts || [];
+        const isIn = cur.some(x => String(x) === id);
+        const next = isIn ? cur.filter(x => String(x) !== id) : [id, ...cur];
+        const updatedUser = { ...user, library: { ...(user.library || {}), posts: next } };
+        setUser(updatedUser);
+        try { localStorage.setItem('user_data', JSON.stringify(updatedUser)); } catch {}
+        try { await updateLibrary({ posts: next }); } catch {}
+        setToast({ id: Date.now(), message: isIn ? 'پست از کتابخانه حذف شد' : 'پست در کتابخانه ذخیره شد', image: (post as any).authorAvatarUrl || '', name: (post as any).author || '' });
+    }, [user]);
+
+    const toggleSaveNote = useCallback(async (note: any) => {
+        if (!user) return;
+        const id = String((note as any).id || (note as any)._id);
+        const cur: any[] = user.library?.notes || [];
+        const isIn = cur.some(x => String(x) === id);
+        const next = isIn ? cur.filter(x => String(x) !== id) : [id, ...cur];
+        const updatedUser = { ...user, library: { ...(user.library || {}), notes: next } };
+        setUser(updatedUser);
+        try { localStorage.setItem('user_data', JSON.stringify(updatedUser)); } catch {}
+        try { await updateLibrary({ notes: next }); } catch {}
+        setToast({ id: Date.now(), message: isIn ? 'یادداشت از کتابخانه حذف شد' : 'یادداشت در کتابخانه ذخیره شد', image: '', name: String((note as any).title || '') });
+    }, [user]);
+
+    const handleSaveBookmark = useCallback(async (book: PublishedBook, text: string, page: number) => {
+        if (!user) return;
+        const id = String((book as any).id || (book as any)._id);
+        const cur: any[] = user.library?.bookmarks || [];
+        const item = { bookId: id, bookTitle: String(book.title || ''), page, text: String(text || '').trim().slice(0, 600) };
+        if (!item.text) return;
+        const exists = cur.some(b => b.bookId === id && b.page === page && b.text === item.text);
+        if (exists) {
+            setToast({ id: Date.now(), message: 'این نشان قبلاً ذخیره شده است' });
+            return;
+        }
+        const next = [item, ...cur].slice(0, 200);
+        const updatedUser = { ...user, library: { ...(user.library || {}), bookmarks: next } };
+        setUser(updatedUser);
+        try { localStorage.setItem('user_data', JSON.stringify(updatedUser)); } catch {}
+        try { await updateLibrary({ bookmarks: next }); } catch {}
+        setToast({ id: Date.now(), message: 'نشان در کتابخانه ذخیره شد', image: '', name: item.bookTitle });
+    }, [user]);
+
+    const handleRemoveBookmark = useCallback(async (bookId: string, text: string) => {
+        if (!user) return;
+        const cur: any[] = user.library?.bookmarks || [];
+        const next = cur.filter(b => !(b.bookId === bookId && b.text === text));
+        const updatedUser = { ...user, library: { ...(user.library || {}), bookmarks: next } };
+        setUser(updatedUser);
+        try { localStorage.setItem('user_data', JSON.stringify(updatedUser)); } catch {}
+        try { await updateLibrary({ bookmarks: next }); } catch {}
+        setToast({ id: Date.now(), message: 'نشان از کتابخانه حذف شد' });
+    }, [user]);
+
     // باز کردن لینک نوتیفیکیشن (باز شدن اپ از نوتیفیکیشن یا کلیک روی بنر) — همگام با صفحه‌های اپ
     const handleNotifOpen = useCallback((link?: string | null) => {
         if (!link) return;
@@ -1183,7 +1438,7 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
     };
 
     const loadMyNotes = useCallback(async () => {
-        if (!user || (user.role !== 'author' && user.role !== 'admin')) { setMyNotes([]); return; }
+        if (!user) { setMyNotes([]); return; }
         const notes = await getMyNotes();
         setMyNotes(notes || []);
     }, [user]);
@@ -1204,8 +1459,8 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
         });
         if (!note) return null;
         setMyNotes(prev => [note, ...prev.filter(n => String(n.id) !== String(note.id))]);
-        if (!note.isDraft) setPublishedBooks(prev => [note, ...prev]);
-        setToast({ id: Date.now(), message: note.isDraft ? 'یادداشت در بایگانی شخصی شما ذخیره شد' : 'یادداشت شما در صفحه نشر منتشر شد' });
+        if (!note.isDraft && !(note as any).pendingApproval) setPublishedBooks(prev => [note, ...prev]);
+        setToast({ id: Date.now(), message: note.isDraft ? 'یادداشت در بایگانی شخصی شما ذخیره شد' : (note as any).pendingApproval ? 'یادداشت برای انتشار ارسال شد — پس از تأیید مدیر در صفحه نشر نمایش داده میشود' : 'یادداشت شما در صفحه نشر منتشر شد' });
         return note;
     }, [user]);
 
@@ -1218,7 +1473,7 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
         });
         if (!updated) return null;
         setMyNotes(prev => prev.map(n => String(n.id) === String(id) ? { ...n, ...updated } : n));
-        if (!updated.isDraft) {
+        if (!updated.isDraft && !(updated as any).pendingApproval) {
             setPublishedBooks(prev => [updated, ...prev.filter(n => String(n.id) !== String(id))]);
         } else {
             setPublishedBooks(prev => prev.filter(n => String(n.id) !== String(id)));
@@ -1234,6 +1489,18 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
         }
         return ok;
     }, []);
+
+    const handleToggleNoteLike = useCallback(async (note: PublishedBook) => {
+        if (!user) return;
+        const id = String(note.id || (note as any)._id);
+        const uid = String((user as any)._id || (user as any).id);
+        const cur: string[] = (note.likes || []).map(l => String(l));
+        const liked = cur.includes(uid);
+        const optimistic = { ...note, likes: liked ? cur.filter(l => l !== uid) : [uid, ...cur] };
+        setPublishedBooks(prev => prev.map(n => String(n.id) === id ? optimistic : n));
+        setMyNotes(prev => prev.map(n => String(n.id) === id ? optimistic : n));
+        try { await toggleNoteLike(id); } catch {}
+    }, [user]);
 
     const handleRepostNoteToMahfel = useCallback(async (note: PublishedBook) => {
         if (!user) return;
@@ -1647,11 +1914,11 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
                     setComments(prev => insertCommentIntoTree(prev, newComment));
                     refreshComments();
                 }
-            }} onAuthorSelect={setSelectedAuthor} onPlayVideo={(v) => { handlePlayVideo(v); window.scrollTo({ top: 0, behavior: 'smooth' }); }} userLibrary={user?.library?.videos || localVideoLibrary} onToggleLibrary={handleToggleLibrary} onShare={(t, s) => {}} onShowInstantView={(t, c) => setInstantView({ title: t, content: c })} userRole={user?.role} currentUserName={user?.name} onDeleteComment={handleDeleteComment} onLikeComment={handleLikeComment} onUpdateComment={handleUpdateComment} onVideoTimeUpdate={handleVideoTimeUpdate} onVideoPlay={handleVideoPlay} onVideoPause={handleVideoPause} onVideoLike={handleVideoLike} />;
+            }} onAuthorSelect={setSelectedAuthor} onPlayVideo={(v) => { handlePlayVideo(v); window.scrollTo({ top: 0, behavior: 'smooth' }); }} userLibrary={user?.library?.videos || localVideoLibrary} onToggleLibrary={handleToggleLibrary} onShare={(t, s) => {}} onShowInstantView={(t, c) => setInstantView({ title: t, content: c })} userRole={user?.role} currentUserName={user?.name} onDeleteComment={handleDeleteComment} onLikeComment={handleLikeComment} onUpdateComment={handleUpdateComment} onVideoTimeUpdate={handleVideoTimeUpdate} onVideoPlay={handleVideoPlay} onVideoPause={handleVideoPause} onVideoEnded={() => { if (queueAuto && queueRef.current.length > 0) playQueueNextRef.current(); }} onVideoLike={handleVideoLike} />;
         }
 
         switch (activeTab) {
-            case 'mahfel': return <MahfelPage tabsHidden={tabsHidden} showInput={showChatInput} onToggleInput={setShowChatInput} posts={posts} videos={videos} podcasts={podcasts} authors={authors} publishedBooks={publishedBooks} comments={comments} currentUser={user?.name} userRole={user?.role} onPlayVideoFromFeed={(v: Video) => { setIsVideoMini(false); handlePlayVideo(v);             }} onPlayPodcastFromFeed={playEpisode} onPlayPodcastComment={(p: Podcast, epIdx: number, seekTime?: number, expandPlayer: boolean = true) => {
+            case 'mahfel': return <MahfelPage tabsHidden={tabsHidden} showInput={showChatInput} onToggleInput={setShowChatInput} posts={posts} videos={videos} podcasts={podcasts} authors={authors} publishedBooks={publishedBooks} comments={comments} currentUser={user?.name} userRole={user?.role} albums={albums} savedPostIds={user?.library?.posts || []} onToggleSavePost={toggleSavePost} onPlayAlbum={playAlbum} onOpenAlbum={setAlbumView} onPlayVideoFromFeed={(v: Video) => { setIsVideoMini(false); handlePlayVideo(v);             }} onPlayPodcastFromFeed={playEpisode} onPlayPodcastComment={(p: Podcast, epIdx: number, seekTime?: number, expandPlayer: boolean = true) => {
               if (currentTrack && String(currentTrack.podcast.id) === String(p.id) && currentTrack.episodeIndex === epIdx && audioRef.current) {
                 if (seekTime != null) audioRef.current.currentTime = seekTime;
                 audioRef.current.play().catch(()=>{});
@@ -1706,8 +1973,8 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
             case 'sowt': return <SowtPage podcasts={podcasts} authors={authors} liveStream={{ isLive: false, title: '', url: '' }} onPodcastSelect={setSelectedPodcast} onPlay={playEpisode} userInterests={user?.interests || []} isHeaderVisible={true} onAuthorSelect={setSelectedAuthor} userLibrary={user?.library?.podcasts || []} onToggleLibrary={(id: number) => {}} onShare={(t: string, s: string) => {}} onToggleSidebar={() => setDesktopSidebarCollapsed(v => !v)} theme={theme} onToggleTheme={toggleTheme} onOpenProfile={() => setIsProfileOpen(true)} user={user} />;
             case 'matn': return <MatnPage authors={authors} books={books} onBookSelect={setSelectedBook} onAuthorSelect={setSelectedAuthor} />;
             case 'videos': return <VideoVaultPage videos={videos} onVideoSelect={(v) => { setIsVideoMini(false); handlePlayVideo(v); }} user={user} theme={theme} onToggleTheme={toggleTheme} onProfileClick={() => setIsProfileOpen(true)} onOpenSidebar={() => setDesktopSidebarCollapsed(v => !v)} onPlaylistOpen={setVaultPlaylistOpen} vaultBackSignal={vaultBackSignal} />;
-            case 'nashr': return <NashrPage publishedBooks={publishedBooks} allPodcasts={podcasts} comments={comments} onAddComment={(text, book, parentId, quotedText) => { if (parentId || quotedText) handleAddBookComment(text, book, parentId, quotedText); else openWriteModalWithAttachment('book', book); }} user={user} onUpdateUser={(u) => { setUser(u); localStorage.setItem('user_data', JSON.stringify(u)); }} onDeleteComment={handleDeleteComment} onLikeComment={handleLikeComment} onUpdateComment={handleUpdateComment} onToggleSidebar={() => setDesktopSidebarCollapsed(v => !v)} myNotes={myNotes} onSaveNote={handleSaveNote} onUpdateNote={handleUpdateNote} onDeleteNote={handleDeleteNote} onRepostToMahfel={handleRepostNoteToMahfel} onOpenAuthorProfile={handleOpenAuthorProfile} />;
-            case 'library': return <LibraryPage savedVideoIds={user?.library?.videos || localVideoLibrary} allVideos={videos} onPlayVideo={(v) => { setIsVideoMini(false); handlePlayVideo(v); }} onRemoveVideo={(id) => handleToggleLibrary(id)} savedPodcastIds={user?.library?.podcasts || []} savedEpisodes={user?.library?.episodes || []} allPodcasts={podcasts} authors={authors} onSelectPodcast={setSelectedPodcast} onRemovePodcast={(p) => togglePodcastLibrary(p)} onRemoveEpisode={(podcastId, episodeIndex) => toggleEpisodeLibrary(podcastId, episodeIndex)} onPlayPodcast={(podcast, idx) => playEpisode(podcast, idx)} theme={theme} onToggleTheme={toggleTheme} user={user} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} onToggleSidebar={() => setDesktopSidebarCollapsed(v => !v)} />;
+            case 'nashr': return <NashrPage publishedBooks={publishedBooks} allPodcasts={podcasts} comments={comments} onAddComment={(text, book, parentId, quotedText) => { if (parentId || quotedText) handleAddBookComment(text, book, parentId, quotedText); else openWriteModalWithAttachment('book', book); }} user={user} onUpdateUser={(u) => { setUser(u); localStorage.setItem('user_data', JSON.stringify(u)); }} onDeleteComment={handleDeleteComment} onLikeComment={handleLikeComment} onUpdateComment={handleUpdateComment} onToggleSidebar={() => setDesktopSidebarCollapsed(v => !v)} myNotes={myNotes} onSaveNote={handleSaveNote} onUpdateNote={handleUpdateNote} onDeleteNote={handleDeleteNote} onRepostToMahfel={handleRepostNoteToMahfel} onOpenAuthorProfile={handleOpenAuthorProfile} onToggleSaveNote={toggleSaveNote} savedNoteIds={user?.library?.notes || []} bookmarks={user?.library?.bookmarks || []} onSaveBookmark={handleSaveBookmark} onRemoveBookmark={handleRemoveBookmark} onToggleNoteLike={handleToggleNoteLike} />;
+            case 'library': return <LibraryPage savedVideoIds={user?.library?.videos || localVideoLibrary} allVideos={videos} onPlayVideo={(v) => { setIsVideoMini(false); handlePlayVideo(v); }} onRemoveVideo={(id) => handleToggleLibrary(id)} savedPodcastIds={user?.library?.podcasts || []} savedEpisodes={user?.library?.episodes || []} allPodcasts={podcasts} authors={authors} onSelectPodcast={setSelectedPodcast} onRemovePodcast={(p) => togglePodcastLibrary(p)} onRemoveEpisode={(podcastId, episodeIndex) => toggleEpisodeLibrary(podcastId, episodeIndex)} onPlayPodcast={(podcast, idx) => playEpisode(podcast, idx)} theme={theme} onToggleTheme={toggleTheme} user={user} onOpenProfile={() => setIsProfileOpen(true)} onOpenSearch={() => setIsSearchOpen(true)} onToggleSidebar={() => setDesktopSidebarCollapsed(v => !v)} albums={albums} onAlbumsChange={setAlbums} queue={playQueue} queueAuto={queueAuto} onQueueAutoToggle={setQueueAuto} onPlayQueueItem={playQueueItem} onRemoveQueueItem={removeFromQueue} onClearQueue={clearQueue} onPlayAlbum={playAlbum} onOpenAlbum={setAlbumView} onAlbumSaved={onAlbumSaved} notes={myNotes} posts={posts} savedPostIds={user?.library?.posts || []} onOpenPost={(p: Post) => { setActiveTab('mahfel'); setSelectedPostForComments(p); }} publishedBooks={publishedBooks} onShowBook={(b: PublishedBook) => { setSelectedPublishedBook(b); }} savedNoteIds={user?.library?.notes || []} bookmarks={user?.library?.bookmarks || []} onRemoveBookmark={handleRemoveBookmark} onToggleSaveNote={toggleSaveNote} onUpdateNote={handleUpdateNote} onDeleteNote={handleDeleteNote} />;
             case 'support': return <SupportPage user={user} theme={theme} onToggleTheme={toggleTheme} onOpenProfile={() => setIsProfileOpen(true)} onToggleSidebar={() => setDesktopSidebarCollapsed(v => !v)} />;
             case 'ai': return <AiAssistantPage podcasts={podcasts} videos={videos} posts={posts} books={publishedBooks} authors={authors} onPlayPodcast={playEpisode} onPlayVideo={(v) => { setIsVideoMini(false); handlePlayVideo(v); }} onShowBook={(b) => { setSelectedPublishedBook(b); }} />;
             default: return null;
@@ -1727,13 +1994,13 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
         <div className={`bg-background flex flex-col relative font-sans text-text-primary ${theme === 'dark' ? 'dark' : ''}`} dir="rtl" style={{ height: '100vh', overflow: 'hidden' }}>
              <IranAccessWarning />
              <VPNBanner isVPN={isVPN} onDismiss={dismissVPN} />
-             <div className="app-container bg-background flex-1 flex min-h-0">
+             <div className="app-container bg-background flex-1 flex min-h-0" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
              
              {/* Desktop Sidebar */}
               <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); setSelectedPodcast(null); setSelectedAuthor(null); setSelectedBook(null); setSelectedPublishedBook(null); setSelectedPostForComments(null); setSelectedPostPodcast(null); setSelectedVideoComment(null); setIsPlayerExpanded(false); setIsVideoMini(true); }} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} theme={theme} onToggleTheme={toggleTheme} onOpenSearch={() => setIsSearchOpen(true)} onOpenAdmin={() => setAppState('admin')} onOpenProfile={() => setIsProfileOpen(true)} user={user} isAuthenticated={isAuthenticated} collapsed={desktopSidebarCollapsed} onToggleCollapsed={setDesktopSidebarCollapsed} />
 
               {/* Main Content */}
-               <div className="flex-1 flex flex-col min-w-0 overflow-y-auto" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+               <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
 
               
                <div className={`flex-1 ${activeTab === 'mahfel' ? 'pb-0' : 'pb-16 lg:pb-0'}`}>
@@ -1907,10 +2174,12 @@ onPlayVideo={(v) => { setIsVideoMini(false); handlePlayVideo(v); }}
                   onVideoTimeUpdate={handleVideoTimeUpdate}
                   onVideoPlay={handleVideoPlay}
                   onVideoPause={handleVideoPause}
+                  onVideoEnded={() => { if (queueAuto && queueRef.current.length > 0) playQueueNextRef.current(); }}
                   onVideoLike={handleVideoLike}
                 />
               )}
              {instantView && <InstantView title={instantView.title} content={instantView.content} onClose={() => setInstantView(null)} />}
+             {albumView && <AlbumViewer album={albumView} onClose={() => setAlbumView(null)} onPlayAll={playAlbum} onPlayItem={playAlbumItem} />}
              {isProfileOpen && user && <UserProfilePage onClose={() => { setIsProfileOpen(false); setViewProfileAuthor(null); }} onLogout={handleLogout} user={user} allPodcasts={podcasts} allVideos={videos} onPlayPodcast={playEpisode} onPlayVideo={(v) => { handlePlayVideo(v); setIsProfileOpen(false); }} onEditPost={(post: Post) => { setEditingPost(post); setEditPostText(post.text || ''); setIsProfileOpen(false); }} onDeletePost={handleDeletePost} onUpdateUser={(u) => { const oldName = user.name; const matches = (item: any) => { const byId = item.userId && String(item.userId) === String(u.id); const byName = !item.userId && item.author && item.author === oldName; return byId || byName; }; const remap = (item: any) => { const own = matches(item); const updated = own ? { ...item, author: u.name, authorAvatarUrl: u.avatar } : item; const replies = item.replies ? { ...updated, replies: (item.replies || []).map(remap) } : updated; return replies; }; setComments(prev => prev.map(remap)); setPosts(prev => prev.map(p => { const own = matches(p); const updated = own ? { ...p, author: u.name, authorAvatarUrl: u.avatar } : p; return { ...updated, comments: (p.comments || []).map(remap) }; })); setUser(u); localStorage.setItem('user_data', JSON.stringify(u)); }} onOpenAdmin={() => { setIsProfileOpen(false); setAppState('admin'); }} myNotes={myNotes} onSaveNote={handleSaveNote} onUpdateNote={handleUpdateNote} onDeleteNote={handleDeleteNote} onRepostToMahfel={handleRepostNoteToMahfel} viewAuthor={viewProfileAuthor} authorNotes={authorPublicNotes} />}
              
              <SearchModal 

@@ -2,16 +2,21 @@ import Post from '../models/Post.js';
 import Comment from '../models/Comment.js';
 import PublishedBook from '../models/PublishedBook.js';
 import PushSubscription from '../models/PushSubscription.js';
+import Notification from '../models/Notification.js';
 import { broadcast } from './broadcast.js';
 
 /** حذف کامل محتوای یک کاربر: پست‌ها، کامنت‌ها + ریپلای‌های آن‌ها، آثار منتشرشده و اشتراک‌های push */
 export async function deleteUserContent(userId) {
   // پست‌های کاربر
-  const postIds = (await Post.find({ userId }).select('_id')).map(p => String(p._id));
+  const postDocs = await Post.find({ userId }).select('_id comments');
+  const postIds = postDocs.map(p => String(p._id));
+  const postCommentIds = [];
+  postDocs.forEach(p => (p.comments || []).forEach(c => postCommentIds.push(String(c._id))));
   await Post.deleteMany({ userId });
   if (postIds.length) {
     broadcast('data-changed', { type: 'posts', action: 'ids-delete', ids: postIds });
   }
+  try { await Notification.deleteMany({ sourceId: { $in: [...postIds, ...postCommentIds] } }); } catch (ignored) {}
 
   // کامنت‌های توکار کاربر + ریپلای‌هایی که به کامنت‌های او زده شده‌اند
   const affected = await Post.find({ 'comments.userId': userId }).select('_id comments').lean();
@@ -23,6 +28,7 @@ export async function deleteUserContent(userId) {
     await Post.updateMany({ 'comments.userId': userId }, {
       $pull: { comments: { $or: [{ userId }, { replyTo: { $in: myCommentIds } }] } },
     });
+    try { if (myCommentIds.length) await Notification.deleteMany({ sourceId: { $in: myCommentIds } }); } catch (ignored) {}
     const fresh = await Post.find({ _id: { $in: affected.map(a => a._id) } });
     fresh.forEach(p => broadcast('data-changed', { type: 'posts', action: 'update', item: p.toObject() }));
   }
@@ -36,6 +42,7 @@ export async function deleteUserContent(userId) {
   if (commentIds.length) {
     broadcast('data-changed', { type: 'comments', action: 'ids-delete', ids: commentIds });
   }
+  try { if (commentIds.length) await Notification.deleteMany({ sourceId: { $in: commentIds } }); } catch (ignored) {}
 
   // آثار منتشرشده/یادداشت‌های نویسنده
   const bookIds = (await PublishedBook.find({ authorId: userId }).select('_id')).map(b => String(b._id));

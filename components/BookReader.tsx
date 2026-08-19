@@ -7,6 +7,9 @@ interface BookReaderProps {
   book: PublishedBook;
   onClose: () => void;
   startPage?: number;
+  savedBookmarks?: any[];
+  onSaveBookmark?: (book: PublishedBook, text: string, page: number) => void;
+  onRemoveBookmark?: (bookId: string, text: string) => void;
 }
 
 interface PageContent {
@@ -17,7 +20,7 @@ interface PageContent {
   pageNum?: number;
 }
 
-const BookReader: React.FC<BookReaderProps> = ({ book, onClose, startPage }) => {
+const BookReader: React.FC<BookReaderProps> = ({ book, onClose, startPage, savedBookmarks = [], onSaveBookmark, onRemoveBookmark }) => {
   const [currentPage, setCurrentPage] = useState(() => {
     if (startPage && startPage > 0) return startPage;
     try {
@@ -48,6 +51,7 @@ const BookReader: React.FC<BookReaderProps> = ({ book, onClose, startPage }) => 
   });
   const [showJump, setShowJump] = useState(false);
   const [jumpInput, setJumpInput] = useState('');
+  const [selText, setSelText] = useState('');
   const touchStartX = useRef(0);
   const touchEndX = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -264,7 +268,11 @@ const BookReader: React.FC<BookReaderProps> = ({ book, onClose, startPage }) => 
         );
       case 'content':
         return (
-          <div className="w-full h-full flex flex-col p-8 justify-center" style={{ color: textColor }}>
+          <div className="w-full h-full flex flex-col p-8 justify-center select-text" style={{ color: textColor }} onMouseUp={() => {
+            const sel = window.getSelection();
+            const t = sel ? sel.toString().trim() : '';
+            setSelText(t && t.length > 0 ? t.slice(0, 600) : '');
+          }}>
             <div className="text-justify font-medium" style={{ textAlign: 'justify', lineHeight: 2.4, fontSize: fontSize }}>
               {p.text}
             </div>
@@ -342,16 +350,6 @@ const BookReader: React.FC<BookReaderProps> = ({ book, onClose, startPage }) => 
               <input type="range" min="50" max="150" value={brightness} onChange={e => setBrightness(Number(e.target.value))} className="w-full h-1 rounded-full appearance-none bg-white/20 accent-white/60" />
             </div>
 
-            {/* Font Size */}
-            <div className="p-3 rounded-2xl bg-white/5 border border-white/10">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold text-white/60">اندازه متن</span>
-                <span className="text-[9px] font-black text-white/40">{toPersianDigits(fontSize)}</span>
-              </div>
-              <input type="range" min="11" max="24" value={fontSize} onChange={e => setFontSize(Number(e.target.value))} className="w-full h-1 rounded-full appearance-none bg-white/20 accent-white/60" />
-              <div className="flex justify-between text-[8px] font-bold text-white/30 mt-1"><span>کوچک</span><span>بزرگ</span></div>
-            </div>
-
             {/* Background Colors */}
             <div className="p-3 rounded-2xl bg-white/5 border border-white/10">
               <p className="text-[10px] font-bold text-white/60 mb-2">رنگ صفحه</p>
@@ -412,8 +410,33 @@ const BookReader: React.FC<BookReaderProps> = ({ book, onClose, startPage }) => 
         </div>
       )}
 
+      {/* Selection bookmark toolbar */}
+      {selText && page.type === 'content' && (() => {
+        const bookId = String((book as any).id || (book as any)._id);
+        const savedBookmark = savedBookmarks.some(b => String(b.bookId) === bookId && String(b.text) === selText);
+        return (
+          <div className="absolute top-20 left-0 right-0 z-30 flex justify-center px-4 animate-fadeIn">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-2xl bg-black/75 backdrop-blur-md border border-white/10 max-w-full">
+              <span className="text-[9px] font-black text-white/70 max-w-[160px] truncate">{selText.slice(0, 40)}...</span>
+              {savedBookmark ? (
+                <span className="text-[9px] font-black text-emerald-400 flex items-center gap-1"><i className="fas fa-check text-[8px]" /> در کتابخانه ذخیره شد</span>
+              ) : (
+                <button onClick={() => { onSaveBookmark?.(book, selText, currentPage); setSelText(''); window.getSelection()?.removeAllRanges(); }}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[9px] font-black text-white active:scale-95 transition-all" style={{ background: 'linear-gradient(135deg, #f59e0b, #f97316)' }}>
+                  <i className="fas fa-bookmark text-[8px]"></i> ذخیره نشان در کتابخانه
+                </button>
+              )}
+              <button onClick={() => { setSelText(''); window.getSelection()?.removeAllRanges(); }} className="w-6 h-6 rounded-lg flex items-center justify-center text-white/60 hover:bg-white/10 active:scale-90 transition-all"><i className="fas fa-xmark text-[10px]"></i></button>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Book Pages */}
       <div className="flex-1 flex items-center justify-center px-4 py-16 touch-none" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onClick={(e) => {
+        // اگر متنی انتخاب شده، ورق نزن
+        const sel = window.getSelection();
+        if (sel && sel.toString().trim().length > 0) return;
         // Click on right half = prev, left half = next
         const rect = e.currentTarget.getBoundingClientRect();
         const x = e.clientX - rect.left;

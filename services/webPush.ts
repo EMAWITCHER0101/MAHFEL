@@ -1,6 +1,16 @@
 import { getPushPublicKey, subscribeToPush, unsubscribeFromPush } from './api';
 
 const PUSH_KEY = 'soha_push_enabled';
+const NOTIF_KEY = 'soha_notif_enabled';
+
+/** وضعیت کلی نوتیفیکیشن (بنر اپ + سیستم) — پیش‌فرض روشن */
+export const getAppNotifEnabled = (): boolean => {
+  try { return localStorage.getItem(NOTIF_KEY) !== '0'; } catch { return true; }
+};
+
+export const setAppNotifEnabled = (v: boolean) => {
+  try { localStorage.setItem(NOTIF_KEY, v ? '1' : '0'); } catch { /* ignore */ }
+};
 
 /** در APK (WebView) سرویس‌ورکر/ذخیره‌سازی فعال نمی‌شود — فقط نمایش زندهٔ وب */
 const isNativeApp = (): boolean => {

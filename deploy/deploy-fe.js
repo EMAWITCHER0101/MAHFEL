@@ -53,18 +53,37 @@ function uploadFile(lp, rp) {
 
     console.log('\n--- 1. Upload backend ---');
     const serverFiles = [
-      'server/server.js', 'server/routes/posts.js', 'server/routes/comments.js',
-      'server/routes/podcasts.js', 'server/routes/videos.js', 'server/routes/books.js',
+      'server/server.js', 'server/routes/posts.js', 'server/routes/comments.js', 'server/routes/playlists.js',
+      'server/routes/community.js', 'server/routes/podcasts.js', 'server/routes/videos.js', 'server/routes/books.js',
       'server/routes/authors.js', 'server/routes/publishedBooks.js', 'server/routes/admin.js',
       'server/routes/auth.js', 'server/routes/ai.js', 'server/routes/proxy.js', 'server/routes/upload.js',
       'server/models/User.js', 'server/models/Podcast.js', 'server/models/PublishedBook.js', 'server/models/Notification.js',
       'server/middleware/auth.js', 'server/utils/profanityFilter.js', 'server/utils/ipCheck.js',
+      'server/utils/webpush.js', 'server/utils/deleteUserContent.js',
       'server/routes/notifications.js', 'server/routes/support.js', 'server/models/SupportMessage.js',
       'server/routes/purchaseRequests.js', 'server/models/PurchaseRequest.js',
+      'server/models/Post.js', 'server/models/Album.js', 'server/routes/albums.js',
+      'server/models/AppUpdate.js', 'server/routes/appUpdate.js',
       'server/package.json',
     ];
     for (const f of serverFiles) {
       await uploadFile(`E:\\soha\\${f}`, `/opt/soha/${f}`);
+    }
+
+    // سرویس‌اکانت Firebase (FCM): اگر فایل محلی موجود باشد آپلود می‌شود
+    const saPath = 'E:\\soha\\server\\service-account.json';
+    if (fs.existsSync(saPath)) {
+      console.log('>>> Upload service-account.json (FCM)');
+      await uploadFile(saPath, '/opt/soha/service-account.json');
+    } else {
+      console.log('>>> service-account.json not found — FCM (اندروید) غیرفعال است');
+    }
+
+    console.log('\n--- 1.5 npm install (server deps) — best-effort ---');
+    try {
+      console.log((await ssh('cd /opt/soha && timeout 120 npm install --omit=dev --no-audit --no-fund 2>&1 | tail -3', 140000)).trim());
+    } catch (e) {
+      console.log('npm install skipped (timeout) — backend همچنان اجرا می‌شود؛ firebase-admin بعداً نصب می‌شود');
     }
 
     console.log('\n--- 2. Restart backend ---');
@@ -74,13 +93,14 @@ function uploadFile(lp, rp) {
 
     console.log('\n--- 3. Deploy frontend ---');
     console.log(await ssh('systemctl stop soha-frontend 2>/dev/null || true'));
-    console.log(await ssh('rm -rf /opt/soha/.next/standalone /opt/soha/.next/cache'));
+    console.log(await ssh('rm -rf /opt/soha/.next'));
+    console.log(await ssh('mkdir -p /opt/soha/.next/standalone'));
     await uploadFile('C:\\Temp\\soha-fe.tar.gz', '/tmp/soha-fe.tar.gz');
-    console.log(await ssh('cd /opt/soha && tar -xzf /tmp/soha-fe.tar.gz -C .next/', 30000));
+    console.log(await ssh('tar -xzf /tmp/soha-fe.tar.gz -C /opt/soha/.next/standalone', 30000));
     await uploadFile('C:\\Temp\\soha-static.tar.gz', '/tmp/soha-static.tar.gz');
     console.log(await ssh('cd /opt/soha/.next/standalone/.next && rm -rf static && mkdir -p static && tar -xzf /tmp/soha-static.tar.gz -C static', 30000));
     await uploadFile('C:\\Temp\\soha-public.tar.gz', '/tmp/soha-public.tar.gz');
-    console.log(await ssh('cd /opt/soha && tar -xzf /tmp/soha-public.tar.gz', 30000));
+    console.log(await ssh('mkdir -p /opt/soha/public && tar -xzf /tmp/soha-public.tar.gz -C /opt/soha/public', 30000));
     console.log(await ssh('rm -rf /opt/soha/.next/standalone/public && cp -r /opt/soha/public /opt/soha/.next/standalone/public 2>/dev/null || true'));
     console.log(await ssh('systemctl start soha-frontend', 15000));
     await new Promise(r => setTimeout(r, 3000));

@@ -362,14 +362,15 @@ const FullScreenPlayer: React.FC<FullScreenPlayerProps> = ({
           {/* Background blur from cover */}
           {coverUrl && <div className="absolute inset-0 overflow-hidden pointer-events-none"><img src={coverUrl} alt="" className="absolute -inset-10 w-[calc(100%+80px)] h-[calc(100%+80px)] object-cover blur-[60px] opacity-[0.12]" /><div className={`absolute inset-0 ${isDark ? 'bg-gray-900/80' : 'bg-white/80'}`}></div></div>}
           
-          <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-2 pt-4 pb-2 overflow-y-auto no-scrollbar">
+          <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-2 pt-4 pb-2 overflow-y-auto no-scrollbar lg:pt-2">
+            <div className="w-full flex flex-col items-center" style={{ margin: 'auto 0' }}>
             {/* Cover with audio waveform */}
-            <div className="relative mb-5 flex-shrink-0 w-full max-w-3xl flex items-center justify-center gap-3">
+            <div className="relative mb-5 flex-shrink-0 w-full max-w-3xl flex items-center justify-center gap-3 lg:mb-3">
               {coverUrl && <div className="absolute -inset-6 rounded-3xl opacity-20 blur-3xl" style={{ background: 'radial-gradient(circle, #06b6d4 0%, #0891b2 50%, transparent 80%)' }}></div>}
 
               {/* Left waveform - full space */}
               {isPlaying && (
-              <div className="relative z-10 flex-1 h-[180px] flex items-center justify-end overflow-hidden">
+              <div className="relative z-10 flex-1 h-[180px] lg:h-[140px] flex items-center justify-end overflow-hidden">
                 <div className="flex items-center gap-[2px] h-full py-2 justify-end">
                   {[3,7,12,8,15,10,18,8,14,6,16,11,9,13,7,17,10,5,14,8,12,6,15,9,11,7,13,16,8,10,5,14,9,12,7,4,16,11,8,19,6,13,10,15,7,12,9,17,5,11,14,8,6,18,10,13,7,15,9,12,4,16,8,11,19,7,14,6,10,13,17,5,9,12,15,8,11,14,6,10,7,18,13,9,16,5,11,8,12,14,7,10,15,6,13,9,11,17,8,4,12,10,16,7,14,5,9,13,11,18,6,8,15,10,12,7,14,16,9,11,5,13,8,10,6,17,12,15,7,14,9,11,19,4,8,13,6,16,10,5,12,7,15,11,18,9,14,13,8,6,10,17,5,12,16,7,11,14,9,15,8,10,13,6,19,4,12,7,16,11,5,14,9,18,8,10,15,6,13,7,11,17,12,4,9,14,16,5,8,10,13,6,15,7,11,18,12,19,9,14,4,16,10,5,8,13,6,7,15,11,17,12,9,14,18,10,16,13,8,5,6,11,15,7,4,19,12,9,14,17,10,16,8,13,6,11,15,5,7,18,12,19,9,14,4,16,10,8,6,13,11,17,15,7,12,5,14,18,9,16,10,19,4,8,6,13,11,15,7,17,12,5,14,18,9,16,10].map((h, i) => (
                     <div key={`lw${i}`} className="w-[2px] rounded-full flex-shrink-0" style={{
@@ -384,7 +385,7 @@ const FullScreenPlayer: React.FC<FullScreenPlayerProps> = ({
               )}
 
               {/* Cover */}
-              <div className={`relative w-[180px] h-[180px] rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.5)] ring-1 ${isDark ? 'ring-white/[0.08]' : 'ring-gray-200'} z-10 flex-shrink-0`}>
+              <div className={`relative w-[180px] h-[180px] lg:w-[140px] lg:h-[140px] rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.5)] ring-1 ${isDark ? 'ring-white/[0.08]' : 'ring-gray-200'} z-10 flex-shrink-0`}>
                 {coverUrl ? (
                   <img src={coverUrl} alt={String(episode.title)} className="w-full h-full object-cover" />
                 ) : (
@@ -395,7 +396,7 @@ const FullScreenPlayer: React.FC<FullScreenPlayerProps> = ({
 
               {/* Right waveform - full space */}
               {isPlaying && (
-              <div className="relative z-10 flex-1 h-[180px] flex items-center justify-start overflow-hidden">
+              <div className="relative z-10 flex-1 h-[180px] lg:h-[140px] flex items-center justify-start overflow-hidden">
                 <div className="flex items-center gap-[2px] h-full py-2 justify-start">
                   {[8,14,6,11,16,9,5,13,7,17,10,12,8,15,6,11,14,9,7,16,10,13,5,12,8,15,7,11,9,14,6,10,13,8,12,19,4,7,16,11,5,18,9,14,10,13,17,6,12,8,15,7,11,4,16,10,18,9,14,19,6,13,5,8,12,7,17,11,15,10,4,16,6,14,9,13,8,18,5,12,7,11,17,15,10,19,4,16,6,14,8,13,9,12,18,5,7,11,17,15,10,16,4,19,6,14,8,13,12,9,18,5,7,11,17,15,10,16,6,4,19,14,8,13,12,9,18,5,7,11,17,15,10,16,6,14,19,4,8,13,12,9,18,5,7,11,17,15,10,16,6,14,19,8,13,12,9,18,5,7,11,17,15,10,16,6,14,4,19,8,13,12,9,18,5,7,11,17,15,10,16,6,14,19,4,8,13,12,9,18,5,7,11,17,15,10,16,6,14,19,8,13,12,9,18,5,7,11,17,15,10,16,6,14,19,4,8,13,12,9,18,5,7,11,17,15,10,16,6,14,19,8,13,12,9,18,5,7,11,17,15,10,16,6,14,19,4,8,13,12,9,18,5,7,11,17,15,10,16,6,14,19].map((h, i) => (
                     <div key={`rw${i}`} className="w-[2px] rounded-full flex-shrink-0" style={{
@@ -411,12 +412,12 @@ const FullScreenPlayer: React.FC<FullScreenPlayerProps> = ({
             </div>
 
             {/* Title */}
-            <div className="text-center mb-4 w-full max-w-md">
+            <div className="text-center mb-4 lg:mb-2.5 w-full max-w-md">
               <h2 className={`text-lg font-black ${isDark ? 'text-white' : 'text-gray-900'} leading-snug line-clamp-1`}>{String(episode.title)}</h2>
             </div>
 
             {/* Progress */}
-            <div className="w-full max-w-md mb-3">
+            <div className="w-full max-w-md mb-3 lg:mb-2">
               <div dir="ltr" className="relative group cursor-pointer"
                 onMouseDown={(e) => { const rect = e.currentTarget.getBoundingClientRect(); onSeek(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))); }}
                 onMouseMove={(e) => { const rect = e.currentTarget.getBoundingClientRect(); setSeekPreview(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))); }}
@@ -437,7 +438,7 @@ const FullScreenPlayer: React.FC<FullScreenPlayerProps> = ({
             </div>
 
             {/* Controls */}
-            <div className="flex items-center gap-5 mb-3">
+            <div className="flex items-center gap-5 mb-3 lg:mb-2">
               <button onClick={onShuffleToggle}
                 className={'w-9 h-9 rounded-xl flex items-center justify-center transition-all text-xs ' + (isShuffle ? 'text-primary bg-primary/[0.12]' : (isDark ? 'text-white/30 hover:text-white/60' : 'text-gray-400 hover:text-gray-900'))}>
                 <i className="fas fa-shuffle"></i>
@@ -487,6 +488,7 @@ const FullScreenPlayer: React.FC<FullScreenPlayerProps> = ({
                   <i className="fas fa-book-open"></i>
                 </button>
               )}
+            </div>
             </div>
           </div>
 
@@ -563,7 +565,6 @@ const FullScreenPlayer: React.FC<FullScreenPlayerProps> = ({
                 { page: 'library' as Page, icon: 'fas fa-book-open', label: 'کتابخانه' },
                 { page: 'videos' as Page, icon: 'fas fa-video', label: 'ویدیو' },
                 { page: 'nashr' as Page, icon: 'fas fa-book-reader', label: 'نشر' },
-                { page: 'ai' as Page, icon: 'fas fa-robot', label: 'هوش مصنوعی' },
               ].map(item => {
                 const isActive = activeTab === item.page;
                 return (

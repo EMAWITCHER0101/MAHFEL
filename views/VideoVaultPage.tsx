@@ -93,7 +93,7 @@ const VideoVaultPage: React.FC<VideoVaultPageProps> = ({ videos, onVideoSelect, 
               <i className="fas fa-play text-white text-xs" />
             </div>
             <div>
-              <p className="text-xs font-black leading-tight " style={{ color: 'var(--text)' }}>نماهنگ‌خانه</p>
+              <p className="text-xs font-black leading-tight " style={{ color: 'var(--text)' }}>نگارخانه</p>
               <p className="text-[8px] font-bold " style={{ color: 'var(--text-3)' }}>سیمای هنر و اندیشه</p>
             </div>
           </div>
