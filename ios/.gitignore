@@ -6,3 +6,6 @@ Pods/
 *.ipa
 Payload/
 GoogleService-Info.plist
+
+# آیکونهای اپ باید در git باشند (ریشه همه *.png را نادیده گرفته)
+!Mahfel/Assets.xcassets/AppIcon.appiconset/*.png

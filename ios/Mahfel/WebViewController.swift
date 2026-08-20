@@ -125,7 +125,8 @@ class WebViewController: UIViewController, WKNavigationDelegate, WKScriptMessage
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         // در صورت قطع اینترنت، صفحه آفلاین محلی را نشان بده
-        if let url = error.userInfo[NSURLErrorFailingURLErrorKey] as? URL,
+        let nsError = error as NSError
+        if let url = nsError.userInfo[NSURLErrorFailingURLErrorKey] as? URL,
            url.host == appUrl.host,
            let offlinePath = Bundle.main.path(forResource: "offline", ofType: "html") {
             webView.loadFileURL(URL(fileURLWithPath: offlinePath), allowingReadAccessTo: URL(fileURLWithPath: offlinePath).deletingLastPathComponent())
