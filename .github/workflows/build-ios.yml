@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 45
     env:
       P12_CERT: ${{ secrets.IOS_P12_CERT }}
@@ -35,6 +35,15 @@ jobs:
       - name: Xcode version
         run: xcodebuild -version
 
+      - name: Select Xcode 16+
+        run: |
+          ls /Applications | grep -i xcode || true
+          XCODE_PATH=$(ls -d /Applications/Xcode_1* 2>/dev/null | sort -V | tail -1)
+          if [ -n "$XCODE_PATH" ]; then
+            sudo xcode-select -s "$XCODE_PATH"
+          fi
+          xcodebuild -version
+
       - name: Install CocoaPods (if missing)
         run: |
           if ! command -v pod >/dev/null 2>&1; then
@@ -46,6 +55,9 @@ jobs:
         working-directory: ios
         run: |
           pod install || pod install --repo-update
+          if grep -q "Firebase" Podfile.lock 2>/dev/null; then
+            echo "Firebase pod installed OK"
+          fi
 
       - name: Import signing certificate (if provided)
         if: env.P12_CERT != ''
