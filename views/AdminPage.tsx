@@ -2691,6 +2691,7 @@ const renderPostsPanel = () => (
                         </div>
                     </div>
                     <button onClick={onClose} data-guide="admin-close-mobile" className="sm:hidden absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 hover:text-red-500 font-black text-lg transition-all">&times;</button>
+                    <button onClick={() => adminExportData('users')} data-guide="admin-export-mobile" className="sm:hidden absolute left-14 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-green-50 flex items-center justify-center text-green-500 transition-all" title="خروجی کاربران"><i className="fas fa-download text-[10px]"></i></button>
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                         <div className="relative hidden sm:block flex-1 min-w-0">
                             <input
@@ -2703,7 +2704,7 @@ const renderPostsPanel = () => (
                             />
                             <i className={`fas ${isSearching ? "fa-spinner fa-spin" : "fa-search"} absolute left-3 top-2.5 text-gray-300 text-[10px]`}></i>
                         </div>
-                        <button onClick={() => adminExportData('users')} className="w-9 h-9 rounded-xl bg-green-50 text-green-500 hover:bg-green-100 transition-all flex items-center justify-center" title="خروجی کاربران"><i className="fas fa-download text-[10px]"></i></button>
+                        <button onClick={() => adminExportData('users')} className="hidden sm:flex w-9 h-9 rounded-xl bg-green-50 text-green-500 hover:bg-green-100 transition-all items-center justify-center" title="خروجی کاربران"><i className="fas fa-download text-[10px]"></i></button>
                         <button onClick={onClose} data-guide="admin-close" className="hidden sm:flex w-10 h-10 rounded-full bg-gray-50 items-center justify-center text-gray-300 hover:text-red-500 font-black text-xl transition-all">&times;</button>
                     </div>
                 </header>
