@@ -2671,7 +2671,7 @@ const renderPostsPanel = () => (
                             <p className="text-[9px] text-gray-400 font-black uppercase mt-0.5 tracking-widest">Soha Admin Panel</p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
                         <div className="relative hidden sm:block flex-1 min-w-0">
                             <input
                                 type="text"
