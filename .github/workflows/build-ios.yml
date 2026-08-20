@@ -38,11 +38,22 @@ jobs:
       - name: Select Xcode 16+
         run: |
           ls /Applications | grep -i xcode || true
-          XCODE_PATH=$(ls -d /Applications/Xcode_1* 2>/dev/null | sort -V | tail -1)
+          XCODE_PATH=$(ls -d /Applications/Xcode_1*.app 2>/dev/null | sort -V | tail -1)
           if [ -n "$XCODE_PATH" ]; then
             sudo xcode-select -s "$XCODE_PATH"
           fi
           xcodebuild -version
+
+      - name: Ensure Xcode >= 16
+        run: |
+          V=$(xcodebuild -version | head -1 | awk '{print $2}')
+          echo "Selected Xcode: $V"
+          MAJOR=$(echo "$V" | cut -d. -f1)
+          if [ "$MAJOR" -lt 16 ]; then
+            echo "::error::Xcode $V is too old for latest Firebase. Need Xcode 16+ (Swift 6)."
+            ls -la /Applications | grep -i xcode || true
+            exit 1
+          fi
 
       - name: Install CocoaPods (if missing)
         run: |
