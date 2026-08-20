@@ -140,7 +140,10 @@ router.get('/analytics', async (req, res) => {
         { $group: { _id: '$author', count: { $sum: 1 } } },
         { $sort: { count: -1 } }, { $limit: 10 }
       ]),
-      Post.find({ createdAt: { $gte: since } }).sort({ 'comments': -1 }).limit(10).select('author text comments likes createdAt'),
+      Post.aggregate([
+        { $project: { title: 1, text: 1, author: 1, commentsCount: { $size: { $ifNull: ['$comments', []] } } } },
+        { $sort: { commentsCount: -1 } }, { $limit: 10 }
+      ]),
     ]);
 
     const [topPodcastEvents, topVideoEvents, dailyPlays, peakHours, weekdayActivity] = await Promise.all([
@@ -320,8 +323,7 @@ router.get('/analytics/segments', async (req, res) => {
         { $sort: { count: -1 } },
       ]),
       Post.aggregate([
-        { $match: { createdAt: { $gte: since } } },
-        { $project: { title: 1, commentsCount: { $size: { $ifNull: ['$comments', []] } } } },
+        { $project: { title: 1, text: 1, commentsCount: { $size: { $ifNull: ['$comments', []] } } } },
         { $sort: { commentsCount: -1 } }, { $limit: 5 },
       ]),
       Comment.aggregate([

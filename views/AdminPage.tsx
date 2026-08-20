@@ -2094,8 +2094,8 @@ const renderPostsPanel = () => (
                             barColor2="#a78bfa"
                             valueSuffix="نظر"
                             data={(community.postsWithMostComments || []).slice(0, 5).map((p: any) => ({
-                                title: p.title,
-                                value: p.commentsCount,
+                                title: p.title || (p.text || '').slice(0, 40) || 'بدون عنوان',
+                                value: p.commentsCount || 0,
                             }))}
                         />
                     </div>
