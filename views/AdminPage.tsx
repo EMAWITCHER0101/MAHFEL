@@ -1,4 +1,4 @@
-
+﻿
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import type { Podcast, Episode, Video, PublishedBook, Author, Book } from '../types';
 import { toPersianDigits } from '../utils/helpers';
@@ -2682,7 +2682,7 @@ const renderPostsPanel = () => (
                 </div>
             )}
             <div className="bg-[#fcfdfe] w-full max-w-4xl h-full sm:h-[90vh] rounded-none sm:rounded-[3.5rem] shadow-2xl flex flex-col overflow-hidden border border-white/5">
-                <header className={`bg-white px-6 sm:px-10 transition-all duration-300 border-b flex justify-between items-center flex-shrink-0 overflow-hidden ${isEditing ? 'h-0 opacity-0 py-0' : 'py-5 sm:py-6 opacity-100'}`}>
+                <header className={`relative bg-white px-6 sm:px-10 transition-all duration-300 border-b flex justify-between items-center flex-shrink-0 overflow-hidden ${isEditing ? 'h-0 opacity-0 py-0' : 'py-5 sm:py-6 opacity-100'}`}>
                     <div className="flex items-center gap-4">
                         <div className="w-11 h-11 bg-gray-900 rounded-[1.25rem] flex items-center justify-center text-white rotate-3 shadow-xl"><i className="fas fa-sliders-h"></i></div>
                         <div>
@@ -2690,18 +2690,18 @@ const renderPostsPanel = () => (
                             <p className="text-[9px] text-gray-400 font-black uppercase mt-0.5 tracking-widest">Soha Admin Panel</p>
                         </div>
                     </div>
+                    <button onClick={onClose} data-guide="admin-close-mobile" className="sm:hidden absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 hover:text-red-500 font-black text-lg transition-all">&times;</button>
                     <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <button onClick={onClose} data-guide="admin-close-mobile" className="sm:hidden w-9 h-9 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-red-500 font-black text-lg transition-all shrink-0">&times;</button>
                         <div className="relative hidden sm:block flex-1 min-w-0">
                             <input
                                 type="text"
                                 value={globalSearch}
                                 onChange={(e) => setGlobalSearch(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleGlobalSearch()}
+                                onKeyDown={(e) => e.key === "Enter" && handleGlobalSearch()}
                                 placeholder="جستجوی سراسری..."
                                 className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-[10px] text-gray-700 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                             />
-                            <i className={`fas ${isSearching ? 'fa-spinner fa-spin' : 'fa-search'} absolute left-3 top-2.5 text-gray-300 text-[10px]`}></i>
+                            <i className={`fas ${isSearching ? "fa-spinner fa-spin" : "fa-search"} absolute left-3 top-2.5 text-gray-300 text-[10px]`}></i>
                         </div>
                         <button onClick={() => adminExportData('users')} className="w-9 h-9 rounded-xl bg-green-50 text-green-500 hover:bg-green-100 transition-all flex items-center justify-center" title="خروجی کاربران"><i className="fas fa-download text-[10px]"></i></button>
                         <button onClick={onClose} data-guide="admin-close" className="hidden sm:flex w-10 h-10 rounded-full bg-gray-50 items-center justify-center text-gray-300 hover:text-red-500 font-black text-xl transition-all">&times;</button>
