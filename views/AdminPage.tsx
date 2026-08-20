@@ -555,7 +555,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
     const [selectedComments, setSelectedComments] = useState<string[]>([]);
     const [analytics, setAnalytics] = useState<any>(null);
     const [analyticsPeriod, setAnalyticsPeriod] = useState('7d');
-    const [analyticsTab, setAnalyticsTab] = useState<'audio' | 'video' | 'community'>('audio');
+    const [analyticsTab, setAnalyticsTab] = useState<'audio' | 'video' | 'community' | 'sales'>('audio');
     const [segments, setSegments] = useState<any>(null);
     const [insights, setInsights] = useState<any>(null);
     const [insightsLoading, setInsightsLoading] = useState(false);
@@ -1907,8 +1907,9 @@ const renderPostsPanel = () => (
             { id: 'audio', label: 'آمار صوتی', icon: 'fa-microphone-alt', color: '#10b981' },
             { id: 'video', label: 'آمار ویدیو', icon: 'fa-video', color: '#2e86c1' },
             { id: 'community', label: 'آمار محفل', icon: 'fa-users', color: '#f97316' },
+            { id: 'sales', label: 'آمار فروش', icon: 'fa-chart-line', color: '#8b5cf6' },
         ] as const;
-        const segSummary = (tab: 'audio' | 'video' | 'community') => {
+        const segSummary = (tab: 'audio' | 'video' | 'community' | 'sales') => {
             if (tab === 'audio') return (
                 <div className="grid grid-cols-2 gap-3">
                     <div className="text-center p-3 bg-emerald-50 rounded-xl">
@@ -1930,6 +1931,18 @@ const renderPostsPanel = () => (
                     <div className="text-center p-3 bg-sky-50 rounded-xl">
                         <p className="text-lg font-black text-sky-600">{toPersianDigits(video.likes || 0)}</p>
                         <p className="text-[8px] font-black text-sky-400">لایک ویدیوها</p>
+                    </div>
+                </div>
+            );
+            if (tab === 'sales') return (
+                <div className="grid grid-cols-2 gap-3">
+                    <div className="text-center p-3 bg-violet-50 rounded-xl">
+                        <p className="text-lg font-black text-violet-600"><i className="fas fa-bag-shopping text-sm"></i></p>
+                        <p className="text-[8px] font-black text-violet-400">فروش تایید شده و سود خالص</p>
+                    </div>
+                    <div className="text-center p-3 bg-purple-50 rounded-xl">
+                        <p className="text-lg font-black text-purple-600"><i className="fas fa-chart-line text-sm"></i></p>
+                        <p className="text-[8px] font-black text-purple-400">پرفروش‌ترین کتاب‌ها</p>
                     </div>
                 </div>
             );
@@ -2112,6 +2125,12 @@ const renderPostsPanel = () => (
                         />
                     </div>
                 </>
+            )}
+
+            {analyticsTab === 'sales' && (
+                <div className="bg-white p-4 rounded-2xl border shadow-sm">
+                    <AdminSalesPanel />
+                </div>
             )}
 
             <div className="bg-gradient-to-br from-indigo-50/80 to-purple-50/80 rounded-2xl border p-4 shadow-sm">
