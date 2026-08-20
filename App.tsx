@@ -7,7 +7,7 @@ import OnboardingGuide from './components/OnboardingGuide';
 import WelcomeVideo from './components/WelcomeVideo';
 import { ADMIN_STEPS, USER_STEPS, AUTHOR_STEPS } from './data/guideSteps';
 import ErrorBoundary from './components/ErrorBoundary';
-import { initBackgroundPlayback, isApp, sendNativeNotification, playInBackgroundAudio, stopBackgroundAudio, updateAudioBackgroundMeta, updateAudioBackgroundState, stopPlaybackService, isNativeMode, setNativeModeActive, nativeCommand, getNativeSnapshot, isVideoBackgroundActive, stopVideoBackground, getAppVersion, isDesktop, getDesktopVersion, isVersionNewer, clearWebMediaSession, getFcmToken, desktopShowNotification } from './services/backgroundPlayback';
+import { initBackgroundPlayback, isApp, isIos, sendNativeNotification, playInBackgroundAudio, stopBackgroundAudio, updateAudioBackgroundMeta, updateAudioBackgroundState, stopPlaybackService, isNativeMode, setNativeModeActive, nativeCommand, getNativeSnapshot, isVideoBackgroundActive, stopVideoBackground, getAppVersion, isDesktop, getDesktopVersion, isVersionNewer, clearWebMediaSession, getFcmToken, desktopShowNotification } from './services/backgroundPlayback';
 import { getAppUpdate, AppUpdateInfo } from './services/api';
 import UpdateDialog from './components/UpdateDialog';
 import { getPushEnabled, syncWebPushSubscription, getAppNotifEnabled } from './services/webPush';
@@ -386,7 +386,7 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
                 if (!mobile && !desktop) return;
                 const info = await getAppUpdate();
                 if (!info) return;
-                if (mobile && info.apkVersion) {
+                if (mobile && !isIos() && info.apkVersion) {
                     const current = getAppVersion();
                     if (!current || isVersionNewer(info.apkVersion, current)) {
                         setUpdateInfo(info);

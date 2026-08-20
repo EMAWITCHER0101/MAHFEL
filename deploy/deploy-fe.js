@@ -1,4 +1,4 @@
-const {Client} = require('C:\\Users\\EMAD\\AppData\\Roaming\\npm\\node_modules\\ssh2');
+﻿const {Client} = require('C:\\Users\\EMAD\\AppData\\Roaming\\npm\\node_modules\\ssh2');
 const dotenv = require('dotenv');
 const path = require('path');
 const fs = require('fs');
@@ -70,20 +70,20 @@ function uploadFile(lp, rp) {
       await uploadFile(`E:\\soha\\${f}`, `/opt/soha/${f}`);
     }
 
-    // سرویس‌اکانت Firebase (FCM): اگر فایل محلی موجود باشد آپلود می‌شود
+    // ط³ط±ظˆغŒط³â€Œط§ع©ط§ظ†طھ Firebase (FCM): ط§ع¯ط± ظپط§غŒظ„ ظ…ط­ظ„غŒ ظ…ظˆط¬ظˆط¯ ط¨ط§ط´ط¯ ط¢ظ¾ظ„ظˆط¯ ظ…غŒâ€Œط´ظˆط¯
     const saPath = 'E:\\soha\\server\\service-account.json';
     if (fs.existsSync(saPath)) {
       console.log('>>> Upload service-account.json (FCM)');
       await uploadFile(saPath, '/opt/soha/service-account.json');
     } else {
-      console.log('>>> service-account.json not found — FCM (اندروید) غیرفعال است');
+      console.log('>>> service-account.json not found â€” FCM (ط§ظ†ط¯ط±ظˆغŒط¯) ط؛غŒط±ظپط¹ط§ظ„ ط§ط³طھ');
     }
 
-    console.log('\n--- 1.5 npm install (server deps) — best-effort ---');
+    console.log('\n--- 1.5 npm install (server deps) â€” best-effort ---');
     try {
       console.log((await ssh('cd /opt/soha && timeout 120 npm install --omit=dev --no-audit --no-fund 2>&1 | tail -3', 140000)).trim());
     } catch (e) {
-      console.log('npm install skipped (timeout) — backend همچنان اجرا می‌شود؛ firebase-admin بعداً نصب می‌شود');
+      console.log('npm install skipped (timeout) â€” backend ظ‡ظ…ع†ظ†ط§ظ† ط§ط¬ط±ط§ ظ…غŒâ€Œط´ظˆط¯ط› firebase-admin ط¨ط¹ط¯ط§ظ‹ ظ†طµط¨ ظ…غŒâ€Œط´ظˆط¯');
     }
 
     console.log('\n--- 2. Restart backend ---');
@@ -95,11 +95,11 @@ function uploadFile(lp, rp) {
     console.log(await ssh('systemctl stop soha-frontend 2>/dev/null || true'));
     console.log(await ssh('rm -rf /opt/soha/.next'));
     console.log(await ssh('mkdir -p /opt/soha/.next/standalone'));
-    await uploadFile('C:\\Temp\\soha-fe.tar.gz', '/tmp/soha-fe.tar.gz');
+    await uploadFile('E:\\temp\\soha-fe.tar.gz', '/tmp/soha-fe.tar.gz');
     console.log(await ssh('tar -xzf /tmp/soha-fe.tar.gz -C /opt/soha/.next/standalone', 30000));
-    await uploadFile('C:\\Temp\\soha-static.tar.gz', '/tmp/soha-static.tar.gz');
+    await uploadFile('E:\\temp\\soha-static.tar.gz', '/tmp/soha-static.tar.gz');
     console.log(await ssh('cd /opt/soha/.next/standalone/.next && rm -rf static && mkdir -p static && tar -xzf /tmp/soha-static.tar.gz -C static', 30000));
-    await uploadFile('C:\\Temp\\soha-public.tar.gz', '/tmp/soha-public.tar.gz');
+    await uploadFile('E:\\temp\\soha-public.tar.gz', '/tmp/soha-public.tar.gz');
     console.log(await ssh('mkdir -p /opt/soha/public && tar -xzf /tmp/soha-public.tar.gz -C /opt/soha/public', 30000));
     console.log(await ssh('rm -rf /opt/soha/.next/standalone/public && cp -r /opt/soha/public /opt/soha/.next/standalone/public 2>/dev/null || true'));
     console.log(await ssh('systemctl start soha-frontend', 15000));

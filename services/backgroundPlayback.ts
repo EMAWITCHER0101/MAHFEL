@@ -49,7 +49,7 @@ let nativeMode = false;
 
 const getBridge = (): BridgeLike | null => {
   if (typeof window === 'undefined') return null;
-  const live = (window as any).AndroidBridge || null;
+  const live = (window as any).AndroidBridge || (window as any).MahfelIosBridge || null;
   if (live) bridge = live;
   return live || bridge;
 };
@@ -57,6 +57,17 @@ const getBridge = (): BridgeLike | null => {
 export const isApp = (): boolean => {
   const b = getBridge();
   return !!b && typeof b.isApp === 'function' && b.isApp() === true;
+};
+
+// --- محیط iOS ---
+export const isIos = (): boolean => {
+  const b = getBridge();
+  if (b && typeof (b as any).isIos === 'function') {
+    try {
+      return (b as any).isIos() === true;
+    } catch { /* ignore */ }
+  }
+  return false;
 };
 
 export const sendNativeNotification = (title: string, body: string, link?: string) => {
