@@ -51,3 +51,6 @@ mobile-screenshot.js
 err.xml
 ui*.xml
 *.png
+
+# Junk archive (moved-out garbage, never track)
+_archive/junk/

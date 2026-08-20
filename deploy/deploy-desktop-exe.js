@@ -11,7 +11,7 @@ const PORT = parseInt(process.env.SSH_PORT || '9011');
 const USER = process.env.SSH_USER;
 const PASS = process.env.SSH_PASS;
 
-const LOCAL_EXE = 'E:\\soha\\Mahfel-Setup.exe';
+const LOCAL_EXE = 'E:\\soha\\_archive\\releases\\Mahfel-Setup.exe';
 const REMOTE_DIR = '/opt/soha/public/downloads';
 
 function ssh(label, cmd, timeout) {

@@ -208,15 +208,31 @@
 ├── 📁 public/                       # فایل‌های استاتیک
 │   ├── 📁 font-awesome/             # آیکون‌های Font Awesome
 │   ├── 📁 fonts/                    # فونت‌های سفارشی
+│   ├── 📁 videopage/                # ویدیوهای خوش‌آمد
 │   └── logo.jpg                     # لوگوی محفل
 │
 ├── 📁 fonts/                        # فونت‌ها (برای next/font)
 │   ├── IranNastaliq.ttf
 │   └── IranNastaliq.woff2
 │
+├── 📁 android/                      # اپ اندروید (Capacitor)
+├── 📁 ios/                          # اپ iOS (Swift + WKWebView)
+├── 📁 electron/                     # اپ دسکتاپ (Electron)
+├── 📁 ws-server/                    # سرور وب‌سوکت (Go)
+├── 📁 deploy/                       # اسکریپت‌های استقرار
+├── 📁 book/                         # فایل‌های PDF کتاب‌ها
+├── 📁 data/                         # داده‌های فرانت‌اند
+├── 📁 utils/                        # ابزارهای کمکی
+├── 📁 _archive/legacy/              # فایل‌های قدیمی (بدون استفاده)
+│
 ├── next.config.ts                   # تنظیمات Next.js
 ├── tailwind.config.js               # تنظیمات Tailwind CSS
 ├── tsconfig.json                    # تنظیمات TypeScript
+├── capacitor.config.ts              # تنظیمات Capacitor
+├── vite.config.ts                   # تنظیمات Vite (خروجی out/)
+├── index.html                       # ورودی Vite (خروجی out/)
+├── types.ts                         # تایپ‌های مشترک
+├── seed.cjs                         # اسکریپت داده‌های اولیه
 └── package.json                     # وابستگی‌ها
 ```
 
