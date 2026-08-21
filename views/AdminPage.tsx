@@ -2410,35 +2410,7 @@ const renderPostsPanel = () => (
                     <div className="space-y-3">
                         {purchaseRequests.map(r => {
                             const pending = r.status === 'pending';
-    const TAB_PERMISSIONS: Record<AdminTab, string | null> = {
-        dashboard: null,
-        users: 'users',
-        posts: 'posts',
-        comments: 'comments',
-        analytics: 'analytics',
-        sowt: 'podcasts',
-        library: 'library',
-        nashr: 'library',
-        notes: 'notes',
-        authors: 'authors',
-        videos: 'videos',
-        notifications: 'notifications',
-        versions: 'settings',
-        purchases: 'purchases',
-        sales: 'sales',
-        support: 'support',
-        roles: null,
-    };
-
-    const isSuperAdmin = myRole === 'superadmin';
-    const visibleTabs = isSuperAdmin
-        ? tabs
-        : tabs.filter(tab => {
-            const perm = TAB_PERMISSIONS[tab.id];
-            return !perm || myPerms.includes(perm);
-        });
-
-    return (
+                            return (
                                 <div key={r._id} className="rounded-2xl p-4 border transition-all" style={{ background: pending ? 'color-mix(in srgb, #f59e0b 4%, white)' : 'white', borderColor: pending ? 'color-mix(in srgb, #f59e0b 30%, transparent)' : 'var(--border)' }}>
                                     {/* header */}
                                     <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
@@ -3017,6 +2989,34 @@ const renderPostsPanel = () => (
         { id: 'support', label: 'پشتیبانی', icon: 'fa-headset', color: '#7c3aed' },
         { id: 'roles', label: 'مدیریت نقش', icon: 'fa-user-shield', color: '#dc2626' },
     ];
+
+    const TAB_PERMISSIONS: Record<AdminTab, string | null> = {
+        dashboard: null,
+        users: 'users',
+        posts: 'posts',
+        comments: 'comments',
+        analytics: 'analytics',
+        sowt: 'podcasts',
+        library: 'library',
+        nashr: 'library',
+        notes: 'notes',
+        authors: 'authors',
+        videos: 'videos',
+        notifications: 'notifications',
+        versions: 'settings',
+        purchases: 'purchases',
+        sales: 'sales',
+        support: 'support',
+        roles: null,
+    };
+
+    const isSuperAdmin = myRole === 'superadmin';
+    const visibleTabs = isSuperAdmin
+        ? tabs
+        : tabs.filter(tab => {
+            const perm = TAB_PERMISSIONS[tab.id];
+            return !perm || myPerms.includes(perm);
+        });
 
     return (
         <div className="fixed inset-0 bg-gray-950/98 z-[4500] backdrop-blur-3xl flex items-center justify-center p-0 sm:p-4 animate-fadeIn">
