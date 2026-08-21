@@ -3168,12 +3168,22 @@ const renderPostsPanel = () => (
     };
 
     const isSuperAdmin = myRole === 'superadmin';
+    const isAdmin = myRole === 'admin';
+    const lockedTabs: string[] = [];
     const visibleTabs = isSuperAdmin
         ? tabs
-        : tabs.filter(tab => {
-            const perm = TAB_PERMISSIONS[tab.id];
-            return !perm || myPerms.includes(perm);
-        });
+        : isAdmin
+            ? tabs.filter(tab => {
+                const perm = TAB_PERMISSIONS[tab.id];
+                if (!perm || myPerms.includes(perm)) return true;
+                lockedTabs.push(tab.id);
+                return false;
+            })
+            : tabs.map(tab => {
+                const perm = TAB_PERMISSIONS[tab.id];
+                if (perm && !myPerms.includes(perm)) lockedTabs.push(tab.id);
+                return tab;
+            });
 
     return (
         <div className="fixed inset-0 bg-gray-950/98 z-[4500] backdrop-blur-3xl flex items-center justify-center p-0 sm:p-4 animate-fadeIn">
@@ -3223,15 +3233,19 @@ const renderPostsPanel = () => (
                 </header>
 
                 <div ref={tabsBarRef} className={`flex gap-1 bg-gray-50 border-b overflow-x-auto no-scrollbar flex-shrink-0 transition-all duration-300 ${isEditing ? 'h-0 opacity-0 p-0' : 'p-2 sm:p-3 opacity-100'}`}>
-                    {visibleTabs.map(tab => (
+                    {visibleTabs.map(tab => {
+                        const isLocked = !isSuperAdmin && lockedTabs.includes(tab.id);
+                        return (
                         <button key={tab.id} onClick={() => setActiveTab(tab.id)}
                             data-guide={`admin-${tab.id}`}
-                            className={`flex flex-col items-center justify-center p-2 rounded-xl sm:rounded-[1.25rem] transition-all border-2 flex-shrink-0 min-w-[60px] sm:w-20 ${activeTab === tab.id ? 'bg-white shadow-lg scale-105 active:scale-95' : 'bg-transparent border-transparent text-gray-300 grayscale opacity-60'}`}
+                            className={`relative flex flex-col items-center justify-center p-2 rounded-xl sm:rounded-[1.25rem] transition-all border-2 flex-shrink-0 min-w-[60px] sm:w-20 ${activeTab === tab.id ? 'bg-white shadow-lg scale-105 active:scale-95' : 'bg-transparent border-transparent text-gray-300 grayscale opacity-60'} ${isLocked ? 'opacity-40' : ''}`}
                             style={{ borderColor: activeTab === tab.id ? tab.color : 'transparent', color: activeTab === tab.id ? tab.color : '' }}>
                             <i className={`fas ${tab.icon} text-sm mb-1`}></i>
                             <span className="text-[8px] sm:text-[9px] font-black uppercase">{tab.label}</span>
+                            {isLocked && <i className="fas fa-lock absolute top-1 left-1 text-[7px] text-red-400"></i>}
                         </button>
-                    ))}
+                        );
+                    })}
                 </div>
 
                 <div className="flex-grow overflow-y-auto no-scrollbar bg-[#f8f9fa] pb-40" onTouchStart={handleAdminTouchStart} onTouchEnd={handleAdminTouchEnd}>
@@ -3277,23 +3291,23 @@ const renderPostsPanel = () => (
                                 )}
                             </div>
                         )}
-                        {activeTab === 'dashboard' && renderDashboard()}
-                        {activeTab === 'users' && renderUsersPanel()}
-                        {activeTab === 'posts' && renderPostsPanel()}
-                        {activeTab === 'comments' && renderCommentsPanel()}
-                        {activeTab === 'analytics' && renderAnalytics()}
-                        {activeTab === 'sowt' && renderSowtPanel()}
-                        {activeTab === 'videos' && renderVideoPanel()}
-                        {activeTab === 'library' && renderLibraryPanel()}
-                        {activeTab === 'nashr' && renderNashrPanel()}
-                        {activeTab === 'notes' && renderAdminNotesPanel()}
-                        {activeTab === 'authors' && renderAdminAuthorsPanel()}
-                        {activeTab === 'notifications' && renderNotificationsPanel()}
-                        {activeTab === 'versions' && renderVersionsPanel()}
-{activeTab === 'purchases' && renderPurchasesPanel()}
-                    {activeTab === 'sales' && <AdminSalesPanel />}
-                    {activeTab === 'support' && renderSupportPanel()}
-                    {activeTab === 'roles' && renderRolesPanel()}
+                        {activeTab === 'dashboard' && <PermissionLocked permissionLabel="داشبورد برای شما غیرفعال شده" isLocked={lockedTabs.includes('dashboard')}><div className="animate-fadeIn">{renderDashboard()}</div></PermissionLocked>}
+                        {activeTab === 'users' && <PermissionLocked permissionLabel="مدیریت کاربران برای شما غیرفعال شده" isLocked={lockedTabs.includes('users')}><div className="animate-fadeIn">{renderUsersPanel()}</div></PermissionLocked>}
+                        {activeTab === 'posts' && <PermissionLocked permissionLabel="مدیریت پست‌ها برای شما غیرفعال شده" isLocked={lockedTabs.includes('posts')}><div className="animate-fadeIn">{renderPostsPanel()}</div></PermissionLocked>}
+                        {activeTab === 'comments' && <PermissionLocked permissionLabel="مدیریت نظرات برای شما غیرفعال شده" isLocked={lockedTabs.includes('comments')}><div className="animate-fadeIn">{renderCommentsPanel()}</div></PermissionLocked>}
+                        {activeTab === 'analytics' && <PermissionLocked permissionLabel="آمار و تحلیل برای شما غیرفعال شده" isLocked={lockedTabs.includes('analytics')}><div className="animate-fadeIn">{renderAnalytics()}</div></PermissionLocked>}
+                        {activeTab === 'sowt' && <PermissionLocked permissionLabel="صوت برای شما غیرفعال شده" isLocked={lockedTabs.includes('sowt')}><div className="animate-fadeIn">{renderSowtPanel()}</div></PermissionLocked>}
+                        {activeTab === 'videos' && <PermissionLocked permissionLabel="مدیریت ویدیو برای شما غیرفعال شده" isLocked={lockedTabs.includes('videos')}><div className="animate-fadeIn">{renderVideoPanel()}</div></PermissionLocked>}
+                        {activeTab === 'library' && <PermissionLocked permissionLabel="کتابخانه برای شما غیرفعال شده" isLocked={lockedTabs.includes('library')}><div className="animate-fadeIn">{renderLibraryPanel()}</div></PermissionLocked>}
+                        {activeTab === 'nashr' && <PermissionLocked permissionLabel="نشر برای شما غیرفعال شده" isLocked={lockedTabs.includes('nashr')}><div className="animate-fadeIn">{renderNashrPanel()}</div></PermissionLocked>}
+                        {activeTab === 'notes' && <PermissionLocked permissionLabel="یادداشت‌ها برای شما غیرفعال شده" isLocked={lockedTabs.includes('notes')}><div className="animate-fadeIn">{renderAdminNotesPanel()}</div></PermissionLocked>}
+                        {activeTab === 'authors' && <PermissionLocked permissionLabel="نویسندگان برای شما غیرفعال شده" isLocked={lockedTabs.includes('authors')}><div className="animate-fadeIn">{renderAdminAuthorsPanel()}</div></PermissionLocked>}
+                        {activeTab === 'notifications' && <PermissionLocked permissionLabel="نوتیفیکیشن برای شما غیرفعال شده" isLocked={lockedTabs.includes('notifications')}><div className="animate-fadeIn">{renderNotificationsPanel()}</div></PermissionLocked>}
+                        {activeTab === 'versions' && <PermissionLocked permissionLabel="نسخه اپ برای شما غیرفعال شده" isLocked={lockedTabs.includes('versions')}><div className="animate-fadeIn">{renderVersionsPanel()}</div></PermissionLocked>}
+{activeTab === 'purchases' && <PermissionLocked permissionLabel="درخواست خرید برای شما غیرفعال شده" isLocked={lockedTabs.includes('purchases')}><div className="animate-fadeIn">{renderPurchasesPanel()}</div></PermissionLocked>}
+                    {activeTab === 'sales' && <PermissionLocked permissionLabel="آمار فروش برای شما غیرفعال شده" isLocked={lockedTabs.includes('sales')}><div className="animate-fadeIn"><AdminSalesPanel /></div></PermissionLocked>}
+                    {activeTab === 'support' && <PermissionLocked permissionLabel="پشتیبانی برای شما غیرفعال شده" isLocked={lockedTabs.includes('support')}><div className="animate-fadeIn">{renderSupportPanel()}</div></PermissionLocked>}
+                    {activeTab === 'roles' && <PermissionLocked permissionLabel="مدیریت نقش برای شما غیرفعال شده" isLocked={lockedTabs.includes('roles')}><div className="animate-fadeIn">{renderRolesPanel()}</div></PermissionLocked>}
                     </div>
                 </div>
 
