@@ -653,8 +653,9 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
     const [purgeBusy, setPurgeBusy] = useState(false);
 
     // سوییپ چپ/راست بین تب‌های پنل (موبایل)
-    const ADMIN_TAB_ORDER: AdminTab[] = ['dashboard', 'users', 'posts', 'comments', 'analytics', 'sowt', 'library', 'nashr', 'notes', 'authors', 'videos', 'notifications', 'versions', 'purchases', 'sales', 'support'];
+    const ADMIN_TAB_ORDER: AdminTab[] = ['dashboard', 'users', 'posts', 'comments', 'analytics', 'sowt', 'library', 'nashr', 'notes', 'authors', 'videos', 'notifications', 'versions', 'purchases', 'sales', 'support', 'roles'];
     const adminSwipeStartRef = useRef<{ x: number; y: number } | null>(null);
+    const tabsBarRef = useRef<HTMLDivElement>(null);
     const handleAdminTouchStart = (e: React.TouchEvent) => {
         if (isEditing || typeof window === 'undefined' || window.innerWidth >= 1024) { adminSwipeStartRef.current = null; return; }
         let node: HTMLElement | null = e.target as HTMLElement | null;
@@ -676,11 +677,20 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
         const dx = t.clientX - start.x;
         const dy = t.clientY - start.y;
         if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-        const idx = ADMIN_TAB_ORDER.indexOf(activeTab);
+        const visibleIds = visibleTabs.map(t => t.id);
+        const idx = visibleIds.indexOf(activeTab);
         if (idx < 0) return;
-        const next = dx < 0 ? ADMIN_TAB_ORDER[idx + 1] : ADMIN_TAB_ORDER[idx - 1];
+        const next = dx < 0 ? visibleIds[idx + 1] : visibleIds[idx - 1];
         if (next) setActiveTab(next);
     };
+
+    useEffect(() => {
+        if (!tabsBarRef.current) return;
+        const activeBtn = tabsBarRef.current.querySelector(`[data-guide="admin-${activeTab}"]`);
+        if (activeBtn) {
+            activeBtn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        }
+    }, [activeTab]);
 
     const showAdminToast = (message: string, type: 'error' | 'success' | 'warning' = 'success') => {
         setAdminToast({ message, type });
@@ -3136,7 +3146,7 @@ const renderPostsPanel = () => (
                     </div>
                 </header>
 
-                <div className={`flex gap-1 bg-gray-50 border-b overflow-x-auto no-scrollbar flex-shrink-0 transition-all duration-300 ${isEditing ? 'h-0 opacity-0 p-0' : 'p-2 sm:p-3 opacity-100'}`}>
+                <div ref={tabsBarRef} className={`flex gap-1 bg-gray-50 border-b overflow-x-auto no-scrollbar flex-shrink-0 transition-all duration-300 ${isEditing ? 'h-0 opacity-0 p-0' : 'p-2 sm:p-3 opacity-100'}`}>
                     {visibleTabs.map(tab => (
                         <button key={tab.id} onClick={() => setActiveTab(tab.id)}
                             data-guide={`admin-${tab.id}`}
