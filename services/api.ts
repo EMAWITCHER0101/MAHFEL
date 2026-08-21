@@ -1059,3 +1059,10 @@ export const updateRolePermissions = async (permissions: Record<string, string[]
 export const getUserPermissions = async (userId: string): Promise<any> => {
   return apiFetch(`/admin-roles/user-permissions/${userId}`);
 };
+
+export const resetUserPermissions = async (userId: string): Promise<any> => {
+  return apiFetch(`/admin-roles/users/${userId}/permissions`, {
+    method: 'PUT',
+    body: JSON.stringify({ permissions: [] }),
+  });
+};

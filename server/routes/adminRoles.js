@@ -261,11 +261,10 @@ router.get('/user-permissions/:userId', auth, requireSuperAdmin, async (req, res
       admin: ['users', 'posts', 'comments', 'analytics', 'sales', 'videos', 'podcasts', 'library', 'notes', 'authors', 'versions', 'purchases', 'support', 'notifications', 'settings'],
     };
     const rolePerms = superadmin?.rolePermissions || defaultRolePerms;
-    const effectivePerms = [
-      ...(rolePerms[user.role] || []),
-      ...(user.adminPermissions || []),
-    ];
-    res.json({ role: user.role, rolePermissions: rolePerms[user.role] || [], adminPermissions: user.adminPermissions || [], effectivePermissions: effectivePerms });
+    const rolePermsForUser = rolePerms[user.role] || [];
+    const hasCustom = user.adminPermissions && user.adminPermissions.length > 0;
+    const effectivePerms = hasCustom ? user.adminPermissions : rolePermsForUser;
+    res.json({ role: user.role, rolePermissions: rolePermsForUser, adminPermissions: user.adminPermissions || [], effectivePermissions: effectivePerms, hasCustom });
   } catch (error) {
     res.status(500).json({ error: 'خطای سرور' });
   }
@@ -283,11 +282,9 @@ router.get('/my-permissions', auth, async (req, res) => {
     };
     const rolePerms = superadmin?.rolePermissions || defaultRolePerms;
     const rolePermsForUser = rolePerms[req.user.role] || [];
-    const effectivePerms = [
-      ...rolePermsForUser,
-      ...(req.user.adminPermissions || []),
-    ];
-    res.json({ role: req.user.role, rolePermissions: rolePermsForUser, adminPermissions: req.user.adminPermissions || [], effectivePermissions: effectivePerms });
+    const hasCustom = req.user.adminPermissions && req.user.adminPermissions.length > 0;
+    const effectivePerms = hasCustom ? req.user.adminPermissions : rolePermsForUser;
+    res.json({ role: req.user.role, rolePermissions: rolePermsForUser, adminPermissions: req.user.adminPermissions || [], effectivePermissions: effectivePerms, hasCustom });
   } catch (error) {
     res.status(500).json({ error: 'خطای سرور' });
   }

@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import type { Podcast, Episode, Video, PublishedBook, Author, Book } from '../types';
 import { toPersianDigits } from '../utils/helpers';
-import { uploadFile, getAdminStats, getAdminUsers, updateUserRole, deleteUser, getAdminPosts, adminDeletePost, adminUpdatePost, getAdminComments, adminDeleteComment, adminUpdateComment, getPodcasts, getBooks, getAuthors, getVideos, getComments, getPosts, getPublishedBooks, getAdminAnalytics, getAdminAnalyticsSegments, getAdminInsights, getAdminActivity, adminExportData, adminSearchGlobal, adminBulkUsers, adminBulkPosts, adminBulkComments, muteUser, unmuteUser, unbanUser, resetUserWarnings, getNotifications, adminSendNotification, adminDeleteNotification, getAICorpus, getAdminVideoPlaylists, createVideoPlaylist, updateVideoPlaylist, deleteVideoPlaylist, adminGetNotes, adminCreateNote, adminUpdateNote, adminDeleteNote, adminGetAuthors, getAppUpdate, adminSaveAppUpdate, adminUploadApk, AppUpdateInfo, adminGetPurchaseRequests, adminUpdatePurchaseRequest, getCommunitySettings, updateCommunitySettings, getSupportMessages, markSupportMessageRead, deleteSupportMessage, adminPurgePosts, requestAdminAccess, getMyAdminRequest, getAdminRequests, approveAdminRequest, rejectAdminRequest, changeUserRole, removeAdmin, getAdminList, AVAILABLE_PERMISSIONS, updateAdminPermissions, ALL_ROLE_PERMISSIONS, getRolePermissions, updateRolePermissions } from '../services/api';
+import { uploadFile, getAdminStats, getAdminUsers, updateUserRole, deleteUser, getAdminPosts, adminDeletePost, adminUpdatePost, getAdminComments, adminDeleteComment, adminUpdateComment, getPodcasts, getBooks, getAuthors, getVideos, getComments, getPosts, getPublishedBooks, getAdminAnalytics, getAdminAnalyticsSegments, getAdminInsights, getAdminActivity, adminExportData, adminSearchGlobal, adminBulkUsers, adminBulkPosts, adminBulkComments, muteUser, unmuteUser, unbanUser, resetUserWarnings, getNotifications, adminSendNotification, adminDeleteNotification, getAICorpus, getAdminVideoPlaylists, createVideoPlaylist, updateVideoPlaylist, deleteVideoPlaylist, adminGetNotes, adminCreateNote, adminUpdateNote, adminDeleteNote, adminGetAuthors, getAppUpdate, adminSaveAppUpdate, adminUploadApk, AppUpdateInfo, adminGetPurchaseRequests, adminUpdatePurchaseRequest, getCommunitySettings, updateCommunitySettings, getSupportMessages, markSupportMessageRead, deleteSupportMessage, adminPurgePosts, requestAdminAccess, getMyAdminRequest, getAdminRequests, approveAdminRequest, rejectAdminRequest, changeUserRole, removeAdmin, getAdminList, AVAILABLE_PERMISSIONS, updateAdminPermissions, ALL_ROLE_PERMISSIONS, getRolePermissions, updateRolePermissions, resetUserPermissions } from '../services/api';
 import { fetchAparatVideoDetails, extractAparatId } from '../utils/aparatApi';
 import { GoogleGenAI } from "@google/genai";
 import { AreaTrendChart, StackedDailyBars, RankBars } from '../components/AdminCharts';
@@ -391,6 +391,8 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
     const [rolePermissions, setRolePermissions] = useState<Record<string, string[]>>({});
     const [editingRole, setEditingRole] = useState<string | null>(null);
     const [editingRolePerms, setEditingRolePerms] = useState<string[]>([]);
+    const [editingUserPerms, setEditingUserPerms] = useState<string | null>(null);
+    const [editingUserPermsList, setEditingUserPermsList] = useState<string[]>([]);
     const [myRequest, setMyRequest] = useState<any>(null);
     const [requestMessage, setRequestMessage] = useState('');
     const [requestLoading, setRequestLoading] = useState(false);
@@ -2966,11 +2968,53 @@ const renderPostsPanel = () => (
                                                 </span>
                                             </div>
                                             {u.role !== 'superadmin' && (
-                                                <select value={u.role} onChange={e => handleChangeRole(u._id, e.target.value)} className="text-[8px] font-bold p-1 rounded-lg border bg-white">
-                                                    <option value="user">کاربر</option>
-                                                    <option value="author">نویسنده</option>
-                                                    <option value="admin">ادمین</option>
-                                                </select>
+                                                <div className="flex items-center gap-1">
+                                                    <select value={u.role} onChange={e => handleChangeRole(u._id, e.target.value)} className="text-[8px] font-bold p-1 rounded-lg border bg-white">
+                                                        <option value="user">کاربر</option>
+                                                        <option value="author">نویسنده</option>
+                                                        <option value="admin">ادمین</option>
+                                                    </select>
+                                                    <button onClick={() => { setEditingUserPerms(editingUserPerms === u._id ? null : u._id); setEditingUserPermsList(u.adminPermissions || []); }}
+                                                        className={`px-2 py-1 rounded-lg text-[8px] font-bold transition-all ${editingUserPerms === u._id ? 'bg-blue-500 text-white' : 'bg-blue-50 text-blue-500 hover:bg-blue-100'}`}>
+                                                        <i className="fas fa-key"></i>
+                                                    </button>
+                                                </div>
+                                            )}
+                                            {editingUserPerms === u._id && (
+                                                <div className="w-full mt-2 p-3 bg-blue-50 rounded-xl border border-blue-200 space-y-2">
+                                                    <div className="flex items-center justify-between">
+                                                        <p className="text-[9px] font-bold text-blue-700">دسترسی اختصاصی {u.name || u.phoneNumber} (نقش: {u.role === 'admin' ? 'ادمین' : u.role === 'author' ? 'نویسنده' : 'کاربر'})</p>
+                                                        <span className="text-[7px] text-gray-400">وقتی خالی باشه، دسترسی نقش اعمال میشه</span>
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {ALL_ROLE_PERMISSIONS.filter(p => {
+                                                            if (u.role === 'admin') return p.category === 'admin';
+                                                            if (u.role === 'author') return true;
+                                                            return p.category === 'user';
+                                                        }).map(p => (
+                                                            <button key={p.id}
+                                                                onClick={() => {
+                                                                    const newPerms = editingUserPermsList.includes(p.id) ? editingUserPermsList.filter(x => x !== p.id) : [...editingUserPermsList, p.id];
+                                                                    setEditingUserPermsList(newPerms);
+                                                                }}
+                                                                className={`px-2 py-1 rounded-lg text-[8px] font-bold transition-all ${editingUserPermsList.includes(p.id) ? 'bg-blue-500 text-white shadow-sm' : 'bg-white border text-gray-500 hover:bg-gray-50'}`}>
+                                                                {editingUserPermsList.includes(p.id) && <i className="fas fa-check ml-0.5"></i>}
+                                                                {p.label}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        <button onClick={async () => { await updateAdminPermissions(u._id, editingUserPermsList); setAdminToast({ type: 'success', message: `دسترسی ${u.name || u.phoneNumber} ذخیره شد` }); loadRolesUsers(); setEditingUserPerms(null); }}
+                                                            className="px-3 py-1.5 bg-green-500 text-white rounded-lg text-[8px] font-bold hover:bg-green-600">
+                                                            <i className="fas fa-save ml-1"></i> ذخیره
+                                                        </button>
+                                                        <button onClick={async () => { await resetUserPermissions(u._id); setAdminToast({ type: 'success', message: `دسترسی ${u.name || u.phoneNumber} به پیش‌فرض نقش برگشت` }); loadRolesUsers(); setEditingUserPerms(null); }}
+                                                            className="px-3 py-1.5 bg-orange-100 text-orange-600 rounded-lg text-[8px] font-bold hover:bg-orange-200">
+                                                            <i className="fas fa-undo ml-1"></i> بازنشانی
+                                                        </button>
+                                                        <button onClick={() => setEditingUserPerms(null)} className="px-3 py-1.5 bg-gray-200 text-gray-600 rounded-lg text-[8px] font-bold hover:bg-gray-300">لغو</button>
+                                                    </div>
+                                                </div>
                                             )}
                                         </div>
                                     ))}
