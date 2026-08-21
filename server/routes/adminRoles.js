@@ -217,4 +217,80 @@ router.put('/users/:userId/permissions', auth, requireSuperAdmin, async (req, re
   }
 });
 
+// دریافت دسترسی پیش‌فرض نقش‌ها (فقط superadmin)
+router.get('/role-permissions', auth, requireSuperAdmin, async (req, res) => {
+  try {
+    const superadmin = await User.findOne({ role: 'superadmin' }).select('rolePermissions');
+    const defaultPerms = {
+      user: ['create_post', 'create_comment', 'create_album', 'create_note', 'purchase_request', 'like_content', 'manage_library'],
+      author: ['create_post', 'create_comment', 'create_album', 'create_note', 'purchase_request', 'like_content', 'manage_library', 'create_book', 'edit_book', 'create_podcast', 'edit_podcast', 'manage_episodes'],
+      admin: ['users', 'posts', 'comments', 'analytics', 'sales', 'videos', 'podcasts', 'library', 'notes', 'authors', 'versions', 'purchases', 'support', 'notifications', 'settings'],
+    };
+    res.json(superadmin?.rolePermissions || defaultPerms);
+  } catch (error) {
+    res.status(500).json({ error: 'خطای سرور' });
+  }
+});
+
+// به‌روزرسانی دسترسی پیش‌فرض نقش‌ها (فقط superadmin)
+router.put('/role-permissions', auth, requireSuperAdmin, async (req, res) => {
+  try {
+    const { permissions } = req.body;
+    if (!permissions || typeof permissions !== 'object') {
+      return res.status(400).json({ error: 'فرمت داده نامعتبر' });
+    }
+    const superadmin = await User.findOne({ role: 'superadmin' });
+    if (!superadmin) return res.status(404).json({ error: 'سوپرادمین یافت نشد' });
+    superadmin.rolePermissions = permissions;
+    await superadmin.save();
+    res.json({ success: true, message: 'دسترسی نقش‌ها به‌روزرسانی شد', rolePermissions: superadmin.rolePermissions });
+  } catch (error) {
+    res.status(500).json({ error: 'خطای سرور' });
+  }
+});
+
+// دریافت دسترسی‌های مؤثر یک کاربر (نقش + اختصاصی)
+router.get('/user-permissions/:userId', auth, requireSuperAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId).select('role adminPermissions name phoneNumber');
+    if (!user) return res.status(404).json({ error: 'کاربر یافت نشد' });
+    const superadmin = await User.findOne({ role: 'superadmin' }).select('rolePermissions');
+    const defaultRolePerms = {
+      user: ['create_post', 'create_comment', 'create_album', 'create_note', 'purchase_request', 'like_content', 'manage_library'],
+      author: ['create_post', 'create_comment', 'create_album', 'create_note', 'purchase_request', 'like_content', 'manage_library', 'create_book', 'edit_book', 'create_podcast', 'edit_podcast', 'manage_episodes'],
+      admin: ['users', 'posts', 'comments', 'analytics', 'sales', 'videos', 'podcasts', 'library', 'notes', 'authors', 'versions', 'purchases', 'support', 'notifications', 'settings'],
+    };
+    const rolePerms = superadmin?.rolePermissions || defaultRolePerms;
+    const effectivePerms = [
+      ...(rolePerms[user.role] || []),
+      ...(user.adminPermissions || []),
+    ];
+    res.json({ role: user.role, rolePermissions: rolePerms[user.role] || [], adminPermissions: user.adminPermissions || [], effectivePermissions: effectivePerms });
+  } catch (error) {
+    res.status(500).json({ error: 'خطای سرور' });
+  }
+});
+
+// دریافت دسترسی‌های خود کاربر (برای فرانت)
+router.get('/my-permissions', auth, async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'احراز هویت لازم است' });
+    const superadmin = await User.findOne({ role: 'superadmin' }).select('rolePermissions');
+    const defaultRolePerms = {
+      user: ['create_post', 'create_comment', 'create_album', 'create_note', 'purchase_request', 'like_content', 'manage_library'],
+      author: ['create_post', 'create_comment', 'create_album', 'create_note', 'purchase_request', 'like_content', 'manage_library', 'create_book', 'edit_book', 'create_podcast', 'edit_podcast', 'manage_episodes'],
+      admin: ['users', 'posts', 'comments', 'analytics', 'sales', 'videos', 'podcasts', 'library', 'notes', 'authors', 'versions', 'purchases', 'support', 'notifications', 'settings'],
+    };
+    const rolePerms = superadmin?.rolePermissions || defaultRolePerms;
+    const rolePermsForUser = rolePerms[req.user.role] || [];
+    const effectivePerms = [
+      ...rolePermsForUser,
+      ...(req.user.adminPermissions || []),
+    ];
+    res.json({ role: req.user.role, rolePermissions: rolePermsForUser, adminPermissions: req.user.adminPermissions || [], effectivePermissions: effectivePerms });
+  } catch (error) {
+    res.status(500).json({ error: 'خطای سرور' });
+  }
+});
+
 export default router;

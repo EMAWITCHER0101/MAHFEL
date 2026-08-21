@@ -1014,3 +1014,48 @@ export const updateAdminPermissions = async (userId: string, permissions: string
 export const getMyPermissions = async (): Promise<{ role: string; permissions: string[] } | null> => {
   return apiFetch('/admin-roles/my-request');
 };
+
+export const ALL_ROLE_PERMISSIONS = [
+  { id: 'create_post', label: 'ایجاد پست', category: 'user' },
+  { id: 'create_comment', label: 'ایجاد نظر', category: 'user' },
+  { id: 'create_album', label: 'ایجاد آلبوم', category: 'user' },
+  { id: 'create_note', label: 'ایجاد یادداشت', category: 'user' },
+  { id: 'purchase_request', label: 'درخواست خرید', category: 'user' },
+  { id: 'like_content', label: 'لایک محتوا', category: 'user' },
+  { id: 'manage_library', label: 'مدیریت کتابخانه', category: 'user' },
+  { id: 'create_book', label: 'ایجاد کتاب', category: 'author' },
+  { id: 'edit_book', label: 'ویرایش کتاب', category: 'author' },
+  { id: 'create_podcast', label: 'ایجاد پادکست', category: 'author' },
+  { id: 'edit_podcast', label: 'ویرایش پادکست', category: 'author' },
+  { id: 'manage_episodes', label: 'مدیریت اپیزود', category: 'author' },
+  { id: 'users', label: 'مدیریت کاربران', category: 'admin' },
+  { id: 'posts', label: 'مدیریت پست‌ها', category: 'admin' },
+  { id: 'comments', label: 'مدیریت نظرات', category: 'admin' },
+  { id: 'analytics', label: 'آمار و تحلیل', category: 'admin' },
+  { id: 'sales', label: 'آمار فروش', category: 'admin' },
+  { id: 'videos', label: 'مدیریت ویدیو', category: 'admin' },
+  { id: 'podcasts', label: 'مدیریت پادکست', category: 'admin' },
+  { id: 'library', label: 'کتابخانه', category: 'admin' },
+  { id: 'notes', label: 'یادداشت‌ها', category: 'admin' },
+  { id: 'authors', label: 'نویسندگان', category: 'admin' },
+  { id: 'versions', label: 'نسخه اپ', category: 'admin' },
+  { id: 'purchases', label: 'درخواست خرید', category: 'admin' },
+  { id: 'support', label: 'پشتیبانی', category: 'admin' },
+  { id: 'notifications', label: 'نوتیفیکیشن', category: 'admin' },
+  { id: 'settings', label: 'تنظیمات', category: 'admin' },
+];
+
+export const getRolePermissions = async (): Promise<Record<string, string[]>> => {
+  return apiFetch('/admin-roles/role-permissions') || {};
+};
+
+export const updateRolePermissions = async (permissions: Record<string, string[]>): Promise<any> => {
+  return apiFetch('/admin-roles/role-permissions', {
+    method: 'PUT',
+    body: JSON.stringify({ permissions }),
+  });
+};
+
+export const getUserPermissions = async (userId: string): Promise<any> => {
+  return apiFetch(`/admin-roles/user-permissions/${userId}`);
+};

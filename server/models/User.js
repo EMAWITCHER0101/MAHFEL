@@ -19,6 +19,15 @@ const userSchema = new mongoose.Schema({
   role: { type: String, enum: ['user', 'author', 'admin', 'superadmin'], default: 'user' },
   adminPermissions: [{ type: String }],
   adminRequests: [adminRequestSchema],
+  rolePermissions: {
+    type: Map,
+    of: [String],
+    default: {
+      user: ['create_post', 'create_comment', 'create_album', 'create_note', 'purchase_request', 'like_content', 'manage_library'],
+      author: ['create_post', 'create_comment', 'create_album', 'create_note', 'purchase_request', 'like_content', 'manage_library', 'create_book', 'edit_book', 'create_podcast', 'edit_podcast', 'manage_episodes'],
+      admin: ['users', 'posts', 'comments', 'analytics', 'sales', 'videos', 'podcasts', 'library', 'notes', 'authors', 'versions', 'purchases', 'support', 'notifications', 'settings'],
+    },
+  },
   warnings: { type: Number, default: 0 },
   banned: { type: Boolean, default: false },
   muted: { type: Boolean, default: false },

@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import type { Podcast, Episode, Video, PublishedBook, Author, Book } from '../types';
 import { toPersianDigits } from '../utils/helpers';
-import { uploadFile, getAdminStats, getAdminUsers, updateUserRole, deleteUser, getAdminPosts, adminDeletePost, adminUpdatePost, getAdminComments, adminDeleteComment, adminUpdateComment, getPodcasts, getBooks, getAuthors, getVideos, getComments, getPosts, getPublishedBooks, getAdminAnalytics, getAdminAnalyticsSegments, getAdminInsights, getAdminActivity, adminExportData, adminSearchGlobal, adminBulkUsers, adminBulkPosts, adminBulkComments, muteUser, unmuteUser, unbanUser, resetUserWarnings, getNotifications, adminSendNotification, adminDeleteNotification, getAICorpus, getAdminVideoPlaylists, createVideoPlaylist, updateVideoPlaylist, deleteVideoPlaylist, adminGetNotes, adminCreateNote, adminUpdateNote, adminDeleteNote, adminGetAuthors, getAppUpdate, adminSaveAppUpdate, adminUploadApk, AppUpdateInfo, adminGetPurchaseRequests, adminUpdatePurchaseRequest, getCommunitySettings, updateCommunitySettings, getSupportMessages, markSupportMessageRead, deleteSupportMessage, adminPurgePosts, requestAdminAccess, getMyAdminRequest, getAdminRequests, approveAdminRequest, rejectAdminRequest, changeUserRole, removeAdmin, getAdminList, AVAILABLE_PERMISSIONS, updateAdminPermissions } from '../services/api';
+import { uploadFile, getAdminStats, getAdminUsers, updateUserRole, deleteUser, getAdminPosts, adminDeletePost, adminUpdatePost, getAdminComments, adminDeleteComment, adminUpdateComment, getPodcasts, getBooks, getAuthors, getVideos, getComments, getPosts, getPublishedBooks, getAdminAnalytics, getAdminAnalyticsSegments, getAdminInsights, getAdminActivity, adminExportData, adminSearchGlobal, adminBulkUsers, adminBulkPosts, adminBulkComments, muteUser, unmuteUser, unbanUser, resetUserWarnings, getNotifications, adminSendNotification, adminDeleteNotification, getAICorpus, getAdminVideoPlaylists, createVideoPlaylist, updateVideoPlaylist, deleteVideoPlaylist, adminGetNotes, adminCreateNote, adminUpdateNote, adminDeleteNote, adminGetAuthors, getAppUpdate, adminSaveAppUpdate, adminUploadApk, AppUpdateInfo, adminGetPurchaseRequests, adminUpdatePurchaseRequest, getCommunitySettings, updateCommunitySettings, getSupportMessages, markSupportMessageRead, deleteSupportMessage, adminPurgePosts, requestAdminAccess, getMyAdminRequest, getAdminRequests, approveAdminRequest, rejectAdminRequest, changeUserRole, removeAdmin, getAdminList, AVAILABLE_PERMISSIONS, updateAdminPermissions, ALL_ROLE_PERMISSIONS, getRolePermissions, updateRolePermissions } from '../services/api';
 import { fetchAparatVideoDetails, extractAparatId } from '../utils/aparatApi';
 import { GoogleGenAI } from "@google/genai";
 import { AreaTrendChart, StackedDailyBars, RankBars } from '../components/AdminCharts';
@@ -385,9 +385,12 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
     const [supportPage, setSupportPage] = useState(1);
     const [supportReadFilter, setSupportReadFilter] = useState<'' | 'true' | 'false'>('');
 
-    const [rolesTab, setRolesTab] = useState<'requests' | 'admins' | 'request' | 'allusers'>('request');
+    const [rolesTab, setRolesTab] = useState<'requests' | 'admins' | 'request' | 'allusers' | 'rolePerms'>('request');
     const [adminRequests, setAdminRequests] = useState<any[]>([]);
     const [adminList, setAdminList] = useState<any[]>([]);
+    const [rolePermissions, setRolePermissions] = useState<Record<string, string[]>>({});
+    const [editingRole, setEditingRole] = useState<string | null>(null);
+    const [editingRolePerms, setEditingRolePerms] = useState<string[]>([]);
     const [myRequest, setMyRequest] = useState<any>(null);
     const [requestMessage, setRequestMessage] = useState('');
     const [requestLoading, setRequestLoading] = useState(false);
@@ -528,6 +531,11 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
         const data = await getAdminUsers(page, 20, search);
         if (data) { setRolesUsers(data.users); setRolesUserTotal(data.total); setRolesUserPage(page); }
     }, [rolesSearch]);
+
+    const loadRolePermissions = useCallback(async () => {
+        const data = await getRolePermissions();
+        if (data) setRolePermissions(data);
+    }, []);
 
     const handleRequestAdmin = async () => {
         setRequestLoading(true);
@@ -803,7 +811,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
         if (activeTab === 'dashboard' || activeTab === 'analytics') loadInsights();
         if (activeTab === 'notifications') loadNotifications();
         if (activeTab === 'support') loadSupportMessages();
-        if (activeTab === 'roles') { loadAdminRequests(); loadAdminList(); loadMyRequest(); loadRolesUsers(); }
+        if (activeTab === 'roles') { loadAdminRequests(); loadAdminList(); loadMyRequest(); loadRolesUsers(); loadRolePermissions(); }
 if (activeTab === 'versions') loadVersions();
         if (activeTab === 'notes') loadAdminNotes(1);
         if (activeTab === 'authors') loadAdminAuthors();
@@ -2746,6 +2754,7 @@ const renderPostsPanel = () => (
                             ['requests', 'درخواست‌ها', 'fa-inbox', '#f59e0b'],
                             ['admins', 'ادمین‌ها', 'fa-user-shield', '#10b981'],
                             ['allusers', 'همه کاربران', 'fa-users', '#8b5cf6'],
+                            ['rolePerms', 'دسترسی نقش‌ها', 'fa-key', '#dc2626'],
                         ] as const).map(([id, label, icon, color]) => (
                             <button key={id} onClick={() => setRolesTab(id)}
                                 className={`px-3 py-1.5 rounded-lg text-[9px] font-black transition-all flex items-center gap-1.5 ${rolesTab === id ? 'text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
@@ -2964,6 +2973,76 @@ const renderPostsPanel = () => (
                                     <button onClick={() => loadRolesUsers(rolesUserPage + 1)} disabled={rolesUserPage * 20 >= rolesUserTotal} className="px-3 py-1 rounded-lg bg-gray-100 text-gray-500 text-[9px] font-black disabled:opacity-30">بعدی</button>
                                 </div>
                             )}
+                        </div>
+                    )}
+                    {rolesTab === 'rolePerms' && (
+                        <div className="space-y-3">
+                            {[
+                                { id: 'user', label: 'کاربر', icon: 'fa-user', color: '#6b7280', desc: 'دسترسی‌های پیش‌فرض کاربران عادی' },
+                                { id: 'author', label: 'نویسنده', icon: 'fa-pen-fancy', color: '#8b5cf6', desc: 'دسترسی‌های پیش‌فرض نویسندگان' },
+                                { id: 'admin', label: 'ادمین', icon: 'fa-user-shield', color: '#3b82f6', desc: 'دسترسی‌های پنل مدیریت ادمین‌ها' },
+                            ].map(role => (
+                                <div key={role.id} className="bg-gray-50 p-3 rounded-xl border">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white" style={{ backgroundColor: role.color }}>
+                                                <i className={`fas ${role.icon} text-[10px]`}></i>
+                                            </div>
+                                            <div>
+                                                <span className="font-bold text-[11px] block">{role.label}</span>
+                                                <span className="text-[8px] text-gray-400">{role.desc}</span>
+                                            </div>
+                                        </div>
+                                        <button onClick={() => { setEditingRole(editingRole === role.id ? null : role.id); setEditingRolePerms(rolePermissions[role.id] || []); }}
+                                            className={`px-3 py-1.5 rounded-lg text-[8px] font-bold transition-all ${editingRole === role.id ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}>
+                                            <i className={`fas ${editingRole === role.id ? 'fa-times' : 'fa-edit'} ml-1`}></i>
+                                            {editingRole === role.id ? 'لغو' : 'ویرایش'}
+                                        </button>
+                                    </div>
+                                    {editingRole !== role.id && (
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                            {(rolePermissions[role.id] || []).map((p: string) => (
+                                                <span key={p} className="px-1.5 py-0.5 bg-white border rounded text-[7px] font-bold text-gray-600">
+                                                    {ALL_ROLE_PERMISSIONS.find(x => x.id === p)?.label || p}
+                                                </span>
+                                            ))}
+                                            {(!rolePermissions[role.id] || rolePermissions[role.id].length === 0) && (
+                                                <span className="text-[8px] text-gray-400">بدون دسترسی</span>
+                                            )}
+                                        </div>
+                                    )}
+                                    {editingRole === role.id && (
+                                        <div className="mt-3 p-3 bg-white rounded-xl border space-y-3">
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {ALL_ROLE_PERMISSIONS.filter(p => p.category === role.id || (role.id === 'admin' && p.category === 'admin')).map(p => (
+                                                    <button key={p.id}
+                                                        onClick={() => {
+                                                            const newPerms = editingRolePerms.includes(p.id) ? editingRolePerms.filter(x => x !== p.id) : [...editingRolePerms, p.id];
+                                                            setEditingRolePerms(newPerms);
+                                                        }}
+                                                        className={`px-2.5 py-1 rounded-lg text-[8px] font-bold transition-all ${editingRolePerms.includes(p.id) ? 'bg-blue-500 text-white shadow-sm' : 'bg-gray-100 border text-gray-500 hover:bg-gray-200'}`}>
+                                                        {editingRolePerms.includes(p.id) && <i className="fas fa-check ml-0.5"></i>}
+                                                        {p.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button onClick={async () => {
+                                                    const newRolePerms = { ...rolePermissions, [role.id]: editingRolePerms };
+                                                    await updateRolePermissions(newRolePerms);
+                                                    setRolePermissions(newRolePerms);
+                                                    setEditingRole(null);
+                                                    setAdminToast({ type: 'success', message: `دسترسی‌های ${role.label} ذخیره شد` });
+                                                }}
+                                                    className="px-4 py-1.5 bg-green-500 text-white rounded-lg text-[9px] font-bold hover:bg-green-600">
+                                                    <i className="fas fa-save ml-1"></i> ذخیره
+                                                </button>
+                                                <button onClick={() => setEditingRole(null)} className="px-4 py-1.5 bg-gray-200 text-gray-600 rounded-lg text-[9px] font-bold hover:bg-gray-300">لغو</button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
                         </div>
                     )}
                 </div>
