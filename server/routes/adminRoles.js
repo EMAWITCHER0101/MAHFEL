@@ -188,13 +188,30 @@ router.get('/my-request', auth, requireAuth, async (req, res) => {
   try {
     const user = await User.findById(req.user._id).select('role adminRequests adminPermissions');
     const pending = user.adminRequests?.find(r => r.status === 'pending');
-    const lastReviewed = user.adminRequests?.filter(r => r.status !== 'pending').sort((a, b) => new Date(b.reviewedAt) - new Date(a.reviewedAt))[0];
+    const lastReviewed = user.adminRequests?.filter(r => r.status !== 'pending').sort((a, b) => new Date(b.reviewedAt) - new Date(a.requestedAt))[0];
     res.json({
       role: user.role,
       adminPermissions: user.adminPermissions || [],
       pendingRequest: pending || null,
       lastReviewedRequest: lastReviewed || null,
     });
+  } catch (error) {
+    res.status(500).json({ error: 'خطای سرور' });
+  }
+});
+
+// به‌روزرسانی دسترسی‌های یک ادمین (فقط superadmin)
+router.put('/users/:userId/permissions', auth, requireSuperAdmin, async (req, res) => {
+  try {
+    const { permissions = [] } = req.body;
+    const user = await User.findById(req.params.userId);
+    if (!user) return res.status(404).json({ error: 'کاربر یافت نشد' });
+    if (user.role === 'superadmin') {
+      return res.status(400).json({ error: 'امکان تغییر دسترسی مدیر سیستم وجود ندارد' });
+    }
+    user.adminPermissions = permissions;
+    await user.save();
+    res.json({ success: true, message: `دسترسی‌های ${user.name || user.phoneNumber} به‌روزرسانی شد`, permissions: user.adminPermissions });
   } catch (error) {
     res.status(500).json({ error: 'خطای سرور' });
   }

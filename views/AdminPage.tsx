@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import type { Podcast, Episode, Video, PublishedBook, Author, Book } from '../types';
 import { toPersianDigits } from '../utils/helpers';
-import { uploadFile, getAdminStats, getAdminUsers, updateUserRole, deleteUser, getAdminPosts, adminDeletePost, adminUpdatePost, getAdminComments, adminDeleteComment, adminUpdateComment, getPodcasts, getBooks, getAuthors, getVideos, getComments, getPosts, getPublishedBooks, getAdminAnalytics, getAdminAnalyticsSegments, getAdminInsights, getAdminActivity, adminExportData, adminSearchGlobal, adminBulkUsers, adminBulkPosts, adminBulkComments, muteUser, unmuteUser, unbanUser, resetUserWarnings, getNotifications, adminSendNotification, adminDeleteNotification, getAICorpus, getAdminVideoPlaylists, createVideoPlaylist, updateVideoPlaylist, deleteVideoPlaylist, adminGetNotes, adminCreateNote, adminUpdateNote, adminDeleteNote, adminGetAuthors, getAppUpdate, adminSaveAppUpdate, adminUploadApk, AppUpdateInfo, adminGetPurchaseRequests, adminUpdatePurchaseRequest, getCommunitySettings, updateCommunitySettings, getSupportMessages, markSupportMessageRead, deleteSupportMessage, adminPurgePosts, requestAdminAccess, getMyAdminRequest, getAdminRequests, approveAdminRequest, rejectAdminRequest, changeUserRole, removeAdmin, getAdminList, AVAILABLE_PERMISSIONS } from '../services/api';
+import { uploadFile, getAdminStats, getAdminUsers, updateUserRole, deleteUser, getAdminPosts, adminDeletePost, adminUpdatePost, getAdminComments, adminDeleteComment, adminUpdateComment, getPodcasts, getBooks, getAuthors, getVideos, getComments, getPosts, getPublishedBooks, getAdminAnalytics, getAdminAnalyticsSegments, getAdminInsights, getAdminActivity, adminExportData, adminSearchGlobal, adminBulkUsers, adminBulkPosts, adminBulkComments, muteUser, unmuteUser, unbanUser, resetUserWarnings, getNotifications, adminSendNotification, adminDeleteNotification, getAICorpus, getAdminVideoPlaylists, createVideoPlaylist, updateVideoPlaylist, deleteVideoPlaylist, adminGetNotes, adminCreateNote, adminUpdateNote, adminDeleteNote, adminGetAuthors, getAppUpdate, adminSaveAppUpdate, adminUploadApk, AppUpdateInfo, adminGetPurchaseRequests, adminUpdatePurchaseRequest, getCommunitySettings, updateCommunitySettings, getSupportMessages, markSupportMessageRead, deleteSupportMessage, adminPurgePosts, requestAdminAccess, getMyAdminRequest, getAdminRequests, approveAdminRequest, rejectAdminRequest, changeUserRole, removeAdmin, getAdminList, AVAILABLE_PERMISSIONS, updateAdminPermissions } from '../services/api';
 import { fetchAparatVideoDetails, extractAparatId } from '../utils/aparatApi';
 import { GoogleGenAI } from "@google/genai";
 import { AreaTrendChart, StackedDailyBars, RankBars } from '../components/AdminCharts';
@@ -397,6 +397,10 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
     const [rolesUserTotal, setRolesUserTotal] = useState(0);
     const [approvingRequest, setApprovingRequest] = useState<string | null>(null);
     const [approvePerms, setApprovePerms] = useState<string[]>([]);
+    const [myRole, setMyRole] = useState<string>('admin');
+    const [myPerms, setMyPerms] = useState<string[]>([]);
+    const [editingPermsUser, setEditingPermsUser] = useState<any>(null);
+    const [editingPerms, setEditingPerms] = useState<string[]>([]);
 
     const [versionForm, setVersionForm] = useState<AppUpdateInfo>({
         apkVersion: '', apkUrl: '', apkMessage: '',
@@ -778,6 +782,15 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
         if (results) setGlobalSearchResults(results);
         setIsSearching(false);
     }, [globalSearch]);
+
+    useEffect(() => {
+        (async () => {
+            try {
+                const req = await getMyAdminRequest();
+                if (req) { setMyRole(req.role); setMyPerms(req.adminPermissions || []); }
+            } catch {}
+        })();
+    }, []);
 
     useEffect(() => {
         if (activeTab === 'dashboard') loadStats();
@@ -2397,7 +2410,35 @@ const renderPostsPanel = () => (
                     <div className="space-y-3">
                         {purchaseRequests.map(r => {
                             const pending = r.status === 'pending';
-                            return (
+    const TAB_PERMISSIONS: Record<AdminTab, string | null> = {
+        dashboard: null,
+        users: 'users',
+        posts: 'posts',
+        comments: 'comments',
+        analytics: 'analytics',
+        sowt: 'podcasts',
+        library: 'library',
+        nashr: 'library',
+        notes: 'notes',
+        authors: 'authors',
+        videos: 'videos',
+        notifications: 'notifications',
+        versions: 'settings',
+        purchases: 'purchases',
+        sales: 'sales',
+        support: 'support',
+        roles: null,
+    };
+
+    const isSuperAdmin = myRole === 'superadmin';
+    const visibleTabs = isSuperAdmin
+        ? tabs
+        : tabs.filter(tab => {
+            const perm = TAB_PERMISSIONS[tab.id];
+            return !perm || myPerms.includes(perm);
+        });
+
+    return (
                                 <div key={r._id} className="rounded-2xl p-4 border transition-all" style={{ background: pending ? 'color-mix(in srgb, #f59e0b 4%, white)' : 'white', borderColor: pending ? 'color-mix(in srgb, #f59e0b 30%, transparent)' : 'var(--border)' }}>
                                     {/* header */}
                                     <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
@@ -2854,13 +2895,42 @@ const renderPostsPanel = () => (
                                                     <option value="author">نویسنده</option>
                                                     <option value="admin">ادمین</option>
                                                 </select>
+                                                <button onClick={() => { setEditingPermsUser(editingPermsUser?._id === a._id ? null : a); setEditingPerms(a.adminPermissions || []); }}
+                                                    className={`px-2 py-1.5 rounded-lg text-[8px] font-bold transition-all ${editingPermsUser?._id === a._id ? 'bg-blue-500 text-white' : 'bg-blue-100 text-blue-600 hover:bg-blue-200'}`}>
+                                                    <i className="fas fa-key"></i>
+                                                </button>
                                                 <button onClick={() => handleRemoveAdmin(a._id)} className="px-2 py-1.5 rounded-lg text-[8px] font-bold bg-red-100 text-red-600 hover:bg-red-200">
                                                     <i className="fas fa-trash-alt"></i>
                                                 </button>
                                             </div>
                                         )}
                                     </div>
-                                    {a.adminPermissions?.length > 0 && (
+                                    {editingPermsUser?._id === a._id && (
+                                        <div className="mt-3 p-3 bg-blue-50 rounded-xl border border-blue-200 space-y-2">
+                                            <p className="text-[9px] font-bold text-blue-700">دسترسی‌های {a.name || a.phoneNumber}:</p>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {AVAILABLE_PERMISSIONS.map(p => (
+                                                    <button key={p.id}
+                                                        onClick={() => {
+                                                            const newPerms = editingPerms.includes(p.id) ? editingPerms.filter(x => x !== p.id) : [...editingPerms, p.id];
+                                                            setEditingPerms(newPerms);
+                                                        }}
+                                                        className={`px-2.5 py-1 rounded-lg text-[8px] font-bold transition-all ${editingPerms.includes(p.id) ? 'bg-blue-500 text-white shadow-sm' : 'bg-white border text-gray-500 hover:bg-gray-50'}`}>
+                                                        {editingPerms.includes(p.id) && <i className="fas fa-check ml-0.5"></i>}
+                                                        {p.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button onClick={async () => { await updateAdminPermissions(a._id, editingPerms); setAdminToast({ type: 'success', message: 'دسترسی‌ها ذخیره شد' }); loadAdminList(); setEditingPermsUser(null); }}
+                                                    className="px-3 py-1.5 bg-green-500 text-white rounded-lg text-[8px] font-bold hover:bg-green-600">
+                                                    <i className="fas fa-save ml-1"></i> ذخیره
+                                                </button>
+                                                <button onClick={() => setEditingPermsUser(null)} className="px-3 py-1.5 bg-gray-200 text-gray-600 rounded-lg text-[8px] font-bold hover:bg-gray-300">لغو</button>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {a.adminPermissions?.length > 0 && editingPermsUser?._id !== a._id && (
                                         <div className="flex flex-wrap gap-1 mt-2">
                                             {a.adminPermissions.map((p: string) => (
                                                 <span key={p} className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-[7px] font-bold">{AVAILABLE_PERMISSIONS.find(x => x.id === p)?.label || p}</span>
@@ -2988,7 +3058,7 @@ const renderPostsPanel = () => (
                 </header>
 
                 <div className={`flex gap-1 bg-gray-50 border-b overflow-x-auto no-scrollbar flex-shrink-0 transition-all duration-300 ${isEditing ? 'h-0 opacity-0 p-0' : 'p-2 sm:p-3 opacity-100'}`}>
-                    {tabs.map(tab => (
+                    {visibleTabs.map(tab => (
                         <button key={tab.id} onClick={() => setActiveTab(tab.id)}
                             data-guide={`admin-${tab.id}`}
                             className={`flex flex-col items-center justify-center p-2 rounded-xl sm:rounded-[1.25rem] transition-all border-2 flex-shrink-0 min-w-[60px] sm:w-20 ${activeTab === tab.id ? 'bg-white shadow-lg scale-105 active:scale-95' : 'bg-transparent border-transparent text-gray-300 grayscale opacity-60'}`}

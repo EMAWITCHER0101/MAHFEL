@@ -1003,3 +1003,14 @@ export const removeAdmin = async (userId: string): Promise<any> => {
 export const getAdminList = async (): Promise<any[]> => {
   return apiFetch('/admin-roles/list') || [];
 };
+
+export const updateAdminPermissions = async (userId: string, permissions: string[]): Promise<any> => {
+  return apiFetch(`/admin-roles/users/${userId}/permissions`, {
+    method: 'PUT',
+    body: JSON.stringify({ permissions }),
+  });
+};
+
+export const getMyPermissions = async (): Promise<{ role: string; permissions: string[] } | null> => {
+  return apiFetch('/admin-roles/my-request');
+};
