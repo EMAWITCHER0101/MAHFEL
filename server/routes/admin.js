@@ -1043,6 +1043,26 @@ router.post('/users/:userId/unban', async (req, res) => {
   }
 });
 
+router.post('/users/:userId/ban', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: 'کاربر یافت نشد' });
+    if (user.role === 'superadmin') return res.status(400).json({ error: 'امکان بن مدیر سیستم وجود ندارد' });
+
+    user.banned = true;
+    await user.save();
+
+    const deleted = await deleteUserContent(userId);
+
+    broadcast('data-changed', { type: 'users', action: 'update', item: { _id: userId, banned: true } });
+
+    res.json({ success: true, banned: true, deleted });
+  } catch (error) {
+    res.status(500).json({ error: 'خطای سرور' });
+  }
+});
+
 router.post('/users/:userId/reset-warnings', async (req, res) => {
   try {
     const { userId } = req.params;

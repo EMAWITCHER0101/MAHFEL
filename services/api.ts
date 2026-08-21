@@ -654,6 +654,10 @@ export const unbanUser = async (userId: string): Promise<any> => {
   return apiFetch(`/admin/users/${userId}/unban`, { method: 'POST' });
 };
 
+export const banUser = async (userId: string): Promise<any> => {
+  return apiFetch(`/admin/users/${userId}/ban`, { method: 'POST' });
+};
+
 export const resetUserWarnings = async (userId: string): Promise<any> => {
   return apiFetch(`/admin/users/${userId}/reset-warnings`, { method: 'POST' });
 };

@@ -4,7 +4,7 @@ import type { Podcast, Episode, Video, PublishedBook, Author, Book } from '../ty
 import { toPersianDigits } from '../utils/helpers';
 import PermissionToast from '../components/PermissionToast';
 import PermissionLocked from '../components/PermissionLocked';
-import { uploadFile, getAdminStats, getAdminUsers, updateUserRole, deleteUser, getAdminPosts, adminDeletePost, adminUpdatePost, getAdminComments, adminDeleteComment, adminUpdateComment, getPodcasts, getBooks, getAuthors, getVideos, getComments, getPosts, getPublishedBooks, getAdminAnalytics, getAdminAnalyticsSegments, getAdminInsights, getAdminActivity, adminExportData, adminSearchGlobal, adminBulkUsers, adminBulkPosts, adminBulkComments, muteUser, unmuteUser, unbanUser, resetUserWarnings, getNotifications, adminSendNotification, adminDeleteNotification, getAICorpus, getAdminVideoPlaylists, createVideoPlaylist, updateVideoPlaylist, deleteVideoPlaylist, adminGetNotes, adminCreateNote, adminUpdateNote, adminDeleteNote, adminGetAuthors, getAppUpdate, adminSaveAppUpdate, adminUploadApk, AppUpdateInfo, adminGetPurchaseRequests, adminUpdatePurchaseRequest, getCommunitySettings, updateCommunitySettings, getSupportMessages, markSupportMessageRead, deleteSupportMessage, adminPurgePosts, requestAdminAccess, getMyAdminRequest, getAdminRequests, approveAdminRequest, rejectAdminRequest, changeUserRole, removeAdmin, getAdminList, AVAILABLE_PERMISSIONS, updateAdminPermissions, ALL_ROLE_PERMISSIONS, getRolePermissions, updateRolePermissions, resetUserPermissions } from '../services/api';
+import { uploadFile, getAdminStats, getAdminUsers, updateUserRole, deleteUser, getAdminPosts, adminDeletePost, adminUpdatePost, getAdminComments, adminDeleteComment, adminUpdateComment, getPodcasts, getBooks, getAuthors, getVideos, getComments, getPosts, getPublishedBooks, getAdminAnalytics, getAdminAnalyticsSegments, getAdminInsights, getAdminActivity, adminExportData, adminSearchGlobal, adminBulkUsers, adminBulkPosts, adminBulkComments, muteUser, unmuteUser, unbanUser, banUser, resetUserWarnings, getNotifications, adminSendNotification, adminDeleteNotification, getAICorpus, getAdminVideoPlaylists, createVideoPlaylist, updateVideoPlaylist, deleteVideoPlaylist, adminGetNotes, adminCreateNote, adminUpdateNote, adminDeleteNote, adminGetAuthors, getAppUpdate, adminSaveAppUpdate, adminUploadApk, AppUpdateInfo, adminGetPurchaseRequests, adminUpdatePurchaseRequest, getCommunitySettings, updateCommunitySettings, getSupportMessages, markSupportMessageRead, deleteSupportMessage, adminPurgePosts, requestAdminAccess, getMyAdminRequest, getAdminRequests, approveAdminRequest, rejectAdminRequest, changeUserRole, removeAdmin, getAdminList, AVAILABLE_PERMISSIONS, updateAdminPermissions, ALL_ROLE_PERMISSIONS, getRolePermissions, updateRolePermissions, resetUserPermissions } from '../services/api';
 import { fetchAparatVideoDetails, extractAparatId } from '../utils/aparatApi';
 import { GoogleGenAI } from "@google/genai";
 import { AreaTrendChart, StackedDailyBars, RankBars } from '../components/AdminCharts';
@@ -1192,10 +1192,20 @@ if (activeTab === 'versions') loadVersions();
                                 <option value="admin">ادمین</option>
                             </select>
                             {u.banned ? (
-                                <button onClick={async () => { const r = await unbanUser(u._id); if (r) setUsers(prev => prev.map(x => x._id === u._id ? { ...x, banned: false, warnings: 0 } : x)); }} className="px-2 py-1.5 bg-green-50 text-green-500 rounded-xl text-[9px] font-black hover:bg-green-100 transition-all" title="رفع بن">✅ رفع بن</button>
-                            ) : u.warnings > 0 ? (
-                                <button onClick={async () => { const r = await resetUserWarnings(u._id); if (r) setUsers(prev => prev.map(x => x._id === u._id ? { ...x, warnings: 0 } : x)); }} className="px-2 py-1.5 bg-amber-50 text-amber-500 rounded-xl text-[9px] font-black hover:bg-amber-100 transition-all" title="پاک کردن اخطارها">⚠️ {toPersianDigits(u.warnings)}</button>
-                            ) : null}
+                                <button onClick={() => {
+                                    showConfirmToast(`آیا از رفع بن ${u.name || u.phoneNumber} مطمئن هستید؟`, async () => {
+                                        const r = await unbanUser(u._id);
+                                        if (r) { setUsers(prev => prev.map(x => x._id === u._id ? { ...x, banned: false, warnings: 0 } : x)); setPermToast({ message: `${u.name || u.phoneNumber} رفع بن شد`, type: 'enabled' }); }
+                                    });
+                                }} className="px-2 py-1.5 bg-green-50 text-green-500 rounded-xl text-[9px] font-black hover:bg-green-100 transition-all" title="رفع بن">✅ رفع بن</button>
+                            ) : (
+                                <button onClick={() => {
+                                    showConfirmToast(`بن کردن ${u.name || u.phoneNumber}؟ تمام پیام‌ها و محتوا حذف خواهد شد!`, async () => {
+                                        const r = await banUser(u._id);
+                                        if (r) { setUsers(prev => prev.map(x => x._id === u._id ? { ...x, banned: true } : x)); setPermToast({ message: `${u.name || u.phoneNumber} بن شد و تمام محتوا حذف شد`, type: 'disabled' }); }
+                                    }, 'danger');
+                                }} className="px-2 py-1.5 bg-red-50 text-red-500 rounded-xl text-[9px] font-black hover:bg-red-100 transition-all" title="بن کردن">🚫 بن</button>
+                            )}
                             {u.muted ? (
                                 <button onClick={async () => { const r = await unmuteUser(u._id); if (r) { setUsers(prev => prev.map(x => x._id === u._id ? { ...x, muted: false, mutedUntil: null } : x)); showAdminToast(`${u.name} رفع سکوت شد`, 'success'); } }} className="px-2 py-1.5 bg-blue-50 text-blue-500 rounded-xl text-[9px] font-black hover:bg-blue-100 transition-all" title="رفع سکوت">🔊 رفع سکوت</button>
                             ) : (
