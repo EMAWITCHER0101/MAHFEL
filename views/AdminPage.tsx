@@ -546,38 +546,44 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
         setRequestLoading(true);
         try {
             const res = await requestAdminAccess(requestMessage);
-            if (res) { setAdminToast({ type: 'success', message: 'درخواست شما ثبت شد' }); setRequestMessage(''); loadMyRequest(); }
-        } catch { setAdminToast({ type: 'error', message: 'خطا در ثبت درخواست' }); }
+            if (res) { setPermToast({ message: 'درخواست شما ثبت شد', type: 'enabled' }); setRequestMessage(''); loadMyRequest(); }
+        } catch { setPermToast({ message: 'خطا در ثبت درخواست', type: 'disabled' }); }
         setRequestLoading(false);
     };
 
     const handleApproveRequest = async (requestId: string, role: string, permissions: string[]) => {
         try {
             const res = await approveAdminRequest(requestId, role, permissions);
-            if (res) { setAdminToast({ type: 'success', message: res.message || 'تأیید شد' }); loadAdminRequests(); loadAdminList(); loadRolesUsers(); }
-        } catch { setAdminToast({ type: 'error', message: 'خطا در تأیید' }); }
+            if (res) { setPermToast({ message: res.message || 'درخواست تأیید شد', type: 'enabled' }); loadAdminRequests(); loadAdminList(); loadRolesUsers(); }
+        } catch { setPermToast({ message: 'خطا در تأیید درخواست', type: 'disabled' }); }
     };
 
     const handleRejectRequest = async (requestId: string) => {
-        try {
-            const res = await rejectAdminRequest(requestId);
-            if (res) { setAdminToast({ type: 'success', message: 'رد شد' }); loadAdminRequests(); }
-        } catch { setAdminToast({ type: 'error', message: 'خطا' }); }
+        showConfirmToast('آیا از رد این درخواست مطمئن هستید؟', async () => {
+            try {
+                const res = await rejectAdminRequest(requestId);
+                if (res) { setPermToast({ message: 'درخواست رد شد', type: 'disabled' }); loadAdminRequests(); }
+            } catch { setPermToast({ message: 'خطا در رد درخواست', type: 'disabled' }); }
+        }, 'warning');
     };
 
-    const handleChangeRole = async (userId: string, role: string, permissions: string[] = []) => {
-        try {
-            const res = await changeUserRole(userId, role, permissions);
-            if (res) { setAdminToast({ type: 'success', message: res.message || 'تغییر یافت' }); loadAdminList(); loadRolesUsers(); }
-        } catch { setAdminToast({ type: 'error', message: 'خطا در تغییر نقش' }); }
+    const handleChangeRole = async (userId: string, newRole: string, permissions: string[] = []) => {
+        const roleNames: Record<string, string> = { user: 'کاربر', author: 'نویسنده', admin: 'ادمین' };
+        showConfirmToast(`آیا از تغییر نقش به «${roleNames[newRole] || newRole}» مطمئن هستید؟`, async () => {
+            try {
+                const res = await changeUserRole(userId, newRole, permissions);
+                if (res) { setPermToast({ message: res.message || `نقش به ${roleNames[newRole]} تغییر یافت`, type: 'enabled' }); loadAdminList(); loadRolesUsers(); }
+            } catch { setPermToast({ message: 'خطا در تغییر نقش', type: 'disabled' }); }
+        });
     };
 
     const handleRemoveAdmin = async (userId: string) => {
-        if (!confirm('آیا از حذف ادمین مطمئن هستید؟')) return;
-        try {
-            const res = await removeAdmin(userId);
-            if (res) { setAdminToast({ type: 'success', message: res.message || 'حذف شد' }); loadAdminList(); loadRolesUsers(); }
-        } catch { setAdminToast({ type: 'error', message: 'خطا در حذف' }); }
+        showConfirmToast('آیا از حذف ادمین مطمئن هستید؟ این کار قابل بازگشت نیست.', async () => {
+            try {
+                const res = await removeAdmin(userId);
+                if (res) { setPermToast({ message: res.message || 'ادمین حذف شد', type: 'disabled' }); loadAdminList(); loadRolesUsers(); }
+            } catch { setPermToast({ message: 'خطا در حذف ادمین', type: 'disabled' }); }
+        });
     };
 
     const [adminNotes, setAdminNotes] = useState<any[]>([]);
@@ -2918,7 +2924,7 @@ const renderPostsPanel = () => (
                                                 ))}
                                             </div>
                                             <div className="flex gap-2">
-                                                <button onClick={async () => { await updateAdminPermissions(a._id, editingPerms); setAdminToast({ type: 'success', message: 'دسترسی‌ها ذخیره شد' }); loadAdminList(); setEditingPermsUser(null); }}
+                                                <button onClick={async () => { await updateAdminPermissions(a._id, editingPerms); loadAdminList(); setEditingPermsUser(null); setPermToast({ message: `دسترسی‌های ${a.name || a.phoneNumber} ذخیره شد`, type: 'enabled' }); }}
                                                     className="px-3 py-1.5 bg-green-500 text-white rounded-lg text-[8px] font-bold hover:bg-green-600">
                                                     <i className="fas fa-save ml-1"></i> ذخیره
                                                 </button>
@@ -3318,17 +3324,26 @@ const renderPostsPanel = () => (
             </div>
             {pickerConfig && <AudioPickerModal podcasts={localData.podcasts} onSelect={pickerConfig.onSelect} onClose={()=>setPickerConfig(null)} />}
             {confirmToast && (
-                <div className="fixed bottom-6 right-6 z-[9999] animate-slideInUp">
-                    <div className={`max-w-xs rounded-2xl shadow-2xl p-4 ${confirmToast.type === 'danger' ? 'bg-red-500' : 'bg-amber-500'} text-white`}>
-                        <div className="flex items-center gap-3 mb-3">
-                            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
-                                <i className={`fas ${confirmToast.type === 'danger' ? 'fa-exclamation-triangle' : 'fa-question'} text-sm`}></i>
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fadeIn" onClick={() => setConfirmToast(null)}>
+                    <div className={`relative max-w-sm w-[90vw] rounded-3xl shadow-2xl overflow-hidden animate-slideUp ${confirmToast.type === 'danger' ? 'border-red-200' : 'border-amber-200'}`} style={{ border: '1px solid' }} onClick={e => e.stopPropagation()}>
+                        {/* Accent bar */}
+                        <div className={`h-1.5 w-full ${confirmToast.type === 'danger' ? 'bg-gradient-to-r from-red-400 via-rose-400 to-pink-400' : 'bg-gradient-to-r from-amber-400 via-orange-400 to-yellow-400'}`} />
+                        <div className="bg-white p-6">
+                            {/* Icon */}
+                            <div className="flex justify-center mb-4">
+                                <div className={`relative w-16 h-16 rounded-full flex items-center justify-center ${confirmToast.type === 'danger' ? 'bg-red-50' : 'bg-amber-50'}`}>
+                                    <div className={`absolute inset-0 rounded-full animate-ping opacity-20 ${confirmToast.type === 'danger' ? 'bg-red-400' : 'bg-amber-400'}`} />
+                                    <i className={`fas ${confirmToast.type === 'danger' ? 'fa-trash-alt text-red-500' : 'fa-exclamation-triangle text-amber-500'} text-xl`}></i>
+                                </div>
                             </div>
-                            <p className="text-[11px] font-bold leading-relaxed">{confirmToast.message}</p>
-                        </div>
-                        <div className="flex gap-2">
-                            <button onClick={() => setConfirmToast(null)} className="flex-1 py-2 bg-white/20 rounded-xl text-[10px] font-black hover:bg-white/30 transition-all active:scale-95">انصراف</button>
-                            <button onClick={() => { confirmToast.onConfirm(); setConfirmToast(null); }} className="flex-1 py-2 bg-white rounded-xl text-[10px] font-black transition-all active:scale-95" style={{ color: confirmToast.type === 'danger' ? '#dc2626' : '#d97706' }}>تایید</button>
+                            {/* Message */}
+                            <p className="text-center text-sm font-black text-gray-800 mb-2">{confirmToast.type === 'danger' ? 'تأیید حذف' : 'تأیید عملیات'}</p>
+                            <p className="text-center text-[11px] text-gray-500 leading-relaxed mb-6">{confirmToast.message}</p>
+                            {/* Buttons */}
+                            <div className="flex gap-3">
+                                <button onClick={() => setConfirmToast(null)} className="flex-1 py-3 rounded-2xl text-[11px] font-black bg-gray-100 text-gray-500 hover:bg-gray-200 transition-all active:scale-95">انصراف</button>
+                                <button onClick={() => { confirmToast.onConfirm(); setConfirmToast(null); }} className={`flex-1 py-3 rounded-2xl text-[11px] font-black text-white transition-all active:scale-95 shadow-lg ${confirmToast.type === 'danger' ? 'bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600' : 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600'}`}>تایید</button>
+                            </div>
                         </div>
                     </div>
                 </div>
