@@ -1,15 +1,16 @@
-// دیپلوی سریع فقط فرانت (آپلود تار + اکسترکت + ریاستارت)
 const {Client} = require('C:\\Users\\EMAD\\AppData\\Roaming\\npm\\node_modules\\ssh2');
 const fs = require('fs');
 const path = require('path');
 const dotenv = require('dotenv');
 dotenv.config({ path: path.join(__dirname, '.env.deploy') });
 
+const REMOTE = '/opt/soha';
+
 function ssh(label, cmd) {
   return new Promise((resolve, reject) => {
     console.log('>>> ' + label);
     const c = new Client();
-    const timer = setTimeout(() => { c.end(); reject(new Error('TIMEOUT: ' + label)); }, 120000);
+    const timer = setTimeout(() => { c.end(); reject(new Error('TIMEOUT: ' + label)); }, 60000);
     c.on('ready', () => {
       c.exec(cmd, {}, (e, s) => {
         if (e) { clearTimeout(timer); c.end(); return reject(e); }
@@ -45,20 +46,20 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 (async () => {
   try {
-    console.log('=== QUICK FRONTEND DEPLOY ===');
-    await ssh('stop frontend', 'systemctl stop soha-frontend 2>/dev/null || true');
-    await sleep(1500);
-    await uploadFile('E:\\temp\\soha-fe.tar.gz', '/tmp/soha-fe.tar.gz');
-    await uploadFile('E:\\temp\\soha-static.tar.gz', '/tmp/soha-static.tar.gz');
-    await ssh('extract fe', 'rm -rf /opt/soha/.next/standalone && mkdir -p /opt/soha/.next/standalone && tar -xzf /tmp/soha-fe.tar.gz -C /opt/soha/.next/standalone');
-    await sleep(1500);
-    await ssh('extract static', 'cd /opt/soha/.next/standalone/.next && rm -rf static && tar -xzf /tmp/soha-static.tar.gz');
-    await sleep(1500);
-    await ssh('copy public', 'rm -rf /opt/soha/.next/standalone/public && cp -r /opt/soha/public /opt/soha/.next/standalone/public 2>/dev/null || true');
-    await ssh('start frontend', 'systemctl start soha-frontend');
-    await sleep(6000);
-    console.log('status:', (await ssh('status', 'systemctl is-active soha-frontend')).trim());
-    console.log('http:', (await ssh('http', 'curl -s -o /dev/null -w "%{http_code}" http://localhost:3000')).trim());
+    console.log('=== DEPLOY ALL BACKEND FILES ===');
+
+    await uploadFile(path.join(__dirname, '..', 'server', 'models', 'User.js'), REMOTE + '/server/models/User.js');
+    await uploadFile(path.join(__dirname, '..', 'server', 'middleware', 'auth.js'), REMOTE + '/server/middleware/auth.js');
+    await uploadFile(path.join(__dirname, '..', 'server', 'routes', 'admin.js'), REMOTE + '/server/routes/admin.js');
+    await uploadFile(path.join(__dirname, '..', 'server', 'routes', 'adminRoles.js'), REMOTE + '/server/routes/adminRoles.js');
+    await uploadFile(path.join(__dirname, '..', 'server', 'server.js'), REMOTE + '/server/server.js');
+
+    await sleep(1000);
+    await ssh('restart backend', 'systemctl restart soha-backend');
+    await sleep(3000);
+
+    console.log('status:', (await ssh('status', 'systemctl is-active soha-backend')).trim());
+    console.log('health:', (await ssh('health', 'curl -s http://localhost:5000/api/health')).trim());
     console.log('\n=== COMPLETE ===');
   } catch (e) {
     console.error('\nFAILED:', e.message);

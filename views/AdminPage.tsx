@@ -280,7 +280,7 @@ const StatCard = ({ icon, label, value, color }: { icon: string; label: string; 
     </div>
 );
 
-type AdminTab = 'dashboard' | 'users' | 'posts' | 'comments' | 'sowt' | 'videos' | 'library' | 'nashr' | 'notes' | 'authors' | 'analytics' | 'notifications' | 'versions' | 'purchases' | 'sales' | 'support';
+type AdminTab = 'dashboard' | 'users' | 'posts' | 'comments' | 'sowt' | 'videos' | 'library' | 'nashr' | 'notes' | 'authors' | 'analytics' | 'notifications' | 'versions' | 'purchases' | 'sales' | 'support' | 'roles';
 
 const MiniBarChart = ({ data, height = 56, color = '#8b5cf6' }: { data: { label: string; value: number }[]; height?: number; color?: string }) => {
   const max = Math.max(1, ...data.map(d => d.value));
@@ -384,6 +384,19 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
     const [supportTotal, setSupportTotal] = useState(0);
     const [supportPage, setSupportPage] = useState(1);
     const [supportReadFilter, setSupportReadFilter] = useState<'' | 'true' | 'false'>('');
+
+    const [rolesTab, setRolesTab] = useState<'requests' | 'admins' | 'request' | 'allusers'>('request');
+    const [adminRequests, setAdminRequests] = useState<any[]>([]);
+    const [adminList, setAdminList] = useState<any[]>([]);
+    const [myRequest, setMyRequest] = useState<any>(null);
+    const [requestMessage, setRequestMessage] = useState('');
+    const [requestLoading, setRequestLoading] = useState(false);
+    const [rolesSearch, setRolesSearch] = useState('');
+    const [rolesUsers, setRolesUsers] = useState<any[]>([]);
+    const [rolesUserPage, setRolesUserPage] = useState(1);
+    const [rolesUserTotal, setRolesUserTotal] = useState(0);
+    const [approvingRequest, setApprovingRequest] = useState<string | null>(null);
+    const [approvePerms, setApprovePerms] = useState<string[]>([]);
 
     const [versionForm, setVersionForm] = useState<AppUpdateInfo>({
         apkVersion: '', apkUrl: '', apkMessage: '',
@@ -491,6 +504,64 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
             setSupportPage(data.page);
         }
     }, [supportPage, supportReadFilter]);
+
+    const loadAdminRequests = useCallback(async (status = 'pending') => {
+        const data = await getAdminRequests(status);
+        if (data) setAdminRequests(data);
+    }, []);
+
+    const loadAdminList = useCallback(async () => {
+        const data = await getAdminList();
+        if (data) setAdminList(data);
+    }, []);
+
+    const loadMyRequest = useCallback(async () => {
+        const data = await getMyAdminRequest();
+        if (data) setMyRequest(data);
+    }, []);
+
+    const loadRolesUsers = useCallback(async (page = 1, search = rolesSearch) => {
+        const data = await getAdminUsers(page, 20, search);
+        if (data) { setRolesUsers(data.users); setRolesUserTotal(data.total); setRolesUserPage(page); }
+    }, [rolesSearch]);
+
+    const handleRequestAdmin = async () => {
+        setRequestLoading(true);
+        try {
+            const res = await requestAdminAccess(requestMessage);
+            if (res) { setAdminToast({ type: 'success', message: 'درخواست شما ثبت شد' }); setRequestMessage(''); loadMyRequest(); }
+        } catch { setAdminToast({ type: 'error', message: 'خطا در ثبت درخواست' }); }
+        setRequestLoading(false);
+    };
+
+    const handleApproveRequest = async (requestId: string, role: string, permissions: string[]) => {
+        try {
+            const res = await approveAdminRequest(requestId, role, permissions);
+            if (res) { setAdminToast({ type: 'success', message: res.message || 'تأیید شد' }); loadAdminRequests(); loadAdminList(); loadRolesUsers(); }
+        } catch { setAdminToast({ type: 'error', message: 'خطا در تأیید' }); }
+    };
+
+    const handleRejectRequest = async (requestId: string) => {
+        try {
+            const res = await rejectAdminRequest(requestId);
+            if (res) { setAdminToast({ type: 'success', message: 'رد شد' }); loadAdminRequests(); }
+        } catch { setAdminToast({ type: 'error', message: 'خطا' }); }
+    };
+
+    const handleChangeRole = async (userId: string, role: string, permissions: string[] = []) => {
+        try {
+            const res = await changeUserRole(userId, role, permissions);
+            if (res) { setAdminToast({ type: 'success', message: res.message || 'تغییر یافت' }); loadAdminList(); loadRolesUsers(); }
+        } catch { setAdminToast({ type: 'error', message: 'خطا در تغییر نقش' }); }
+    };
+
+    const handleRemoveAdmin = async (userId: string) => {
+        if (!confirm('آیا از حذف ادمین مطمئن هستید؟')) return;
+        try {
+            const res = await removeAdmin(userId);
+            if (res) { setAdminToast({ type: 'success', message: res.message || 'حذف شد' }); loadAdminList(); loadRolesUsers(); }
+        } catch { setAdminToast({ type: 'error', message: 'خطا در حذف' }); }
+    };
 
     const [adminNotes, setAdminNotes] = useState<any[]>([]);
     const [adminNotesPage, setAdminNotesPage] = useState(1);
@@ -719,10 +790,11 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
         if (activeTab === 'dashboard' || activeTab === 'analytics') loadInsights();
         if (activeTab === 'notifications') loadNotifications();
         if (activeTab === 'support') loadSupportMessages();
+        if (activeTab === 'roles') { loadAdminRequests(); loadAdminList(); loadMyRequest(); loadRolesUsers(); }
 if (activeTab === 'versions') loadVersions();
         if (activeTab === 'notes') loadAdminNotes(1);
         if (activeTab === 'authors') loadAdminAuthors();
-    }, [activeTab, loadStats, loadUsers, loadPosts, loadComments, loadAnalytics, loadActivity, loadInsights, loadAICorpus, loadNotifications, loadAdminNotes, loadAdminAuthors, loadVersions]);
+    }, [activeTab, loadStats, loadUsers, loadPosts, loadComments, loadAnalytics, loadActivity, loadInsights, loadAICorpus, loadNotifications, loadAdminNotes, loadAdminAuthors, loadVersions, loadAdminRequests, loadAdminList, loadMyRequest, loadRolesUsers]);
 
     // رفرش لحظه‌ای لیست نوتیفیکیشن‌ها وقتی پیام/پست/ریپلای حذف می‌شود یا نوتیفیکیشن جدید می‌رسد
     useEffect(() => {
@@ -2651,6 +2723,211 @@ const renderPostsPanel = () => (
             </div>
         </div>
     );
+    const renderRolesPanel = () => {
+        return (
+            <div className="p-4 sm:p-6 flex flex-col gap-4">
+                <div className="bg-white p-4 sm:p-5 rounded-2xl border shadow-sm">
+                    <div className="flex gap-1.5 mb-4 flex-wrap">
+                        {([
+                            ['request', 'درخواست ادمین شدن', 'fa-paper-plane', '#6366f1'],
+                            ['requests', 'درخواست‌ها', 'fa-inbox', '#f59e0b'],
+                            ['admins', 'ادمین‌ها', 'fa-user-shield', '#10b981'],
+                            ['allusers', 'همه کاربران', 'fa-users', '#8b5cf6'],
+                        ] as const).map(([id, label, icon, color]) => (
+                            <button key={id} onClick={() => setRolesTab(id)}
+                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black transition-all flex items-center gap-1.5 ${rolesTab === id ? 'text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                                style={rolesTab === id ? { backgroundColor: color } : {}}>
+                                <i className={`fas ${icon} text-[8px]`}></i>
+                                {label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {rolesTab === 'request' && (
+                        <div className="space-y-3">
+                            <p className="text-[10px] text-gray-500">درخواست ادمین شدن بدهید. مدیر سیستم دسترسی‌های شما را مشخص می‌کند.</p>
+                            {(myRequest?.role === 'superadmin') ? (
+                                <div className="bg-red-50 p-3 rounded-xl text-red-700 text-[10px] font-bold flex items-center gap-2">
+                                    <i className="fas fa-crown"></i> شما مدیر سیستم هستید
+                                </div>
+                            ) : myRequest?.role === 'admin' ? (
+                                <div className="bg-blue-50 p-3 rounded-xl text-blue-700 text-[10px] font-bold flex items-center gap-2">
+                                    <i className="fas fa-shield-alt"></i> شما ادمین هستید
+                                </div>
+                            ) : myRequest?.pendingRequest ? (
+                                <div className="bg-amber-50 p-3 rounded-xl text-amber-700 text-[10px] font-bold flex items-center gap-2">
+                                    <i className="fas fa-clock"></i> درخواست شما در انتظار بررسی است
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    <textarea value={requestMessage} onChange={e => setRequestMessage(e.target.value)} placeholder="چرا می‌خواهید ادمین شوید؟" className="w-full p-2.5 border rounded-xl text-[10px] focus:ring-2 focus:ring-red-300 outline-none" rows={3} />
+                                    <button onClick={handleRequestAdmin} disabled={requestLoading} className="px-4 py-2 bg-red-500 text-white rounded-xl text-[10px] font-bold disabled:opacity-50 hover:bg-red-600 transition-all">
+                                        {requestLoading ? 'در حال ارسال...' : 'ارسال درخواست'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {rolesTab === 'requests' && (
+                        <div className="space-y-3">
+                            <h3 className="text-[10px] font-black text-gray-400 flex items-center gap-2">
+                                <i className="fas fa-inbox text-amber-500"></i>
+                                درخواست‌های در انتظار ({toPersianDigits(adminRequests.length)})
+                            </h3>
+                            {adminRequests.length === 0 ? (
+                                <p className="text-center text-xs text-gray-400 py-8">درخواستی وجود ندارد</p>
+                            ) : adminRequests.map(req => (
+                                <div key={req._id} className="bg-gray-50 p-3 rounded-xl border space-y-2">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="font-bold text-[11px]">{req.userName || 'بدون نام'}</span>
+                                        <span className="text-[9px] text-gray-400">{req.userPhone}</span>
+                                        <span className="text-[8px] text-gray-300 bg-gray-100 px-1.5 py-0.5 rounded">{toPersianDigits(new Date(req.requestedAt).toLocaleDateString('fa-IR'))}</span>
+                                    </div>
+                                    {req.message && <p className="text-[9px] text-gray-500 bg-white p-2 rounded-lg border">{req.message}</p>}
+                                    <div className="flex gap-1.5 flex-wrap items-center">
+                                        <button onClick={() => { setApprovingRequest(req._id); setApprovePerms([]); }}
+                                            className="px-3 py-1.5 rounded-lg text-[8px] font-bold bg-green-500 text-white hover:bg-green-600 transition-all">
+                                            <i className="fas fa-check ml-1"></i> تأیید
+                                        </button>
+                                        <button onClick={() => handleRejectRequest(req._id)}
+                                            className="px-3 py-1.5 rounded-lg text-[8px] font-bold bg-red-100 text-red-600 hover:bg-red-200 transition-all">
+                                            <i className="fas fa-times ml-1"></i> رد
+                                        </button>
+                                    </div>
+                                    {approvingRequest === req._id && (
+                                        <div className="bg-green-50 p-3 rounded-xl border space-y-2">
+                                            <p className="text-[9px] font-bold text-green-700">نقش مورد نظر:</p>
+                                            <div className="flex gap-2">
+                                                <button onClick={() => handleApproveRequest(req._id, 'admin', approvePerms)}
+                                                    className="px-3 py-1.5 rounded-lg text-[9px] font-bold bg-blue-500 text-white hover:bg-blue-600">ادمین</button>
+                                                <button onClick={() => handleApproveRequest(req._id, 'author', [])}
+                                                    className="px-3 py-1.5 rounded-lg text-[9px] font-bold bg-purple-500 text-white hover:bg-purple-600">نویسنده</button>
+                                                <button onClick={() => setApprovingRequest(null)}
+                                                    className="px-3 py-1.5 rounded-lg text-[9px] font-bold bg-gray-200 text-gray-600 hover:bg-gray-300">لغو</button>
+                                            </div>
+                                            {approvePerms !== undefined && (
+                                                <div className="flex flex-wrap gap-1.5 mt-1">
+                                                    {AVAILABLE_PERMISSIONS.map(p => (
+                                                        <button key={p.id}
+                                                            onClick={() => setApprovePerms(prev => prev.includes(p.id) ? prev.filter(x => x !== p.id) : [...prev, p.id])}
+                                                            className={`px-2 py-1 rounded-lg text-[7px] font-bold transition-all ${approvePerms.includes(p.id) ? 'bg-green-500 text-white' : 'bg-white border text-gray-500 hover:bg-gray-50'}`}>
+                                                            {p.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {rolesTab === 'admins' && (
+                        <div className="space-y-3">
+                            <h3 className="text-[10px] font-black text-gray-400 flex items-center gap-2">
+                                <i className="fas fa-user-shield text-green-500"></i>
+                                ادمین‌ها و نویسندگان ({toPersianDigits(adminList.length)})
+                            </h3>
+                            {adminList.length === 0 ? (
+                                <p className="text-center text-xs text-gray-400 py-8">هنوز ادمین یا نویسنده‌ای وجود ندارد</p>
+                            ) : adminList.map(a => (
+                                <div key={a._id} className="bg-gray-50 p-3 rounded-xl border">
+                                    <div className="flex items-center justify-between flex-wrap gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-bold ${a.role === 'superadmin' ? 'bg-red-500' : a.role === 'admin' ? 'bg-blue-500' : 'bg-purple-500'}`}>
+                                                {a.role === 'superadmin' ? <i className="fas fa-crown text-[8px]"></i> : (a.name || a.phoneNumber || '?')[0]}
+                                            </div>
+                                            <div>
+                                                <span className="font-bold text-[11px] block">{a.name || 'بدون نام'}</span>
+                                                <span className="text-[8px] text-gray-400">{a.phoneNumber}</span>
+                                            </div>
+                                            <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold ${a.role === 'superadmin' ? 'bg-red-100 text-red-700' : a.role === 'admin' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                                                {a.role === 'superadmin' ? 'مدیر سیستم' : a.role === 'admin' ? 'ادمین' : 'نویسنده'}
+                                            </span>
+                                        </div>
+                                        {a.role !== 'superadmin' && (
+                                            <div className="flex gap-1.5 items-center">
+                                                <select value={a.role} onChange={e => handleChangeRole(a._id, e.target.value)} className="text-[9px] font-bold p-1.5 rounded-lg border bg-white">
+                                                    <option value="user">کاربر</option>
+                                                    <option value="author">نویسنده</option>
+                                                    <option value="admin">ادمین</option>
+                                                </select>
+                                                <button onClick={() => handleRemoveAdmin(a._id)} className="px-2 py-1.5 rounded-lg text-[8px] font-bold bg-red-100 text-red-600 hover:bg-red-200">
+                                                    <i className="fas fa-trash-alt"></i>
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                    {a.adminPermissions?.length > 0 && (
+                                        <div className="flex flex-wrap gap-1 mt-2">
+                                            {a.adminPermissions.map((p: string) => (
+                                                <span key={p} className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-[7px] font-bold">{AVAILABLE_PERMISSIONS.find(x => x.id === p)?.label || p}</span>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {rolesTab === 'allusers' && (
+                        <div className="space-y-3">
+                            <h3 className="text-[10px] font-black text-gray-400 flex items-center gap-2">
+                                <i className="fas fa-users text-purple-500"></i>
+                                همه کاربران ({toPersianDigits(rolesUserTotal)})
+                            </h3>
+                            <div className="flex gap-2">
+                                <input value={rolesSearch} onChange={e => setRolesSearch(e.target.value)}
+                                    onKeyDown={e => { if (e.key === 'Enter') loadRolesUsers(1); }}
+                                    placeholder="جستجو نام یا شماره..." className="flex-1 p-2 border rounded-xl text-[10px] focus:ring-2 focus:ring-purple-300 outline-none" />
+                                <button onClick={() => loadRolesUsers(1)} className="px-3 py-2 bg-purple-500 text-white rounded-xl text-[9px] font-bold hover:bg-purple-600">
+                                    <i className="fas fa-search"></i>
+                                </button>
+                            </div>
+                            {rolesUsers.length === 0 ? (
+                                <p className="text-center text-xs text-gray-400 py-8">کاربری یافت نشد</p>
+                            ) : (
+                                <div className="space-y-1.5 max-h-[50vh] overflow-y-auto">
+                                    {rolesUsers.map((u: any) => (
+                                        <div key={u._id} className="bg-gray-50 p-2.5 rounded-xl border flex items-center justify-between flex-wrap gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[9px] font-bold ${u.role === 'superadmin' ? 'bg-red-500' : u.role === 'admin' ? 'bg-blue-500' : u.role === 'author' ? 'bg-purple-500' : 'bg-gray-400'}`}>
+                                                    {(u.name || u.phoneNumber || '?')[0]}
+                                                </div>
+                                                <div>
+                                                    <span className="font-bold text-[10px] block">{u.name || 'بدون نام'}</span>
+                                                    <span className="text-[8px] text-gray-400">{u.phoneNumber}</span>
+                                                </div>
+                                                <span className={`px-1.5 py-0.5 rounded-full text-[7px] font-bold ${u.role === 'superadmin' ? 'bg-red-100 text-red-700' : u.role === 'admin' ? 'bg-blue-100 text-blue-700' : u.role === 'author' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-500'}`}>
+                                                    {u.role === 'superadmin' ? 'مدیر سیستم' : u.role === 'admin' ? 'ادمین' : u.role === 'author' ? 'نویسنده' : 'کاربر'}
+                                                </span>
+                                            </div>
+                                            {u.role !== 'superadmin' && (
+                                                <select value={u.role} onChange={e => handleChangeRole(u._id, e.target.value)} className="text-[8px] font-bold p-1 rounded-lg border bg-white">
+                                                    <option value="user">کاربر</option>
+                                                    <option value="author">نویسنده</option>
+                                                    <option value="admin">ادمین</option>
+                                                </select>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            {rolesUserTotal > 20 && (
+                                <div className="flex items-center justify-center gap-2 mt-2">
+                                    <button onClick={() => loadRolesUsers(Math.max(1, rolesUserPage - 1))} disabled={rolesUserPage <= 1} className="px-3 py-1 rounded-lg bg-gray-100 text-gray-500 text-[9px] font-black disabled:opacity-30">قبلی</button>
+                                    <span className="text-[9px] text-gray-400">صفحه {toPersianDigits(rolesUserPage)} از {toPersianDigits(Math.ceil(rolesUserTotal / 20))}</span>
+                                    <button onClick={() => loadRolesUsers(rolesUserPage + 1)} disabled={rolesUserPage * 20 >= rolesUserTotal} className="px-3 py-1 rounded-lg bg-gray-100 text-gray-500 text-[9px] font-black disabled:opacity-30">بعدی</button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    };
     const tabs: { id: AdminTab; label: string; icon: string; color: string }[] = [
         { id: 'dashboard', label: 'داشبورد', icon: 'fa-chart-pie', color: '#6366f1' },
         { id: 'users', label: 'کاربران', icon: 'fa-users', color: '#10b981' },
@@ -2668,6 +2945,7 @@ const renderPostsPanel = () => (
         { id: 'purchases', label: 'درخواست خرید', icon: 'fa-money-bill-transfer', color: '#059669' },
         { id: 'sales', label: 'آمار فروش', icon: 'fa-chart-line', color: '#2e86c1' },
         { id: 'support', label: 'پشتیبانی', icon: 'fa-headset', color: '#7c3aed' },
+        { id: 'roles', label: 'مدیریت نقش', icon: 'fa-user-shield', color: '#dc2626' },
     ];
 
     return (
@@ -2780,6 +3058,7 @@ const renderPostsPanel = () => (
 {activeTab === 'purchases' && renderPurchasesPanel()}
                     {activeTab === 'sales' && <AdminSalesPanel />}
                     {activeTab === 'support' && renderSupportPanel()}
+                    {activeTab === 'roles' && renderRolesPanel()}
                     </div>
                 </div>
 
