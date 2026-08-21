@@ -2,6 +2,8 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import type { Podcast, Episode, Video, PublishedBook, Author, Book } from '../types';
 import { toPersianDigits } from '../utils/helpers';
+import PermissionToast from '../components/PermissionToast';
+import PermissionLocked from '../components/PermissionLocked';
 import { uploadFile, getAdminStats, getAdminUsers, updateUserRole, deleteUser, getAdminPosts, adminDeletePost, adminUpdatePost, getAdminComments, adminDeleteComment, adminUpdateComment, getPodcasts, getBooks, getAuthors, getVideos, getComments, getPosts, getPublishedBooks, getAdminAnalytics, getAdminAnalyticsSegments, getAdminInsights, getAdminActivity, adminExportData, adminSearchGlobal, adminBulkUsers, adminBulkPosts, adminBulkComments, muteUser, unmuteUser, unbanUser, resetUserWarnings, getNotifications, adminSendNotification, adminDeleteNotification, getAICorpus, getAdminVideoPlaylists, createVideoPlaylist, updateVideoPlaylist, deleteVideoPlaylist, adminGetNotes, adminCreateNote, adminUpdateNote, adminDeleteNote, adminGetAuthors, getAppUpdate, adminSaveAppUpdate, adminUploadApk, AppUpdateInfo, adminGetPurchaseRequests, adminUpdatePurchaseRequest, getCommunitySettings, updateCommunitySettings, getSupportMessages, markSupportMessageRead, deleteSupportMessage, adminPurgePosts, requestAdminAccess, getMyAdminRequest, getAdminRequests, approveAdminRequest, rejectAdminRequest, changeUserRole, removeAdmin, getAdminList, AVAILABLE_PERMISSIONS, updateAdminPermissions, ALL_ROLE_PERMISSIONS, getRolePermissions, updateRolePermissions, resetUserPermissions } from '../services/api';
 import { fetchAparatVideoDetails, extractAparatId } from '../utils/aparatApi';
 import { GoogleGenAI } from "@google/genai";
@@ -393,6 +395,7 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
     const [editingRolePerms, setEditingRolePerms] = useState<string[]>([]);
     const [editingUserPerms, setEditingUserPerms] = useState<string | null>(null);
     const [editingUserPermsList, setEditingUserPermsList] = useState<string[]>([]);
+    const [permToast, setPermToast] = useState<{ message: string; type: 'enabled' | 'disabled' } | null>(null);
     const [myRequest, setMyRequest] = useState<any>(null);
     const [requestMessage, setRequestMessage] = useState('');
     const [requestLoading, setRequestLoading] = useState(false);
@@ -3004,11 +3007,27 @@ const renderPostsPanel = () => (
                                                         ))}
                                                     </div>
                                                     <div className="flex gap-2">
-                                                        <button onClick={async () => { await updateAdminPermissions(u._id, editingUserPermsList); setAdminToast({ type: 'success', message: `دسترسی ${u.name || u.phoneNumber} ذخیره شد` }); loadRolesUsers(); setEditingUserPerms(null); }}
+                                                        <button onClick={async () => {
+                                                            const oldPerms = u.adminPermissions || [];
+                                                            const added = editingUserPermsList.filter(p => !oldPerms.includes(p));
+                                                            const removed = oldPerms.filter(p => !editingUserPermsList.includes(p));
+                                                            await updateAdminPermissions(u._id, editingUserPermsList);
+                                                            loadRolesUsers();
+                                                            setEditingUserPerms(null);
+                                                            if (editingUserPermsList.length === 0) {
+                                                                setPermToast({ message: `دسترسی ${u.name || u.phoneNumber} به پیش‌فرض نقش برگشت`, type: 'enabled' });
+                                                            } else if (added.length > 0 && removed.length === 0) {
+                                                                setPermToast({ message: `${added.length} دسترسی برای ${u.name || u.phoneNumber} فعال شد`, type: 'enabled' });
+                                                            } else if (removed.length > 0 && added.length === 0) {
+                                                                setPermToast({ message: `${removed.length} دسترسی برای ${u.name || u.phoneNumber} غیرفعال شد`, type: 'disabled' });
+                                                            } else {
+                                                                setPermToast({ message: `دسترسی ${u.name || u.phoneNumber} به‌روزرسانی شد`, type: 'enabled' });
+                                                            }
+                                                        }}
                                                             className="px-3 py-1.5 bg-green-500 text-white rounded-lg text-[8px] font-bold hover:bg-green-600">
                                                             <i className="fas fa-save ml-1"></i> ذخیره
                                                         </button>
-                                                        <button onClick={async () => { await resetUserPermissions(u._id); setAdminToast({ type: 'success', message: `دسترسی ${u.name || u.phoneNumber} به پیش‌فرض نقش برگشت` }); loadRolesUsers(); setEditingUserPerms(null); }}
+                                                        <button onClick={async () => { await resetUserPermissions(u._id); loadRolesUsers(); setEditingUserPerms(null); setPermToast({ message: `دسترسی ${u.name || u.phoneNumber} به پیش‌فرض نقش برگشت`, type: 'enabled' }); }}
                                                             className="px-3 py-1.5 bg-orange-100 text-orange-600 rounded-lg text-[8px] font-bold hover:bg-orange-200">
                                                             <i className="fas fa-undo ml-1"></i> بازنشانی
                                                         </button>
@@ -3086,7 +3105,12 @@ const renderPostsPanel = () => (
                                                     await updateRolePermissions(newRolePerms);
                                                     setRolePermissions(newRolePerms);
                                                     setEditingRole(null);
-                                                    setAdminToast({ type: 'success', message: `دسترسی‌های ${role.label} ذخیره شد` });
+                                                    const oldPerms = rolePermissions[role.id] || [];
+                                                    const added = editingRolePerms.filter(p => !oldPerms.includes(p));
+                                                    const removed = oldPerms.filter(p => !editingRolePerms.includes(p));
+                                                    if (added.length > 0) setPermToast({ message: `${added.length} دسترسی برای نقش ${role.label} فعال شد`, type: 'enabled' });
+                                                    else if (removed.length > 0) setPermToast({ message: `${removed.length} دسترسی برای نقش ${role.label} غیرفعال شد`, type: 'disabled' });
+                                                    else setAdminToast({ type: 'success', message: `دسترسی‌های ${role.label} ذخیره شد` });
                                                 }}
                                                     className="px-4 py-1.5 bg-green-500 text-white rounded-lg text-[9px] font-bold hover:bg-green-600">
                                                     <i className="fas fa-save ml-1"></i> ذخیره
@@ -3153,6 +3177,14 @@ const renderPostsPanel = () => (
 
     return (
         <div className="fixed inset-0 bg-gray-950/98 z-[4500] backdrop-blur-3xl flex items-center justify-center p-0 sm:p-4 animate-fadeIn">
+
+            {permToast && (
+                <PermissionToast
+                    message={permToast.message}
+                    type={permToast.type}
+                    onClose={() => setPermToast(null)}
+                />
+            )}
 
             {adminToast && (
                 <div className={`fixed top-6 right-6 z-[5000] px-5 py-3.5 rounded-2xl text-sm font-bold text-white shadow-2xl max-w-[90%] sm:max-w-sm text-center animate-toastIn flex items-center gap-2.5 backdrop-blur-sm ${
