@@ -68,6 +68,28 @@ export const requireRole = (...roles) => {
   };
 };
 
+export const requireSuperAdmin = (req, res, next) => {
+  if (!req.user) return res.status(401).json({ error: 'احراز هویت لازم است' });
+  if (req.user.role !== 'superadmin') {
+    return res.status(403).json({ error: 'فقط مدیر سیستم دسترسی دارد' });
+  }
+  next();
+};
+
+export const requireAdminPermission = (permission) => {
+  return (req, res, next) => {
+    if (!req.user) return res.status(401).json({ error: 'احراز هویت لازم است' });
+    if (req.user.role === 'superadmin') return next();
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'دسترسی غیرمجاز' });
+    }
+    if (!req.user.adminPermissions || !req.user.adminPermissions.includes(permission)) {
+      return res.status(403).json({ error: `دسترسی «${permission}» ندارید` });
+    }
+    next();
+  };
+};
+
 export const generateToken = (userId) => {
   return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',

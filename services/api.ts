@@ -939,3 +939,67 @@ export const deleteSupportMessage = async (id: string): Promise<boolean> => {
 export const saveAllData = async (data: any): Promise<void> => {
   console.warn('saveAllData is deprecated. Use individual API calls instead.');
 };
+
+// --- Admin Roles & Permissions ---
+export const AVAILABLE_PERMISSIONS = [
+  { id: 'users', label: 'مدیریت کاربران' },
+  { id: 'posts', label: 'مدیریت پست‌ها' },
+  { id: 'comments', label: 'مدیریت نظرات' },
+  { id: 'analytics', label: 'آمار و تحلیل' },
+  { id: 'sales', label: 'آمار فروش' },
+  { id: 'videos', label: 'مدیریت ویدیوها' },
+  { id: 'podcasts', label: 'مدیریت پادکست‌ها' },
+  { id: 'library', label: 'مدیریت کتابخانه' },
+  { id: 'notes', label: 'مدیریت یادداشت‌ها' },
+  { id: 'authors', label: 'مدیریت نویسندگان' },
+  { id: 'versions', label: 'مدیریت نسخه‌ها' },
+  { id: 'purchases', label: 'مدیریت خریدها' },
+  { id: 'support', label: 'پشتیبانی' },
+  { id: 'notifications', label: 'اعلان‌ها' },
+  { id: 'settings', label: 'تنظیمات' },
+];
+
+export const requestAdminAccess = async (message?: string): Promise<any> => {
+  return apiFetch('/admin-roles/request', {
+    method: 'POST',
+    body: JSON.stringify({ message }),
+  });
+};
+
+export const getMyAdminRequest = async (): Promise<any> => {
+  return apiFetch('/admin-roles/my-request');
+};
+
+export const getAdminRequests = async (status = 'pending'): Promise<any[]> => {
+  return apiFetch(`/admin-roles/requests?status=${status}`) || [];
+};
+
+export const approveAdminRequest = async (requestId: string, role: string, permissions: string[]): Promise<any> => {
+  return apiFetch(`/admin-roles/requests/${requestId}/approve`, {
+    method: 'POST',
+    body: JSON.stringify({ role, permissions }),
+  });
+};
+
+export const rejectAdminRequest = async (requestId: string): Promise<any> => {
+  return apiFetch(`/admin-roles/requests/${requestId}/reject`, {
+    method: 'POST',
+  });
+};
+
+export const changeUserRole = async (userId: string, role: string, permissions?: string[]): Promise<any> => {
+  return apiFetch(`/admin-roles/users/${userId}/role`, {
+    method: 'PUT',
+    body: JSON.stringify({ role, permissions }),
+  });
+};
+
+export const removeAdmin = async (userId: string): Promise<any> => {
+  return apiFetch(`/admin-roles/users/${userId}/remove-admin`, {
+    method: 'POST',
+  });
+};
+
+export const getAdminList = async (): Promise<any[]> => {
+  return apiFetch('/admin-roles/list') || [];
+};

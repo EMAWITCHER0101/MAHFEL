@@ -16,7 +16,7 @@ import { deleteUserContent } from '../utils/deleteUserContent.js';
 import { sendWebPushToAll } from '../utils/webpush.js';
 
 const router = Router();
-router.use(requireAuth, requireRole('admin'));
+router.use(requireAuth, requireRole('admin', 'superadmin'));
 
 const DAY = 24 * 60 * 60 * 1000;
 

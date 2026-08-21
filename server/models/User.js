@@ -1,13 +1,24 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
+const adminRequestSchema = new mongoose.Schema({
+  status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+  message: { type: String, default: '' },
+  requestedAt: { type: Date, default: Date.now },
+  reviewedAt: { type: Date, default: null },
+  reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  grantedPermissions: [{ type: String }],
+}, { _id: true });
+
 const userSchema = new mongoose.Schema({
   phoneNumber: { type: String, unique: true, sparse: true },
   email: { type: String, unique: true, sparse: true, lowercase: true, trim: true },
   password: { type: String },
   name: { type: String, default: '' },
   avatar: { type: String, default: '' },
-  role: { type: String, enum: ['user', 'author', 'admin'], default: 'user' },
+  role: { type: String, enum: ['user', 'author', 'admin', 'superadmin'], default: 'user' },
+  adminPermissions: [{ type: String }],
+  adminRequests: [adminRequestSchema],
   warnings: { type: Number, default: 0 },
   banned: { type: Boolean, default: false },
   muted: { type: Boolean, default: false },
