@@ -286,6 +286,7 @@ const RenderReply = React.memo<RenderReplyProps>(({ comment, depth, postId, loca
             <div className="flex items-center gap-2 mb-1">
               <span className="font-bold text-[10px] cursor-pointer hover:opacity-70 transition-opacity" style={{ color: 'var(--text-1)' }} onClick={() => onOpenProfile?.(comment.userId, comment.author, comment.authorAvatarUrl)}>{comment.author}</span>
               {comment.isFeatured && <span className="text-[6px] px-1 py-0.5 rounded-full font-black" style={{ background: 'linear-gradient(135deg, #fef3c7, #fde68a)', color: '#b45309', boxShadow: '0 1px 3px rgba(234,179,8,0.2)' }}><i className="fas fa-star"></i></span>}
+              {comment.isPinned && <span className="text-[6px] px-1 py-0.5 rounded-full bg-orange-100 text-orange-600 font-black"><i className="fas fa-thumbtack"></i></span>}
               <div className="w-0.5 h-0.5 rounded-full" style={{ background: 'var(--text-3)' }}></div>
               <span className="text-[8px] font-medium" style={{ color: 'var(--text-3)' }}>{formatTimeFromISO(comment.isoDate)}</span>
               <button onClick={menu.openAt} className="w-5 h-5 rounded-md flex items-center justify-center transition-all hover:bg-black/5 active:scale-90 opacity-0 group-hover/reply:opacity-50 hover:!opacity-80 flex-shrink-0" style={{ color: 'var(--text-3)' }}>
@@ -931,6 +932,8 @@ const VideoCommentItem: React.FC<{
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1.5">
                   <span className="font-black text-[12px] cursor-pointer hover:opacity-70 transition-opacity" style={{ color: 'var(--primary)' }} onClick={() => onOpenProfile?.(comment.userId, comment.author, comment.authorAvatarUrl)}>{comment.author}</span>
+                  {comment.isFeatured && <span className="text-[7px] px-1.5 py-0.5 rounded-full font-black" style={{ background: 'linear-gradient(135deg, #fef3c7, #fde68a)', color: '#b45309', boxShadow: '0 1px 3px rgba(234,179,8,0.2)' }}><i className="fas fa-star"></i> ویژه</span>}
+                  {comment.isPinned && <span className="text-[7px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600 font-black"><i className="fas fa-thumbtack"></i> سنجاق</span>}
                   <span className="text-[10px]" style={{ color: 'var(--text-3)' }}>{formatTimeFromISO(comment.isoDate)}</span>
                   <button onClick={menu.openAt} className="w-6 h-6 rounded-lg flex items-center justify-center transition-all hover:bg-black/5 active:scale-90 opacity-0 group-hover:opacity-50 hover:!opacity-80 flex-shrink-0" style={{ color: 'var(--text-3)' }}>
                     <i className="fas fa-ellipsis-vertical text-[9px]"></i>
@@ -1769,6 +1772,8 @@ const PodcastCommentItem: React.FC<{
                 {comment.authorAvatarUrl ? <img src={comment.authorAvatarUrl} alt="" className="w-full h-full object-cover" /> : comment.author.charAt(0)}
               </div>
               <span className="text-[11px] font-bold cursor-pointer hover:opacity-70 transition-opacity" style={{ color: 'var(--primary)' }} onClick={() => onOpenProfile?.(comment.userId, comment.author, comment.authorAvatarUrl)}>{comment.author}</span>
+              {comment.isFeatured && <span className="text-[7px] px-1.5 py-0.5 rounded-full font-black" style={{ background: 'linear-gradient(135deg, #fef3c7, #fde68a)', color: '#b45309', boxShadow: '0 1px 3px rgba(234,179,8,0.2)' }}><i className="fas fa-star"></i> ویژه</span>}
+              {comment.isPinned && <span className="text-[7px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600 font-black"><i className="fas fa-thumbtack"></i> سنجاق</span>}
               <span className="text-[8px]" style={{ color: 'var(--text-3)' }}>{formatTimeFromISO(comment.isoDate)}</span>
               <button onClick={menu.openAt} className="w-5 h-5 rounded-md flex items-center justify-center transition-all hover:bg-black/5 active:scale-90 opacity-30 hover:!opacity-70 flex-shrink-0" style={{ color: 'var(--text-3)' }}>
                 <i className="fas fa-ellipsis-vertical text-[8px]"></i>

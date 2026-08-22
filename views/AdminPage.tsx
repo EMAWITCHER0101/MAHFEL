@@ -1631,6 +1631,7 @@ const renderPostsPanel = () => (
                                 <div className="flex-1 min-w-0">
                                     <div className="flex flex-wrap items-center gap-2 mb-1">
                                         <span className="text-[11px] font-black text-gray-800">{n.title || 'بی‌عنوان'}</span>
+                                        {n.isPinned && <span className="text-[7px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600 font-black"><i className="fas fa-thumbtack"></i> سنجاق</span>}
                                         {n.isDraft ? (
                                             <span className="text-[7px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-600 font-black whitespace-nowrap"><i className="fas fa-pen-alt"></i> پیش‌نویس</span>
                                         ) : n.pendingApproval ? (
@@ -1651,6 +1652,12 @@ const renderPostsPanel = () => (
                                             <i className="fas fa-check text-[9px]"></i>
                                         </button>
                                     )}
+                                    <button onClick={async () => {
+                                        const r = await adminUpdateNote(n._id, { isPinned: !n.isPinned });
+                                        if (r) { showAdminToast(n.isPinned ? 'سنجاق برداشته شد' : 'یادداشت سنجاق شد', 'success'); loadAdminNotes(adminNotesPage); }
+                                    }} className={`w-8 h-8 rounded-xl transition-all flex items-center justify-center ${n.isPinned ? 'bg-orange-50 text-orange-500' : 'bg-gray-50 text-gray-400 hover:bg-orange-50 hover:text-orange-500'}`} title="سنجاق">
+                                        <i className="fas fa-thumbtack text-[9px]"></i>
+                                    </button>
                                     <button onClick={() => { setEditingNote(n); setNoteTitle(n.title || ''); setNoteContent((n.contentHtml || n.description || '').replace(/<[^>]*>/g, '')); setNoteAuthorName(n.authorName || n.user?.name || ''); setNoteIsDraft(!!n.isDraft); setNoteComposer({ open: true }); }} className="w-8 h-8 rounded-xl bg-blue-50 text-blue-500 hover:bg-blue-100 transition-all flex items-center justify-center"><i className="fas fa-pen text-[9px]"></i></button>
                                     <button onClick={async () => {
                                         const r = await adminUpdateNote(n._id, { isDraft: !n.isDraft });

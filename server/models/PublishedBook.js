@@ -21,6 +21,7 @@ const publishedBookSchema = new mongoose.Schema({
   isDraft: { type: Boolean, default: false },
   pendingApproval: { type: Boolean, default: false },
   likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  isPinned: { type: Boolean, default: false },
 }, { timestamps: true, suppressReservedKeysWarning: true });
 
 publishedBookSchema.index({ title: 'text', description: 'text' });
