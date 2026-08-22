@@ -2281,7 +2281,7 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
             if (pinnedPosts.length === 0) return null;
             const shown = expandedPinned ? pinnedPosts : pinnedPosts.slice(0, 1);
             return (
-              <div className="mb-3 animate-fadeIn">
+              <div className="mb-3 animate-fadeIn sticky top-0 z-20">
                 <div className="rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(145deg, #fff7ed, #fffbeb, #fef3c7)', border: '1px solid rgba(234, 179, 8, 0.2)', boxShadow: '0 2px 12px rgba(234, 179, 8, 0.1)' }}>
                   <div className="flex items-center gap-2 px-3 py-2 border-b" style={{ borderColor: 'rgba(234, 179, 8, 0.15)' }}>
                     <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>

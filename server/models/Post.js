@@ -39,6 +39,7 @@ const postSchema = new mongoose.Schema({
   likes: { type: Number, default: 0 },
   reactions: { type: Map, of: Number },
   isPinned: { type: Boolean, default: false },
+  isFeatured: { type: Boolean, default: false },
   replyToId: Number,
   isEdited: { type: Boolean, default: false },
   sourceText: String,

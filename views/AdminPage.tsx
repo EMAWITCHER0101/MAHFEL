@@ -1359,6 +1359,7 @@ const renderPostsPanel = () => (
                                 <div className="flex justify-between items-center mb-1">
                                     <span className="text-[11px] font-black text-gray-800">{p.author}</span>
                                     <div className="flex items-center gap-2">
+                                        {p.isFeatured && <span className="text-[7px] px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-600 font-black"><i className="fas fa-star"></i> ویژه</span>}
                                         {p.isPinned && <span className="text-[7px] px-1.5 py-0.5 rounded-full bg-yellow-50 text-yellow-600 font-black"><i className="fas fa-thumbtack"></i> سنجاق</span>}
                                         {p.isEdited && <span className="text-[7px] text-gray-400 font-bold">ویرایش شده</span>}
                                         <span className="text-[8px] text-gray-400 font-bold">{p.date}</span>
@@ -3091,7 +3092,11 @@ const renderPostsPanel = () => (
                                                         ))}
                                                     </div>
                                                     <div className="flex gap-2">
-                                                        <button onClick={async () => {
+                                <button onClick={async () => {
+                                    const r = await adminUpdatePost(p._id, { isFeatured: !p.isFeatured });
+                                    if (r) setAdminPosts(prev => prev.map(x => x._id === p._id ? { ...x, isFeatured: !x.isFeatured } : x));
+                                }} className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center opacity-0 group-hover:opacity-100 ${p.isFeatured ? 'bg-yellow-50 text-yellow-500' : 'bg-gray-50 text-gray-400 hover:bg-yellow-50 hover:text-yellow-500'}`}><i className="fas fa-star text-[8px]"></i></button>
+                                <button onClick={async () => {
                                                             const oldPerms = u.adminPermissions || [];
                                                             const added = editingUserPermsList.filter(p => !oldPerms.includes(p));
                                                             const removed = oldPerms.filter(p => !editingUserPermsList.includes(p));
