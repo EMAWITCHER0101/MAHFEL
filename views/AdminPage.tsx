@@ -396,6 +396,8 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
     const [editingUserPerms, setEditingUserPerms] = useState<string | null>(null);
     const [editingUserPermsList, setEditingUserPermsList] = useState<string[]>([]);
     const [permToast, setPermToast] = useState<{ message: string; type: 'enabled' | 'disabled' } | null>(null);
+    const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+    const [featuredGlowIds, setFeaturedGlowIds] = useState<Set<string>>(new Set());
     const [myRequest, setMyRequest] = useState<any>(null);
     const [requestMessage, setRequestMessage] = useState('');
     const [requestLoading, setRequestLoading] = useState(false);
@@ -663,8 +665,19 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
     const [readingBook, setReadingBook] = useState<PublishedBook | null>(null);
     const [purgeBusy, setPurgeBusy] = useState(false);
 
+    // drag & drop تب‌ها با long-press
+    const [tabOrder, setTabOrder] = useState<AdminTab[]>(() => {
+        if (typeof window !== 'undefined') {
+            try { const saved = localStorage.getItem('admin_tab_order'); if (saved) return JSON.parse(saved); } catch {}
+        }
+        return ['dashboard', 'users', 'posts', 'comments', 'analytics', 'sowt', 'library', 'nashr', 'notes', 'authors', 'videos', 'notifications', 'versions', 'purchases', 'sales', 'support', 'roles'];
+    });
+    const [dragTabIdx, setDragTabIdx] = useState<number | null>(null);
+    const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+    const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const isDragging = dragTabIdx !== null;
+
     // سوییپ چپ/راست بین تب‌های پنل (موبایل)
-    const ADMIN_TAB_ORDER: AdminTab[] = ['dashboard', 'users', 'posts', 'comments', 'analytics', 'sowt', 'library', 'nashr', 'notes', 'authors', 'videos', 'notifications', 'versions', 'purchases', 'sales', 'support', 'roles'];
     const adminSwipeStartRef = useRef<{ x: number; y: number } | null>(null);
     const tabsBarRef = useRef<HTMLDivElement>(null);
     const handleAdminTouchStart = (e: React.TouchEvent) => {
@@ -694,6 +707,39 @@ const AdminPage = ({ onClose, currentPodcasts, currentVideos, currentPublishedBo
         const next = dx < 0 ? visibleIds[idx + 1] : visibleIds[idx - 1];
         if (next) setActiveTab(next);
     };
+
+    // long-press شروع drag
+    const handleTabLongPressStart = (idx: number) => {
+        longPressTimerRef.current = setTimeout(() => {
+            setDragTabIdx(idx);
+            if (navigator.vibrate) navigator.vibrate(30);
+        }, 500);
+    };
+    const handleTabLongPressEnd = () => {
+        if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
+    };
+    const handleTabDragOver = (idx: number) => {
+        if (dragTabIdx === null || dragTabIdx === idx) return;
+        setDragOverIdx(idx);
+    };
+    const handleTabDrop = () => {
+        if (dragTabIdx === null || dragOverIdx === null || dragTabIdx === dragOverIdx) { setDragTabIdx(null); setDragOverIdx(null); return; }
+        const newOrder = [...tabOrder];
+        const visibleIds = visibleTabs.map(t => t.id);
+        const movingId = visibleIds[dragTabIdx];
+        const targetId = visibleIds[dragOverIdx];
+        const fromGlobal = newOrder.indexOf(movingId);
+        const toGlobal = newOrder.indexOf(targetId);
+        if (fromGlobal !== -1) newOrder.splice(fromGlobal, 1);
+        if (toGlobal !== -1) newOrder.splice(toGlobal, 0, movingId);
+        else newOrder.push(movingId);
+        setTabOrder(newOrder);
+        localStorage.setItem('admin_tab_order', JSON.stringify(newOrder));
+        setDragTabIdx(null);
+        setDragOverIdx(null);
+        if (navigator.vibrate) navigator.vibrate(20);
+    };
+    const handleTabDragEnd = () => { setDragTabIdx(null); setDragOverIdx(null); };
 
     useEffect(() => {
         if (!tabsBarRef.current) return;
@@ -1297,7 +1343,7 @@ const renderPostsPanel = () => (
 
             <div className="space-y-3">
                 {adminPosts.map((p: any) => (
-                    <div key={p._id} className={`bg-white p-4 rounded-2xl border shadow-sm group hover:border-primary transition-all ${selectedPosts.includes(p._id) ? 'border-orange-400 bg-orange-50/30' : ''}`}>
+                    <div key={p._id} className={`bg-white p-4 rounded-2xl border shadow-sm group hover:border-primary transition-all duration-500 ${selectedPosts.includes(p._id) ? 'border-orange-400 bg-orange-50/30' : ''} ${deletingIds.has(p._id) ? 'animate-deleteCollapse opacity-0 scale-95 -translate-y-2' : ''}`}>
                         <div className="flex items-start gap-3">
                             <input
                                 type="checkbox"
@@ -1369,8 +1415,10 @@ const renderPostsPanel = () => (
                                 }} className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center opacity-0 group-hover:opacity-100 ${p.isPinned ? 'bg-yellow-50 text-yellow-500' : 'bg-gray-50 text-gray-400 hover:bg-yellow-50 hover:text-yellow-500'}`}><i className="fas fa-thumbtack text-[8px]"></i></button>
                                 <button onClick={() => {
                                     showConfirmToast('آیا از حذف این پست اطمینان دارید؟', async () => {
+                                        setDeletingIds(prev => new Set([...prev, p._id]));
+                                        await new Promise(r => setTimeout(r, 500));
                                         const r = await adminDeletePost(p._id);
-                                        if (r) { setAdminPosts(prev => prev.filter(x => x._id !== p._id)); showAdminToast('پست حذف شد', 'success'); }
+                                        if (r) { setAdminPosts(prev => prev.filter(x => x._id !== p._id)); setDeletingIds(prev => { const n = new Set(prev); n.delete(p._id); return n; }); showAdminToast('پست حذف شد', 'success'); }
                                     });
                                 }} className="w-7 h-7 rounded-lg bg-red-500 text-white hover:bg-red-600 shadow-md transition-all flex items-center justify-center"><i className="fas fa-trash text-[8px]"></i></button>
                             </div>
@@ -1420,7 +1468,7 @@ const renderPostsPanel = () => (
 
             <div className="space-y-2">
                 {adminComments.map((c: any) => (
-                    <div key={c._id} className={`relative bg-white p-3 sm:p-4 lg:p-5 rounded-3xl border shadow-sm group transition-all hover:shadow-md hover:-translate-y-0.5 ${c.isFeatured ? 'border-yellow-300 bg-gradient-to-b from-yellow-50/60 to-white' : 'border-gray-100 hover:border-primary/40'} ${selectedComments.includes(c._id) ? 'border-teal-400 bg-teal-50/40 ring-2 ring-teal-100' : ''}`}>
+                    <div key={c._id} className={`relative bg-white p-3 sm:p-4 lg:p-5 rounded-3xl border shadow-sm group transition-all duration-500 hover:shadow-md hover:-translate-y-0.5 ${c.isFeatured ? 'border-yellow-300 bg-gradient-to-b from-yellow-50/60 to-white' : 'border-gray-100 hover:border-primary/40'} ${selectedComments.includes(c._id) ? 'border-teal-400 bg-teal-50/40 ring-2 ring-teal-100' : ''} ${deletingIds.has(c._id) ? 'animate-deleteCollapse opacity-0 scale-95 -translate-y-2' : ''} ${featuredGlowIds.has(c._id) ? 'animate-featuredGlow' : ''}`}>
                         <div className="flex items-start gap-3">
                             <input
                                 type="checkbox"
@@ -1438,6 +1486,7 @@ const renderPostsPanel = () => (
                                         <span className="text-[11px] font-black text-gray-800">{c.author}</span>
                                         <span className="text-[7px] px-1.5 py-0.5 rounded-full font-bold" style={{ background: c.type === 'podcast' ? '#fef3c7' : c.type === 'video' ? '#dbeafe' : '#fce7f3', color: c.type === 'podcast' ? '#d97706' : c.type === 'video' ? '#2563eb' : '#db2777' }}>{c.type}</span>
                                         {c.isFeatured && <span className="text-[7px] px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-600 font-black"><i className="fas fa-star"></i> ویژه</span>}
+                                        {c.isPinned && <span className="text-[7px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600 font-black"><i className="fas fa-thumbtack"></i> پین</span>}
                                     </div>
                                     <span className="text-[8px] text-gray-400 font-bold">{c.date}</span>
                                 </div>
@@ -1480,12 +1529,24 @@ const renderPostsPanel = () => (
                                 <button onClick={() => { setEditingCommentId(c._id); setEditingCommentText(c.text); }} className="w-7 h-7 rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 transition-all flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100"><i className="fas fa-pen text-[8px]"></i></button>
                                 <button onClick={async () => {
                                     const r = await adminUpdateComment(c._id, { isFeatured: !c.isFeatured });
-                                    if (r) setAdminComments(prev => prev.map(x => x._id === c._id ? { ...x, isFeatured: !x.isFeatured } : x));
+                                    if (r) {
+                                        setAdminComments(prev => prev.map(x => x._id === c._id ? { ...x, isFeatured: !x.isFeatured } : x));
+                                        if (!c.isFeatured) {
+                                            setFeaturedGlowIds(prev => new Set([...prev, c._id]));
+                                            setTimeout(() => setFeaturedGlowIds(prev => { const n = new Set(prev); n.delete(c._id); return n; }), 1200);
+                                        }
+                                    }
                                 }} className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 ${c.isFeatured ? 'bg-yellow-50 text-yellow-500' : 'bg-gray-50 text-gray-400 hover:bg-yellow-50 hover:text-yellow-500'}`}><i className="fas fa-star text-[8px]"></i></button>
+                                <button onClick={async () => {
+                                    const r = await adminUpdateComment(c._id, { isPinned: !c.isPinned });
+                                    if (r) setAdminComments(prev => prev.map(x => x._id === c._id ? { ...x, isPinned: !x.isPinned } : x));
+                                }} className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 ${c.isPinned ? 'bg-orange-50 text-orange-500' : 'bg-gray-50 text-gray-400 hover:bg-orange-50 hover:text-orange-500'}`}><i className="fas fa-thumbtack text-[8px]"></i></button>
                                 <button onClick={() => {
                                     showConfirmToast('آیا از حذف این نظر اطمینان دارید؟', async () => {
+                                        setDeletingIds(prev => new Set([...prev, c._id]));
+                                        await new Promise(r => setTimeout(r, 500));
                                         const r = await adminDeleteComment(c._id);
-                                        if (r) { setAdminComments(prev => prev.filter(x => x._id !== c._id)); showAdminToast('نظر حذف شد', 'success'); }
+                                        if (r) { setAdminComments(prev => prev.filter(x => x._id !== c._id)); setDeletingIds(prev => { const n = new Set(prev); n.delete(c._id); return n; }); showAdminToast('نظر حذف شد', 'success'); }
                                     });
                                 }} className="w-7 h-7 rounded-lg bg-red-500 text-white hover:bg-red-600 shadow-md transition-all flex items-center justify-center opacity-100 sm:opacity-100 sm:group-hover:opacity-100"><i className="fas fa-trash text-[8px]"></i></button>
                             </div>
@@ -3186,7 +3247,7 @@ const renderPostsPanel = () => (
     const isSuperAdmin = myRole === 'superadmin';
     const isAdmin = myRole === 'admin';
     const lockedTabs: string[] = [];
-    const visibleTabs = isSuperAdmin
+    const visibleTabsRaw = isSuperAdmin
         ? tabs
         : isAdmin
             ? tabs.filter(tab => {
@@ -3200,6 +3261,11 @@ const renderPostsPanel = () => (
                 if (perm && !myPerms.includes(perm)) lockedTabs.push(tab.id);
                 return tab;
             });
+    const visibleTabs = [...visibleTabsRaw].sort((a, b) => {
+        const ai = tabOrder.indexOf(a.id);
+        const bi = tabOrder.indexOf(b.id);
+        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+    });
 
     return (
         <div className="fixed inset-0 bg-gray-950/98 z-[4500] backdrop-blur-3xl flex items-center justify-center p-0 sm:p-4 animate-fadeIn">
@@ -3249,16 +3315,28 @@ const renderPostsPanel = () => (
                 </header>
 
                 <div ref={tabsBarRef} className={`flex gap-1 bg-gray-50 border-b overflow-x-auto no-scrollbar flex-shrink-0 transition-all duration-300 ${isEditing ? 'h-0 opacity-0 p-0' : 'p-2 sm:p-3 opacity-100'}`}>
-                    {visibleTabs.map(tab => {
+                    {visibleTabs.map((tab, idx) => {
                         const isLocked = !isSuperAdmin && lockedTabs.includes(tab.id);
+                        const isDragSrc = dragTabIdx === idx;
+                        const isDragOver = dragOverIdx === idx && dragTabIdx !== null && dragTabIdx !== idx;
                         return (
-                        <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                        <button key={tab.id} onClick={() => { if (!isDragging) setActiveTab(tab.id); }}
                             data-guide={`admin-${tab.id}`}
-                            className={`relative flex flex-col items-center justify-center p-2 rounded-xl sm:rounded-[1.25rem] transition-all border-2 flex-shrink-0 min-w-[60px] sm:w-20 ${activeTab === tab.id ? 'bg-white shadow-lg scale-105 active:scale-95' : 'bg-transparent border-transparent text-gray-300 grayscale opacity-60'} ${isLocked ? 'opacity-40' : ''}`}
-                            style={{ borderColor: activeTab === tab.id ? tab.color : 'transparent', color: activeTab === tab.id ? tab.color : '' }}>
+                            draggable={isSuperAdmin}
+                            onMouseDown={() => isSuperAdmin && handleTabLongPressStart(idx)}
+                            onMouseUp={handleTabLongPressEnd}
+                            onMouseLeave={handleTabLongPressEnd}
+                            onTouchStart={() => isSuperAdmin && handleTabLongPressStart(idx)}
+                            onTouchEnd={handleTabLongPressEnd}
+                            onDragOver={(e) => { e.preventDefault(); handleTabDragOver(idx); }}
+                            onDrop={handleTabDrop}
+                            onDragEnd={handleTabDragEnd}
+                            className={`relative flex flex-col items-center justify-center p-2 rounded-xl sm:rounded-[1.25rem] transition-all duration-200 border-2 flex-shrink-0 min-w-[60px] sm:w-20 select-none ${activeTab === tab.id ? 'bg-white shadow-lg scale-105 active:scale-95' : 'bg-transparent border-transparent text-gray-300 grayscale opacity-60'} ${isLocked ? 'opacity-40' : ''} ${isDragSrc ? 'opacity-40 scale-90 border-dashed border-gray-400' : ''} ${isDragOver ? 'border-primary bg-primary/5 scale-110' : ''} ${isDragging && !isDragSrc ? 'cursor-grab' : ''}`}
+                            style={{ borderColor: isDragOver ? undefined : activeTab === tab.id ? tab.color : 'transparent', color: activeTab === tab.id ? tab.color : '' }}>
                             <i className={`fas ${tab.icon} text-sm mb-1`}></i>
                             <span className="text-[8px] sm:text-[9px] font-black uppercase">{tab.label}</span>
                             {isLocked && <i className="fas fa-lock absolute top-1 left-1 text-[7px] text-red-400"></i>}
+                            {isSuperAdmin && isDragSrc && <i className="fas fa-grip-vertical absolute top-1 right-1 text-[7px] text-gray-400"></i>}
                         </button>
                         );
                     })}

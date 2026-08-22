@@ -11,6 +11,7 @@ const commentSchema = new mongoose.Schema({
   likes: { type: Number, default: 0 },
   likedBy: [{ type: String }],
   isFeatured: { type: Boolean, default: false },
+  isPinned: { type: Boolean, default: false },
   podcastId: { type: mongoose.Schema.Types.ObjectId, ref: 'Podcast' },
   episodeIndex: Number,
   podcastTitle: String,

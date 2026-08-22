@@ -893,10 +893,11 @@ router.delete('/comments/:id', async (req, res) => {
 
 router.put('/comments/:id', async (req, res) => {
   try {
-    const { text, isFeatured } = req.body;
+    const { text, isFeatured, isPinned } = req.body;
     const update = {};
     if (text !== undefined) update.text = text;
     if (isFeatured !== undefined) update.isFeatured = isFeatured;
+    if (isPinned !== undefined) update.isPinned = isPinned;
     const comment = await Comment.findByIdAndUpdate(req.params.id, update, { new: true });
     if (!comment) return res.status(404).json({ error: 'نظر یافت نشد' });
     broadcast('data-changed', { type: 'comments', action: 'update', item: comment.toObject() });

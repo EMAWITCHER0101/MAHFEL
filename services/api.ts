@@ -562,7 +562,7 @@ export const adminDeleteComment = async (commentId: string): Promise<any> => {
   return apiFetch(`/admin/comments/${commentId}`, { method: 'DELETE' });
 };
 
-export const adminUpdateComment = async (commentId: string, data: { text?: string; isFeatured?: boolean }): Promise<any> => {
+export const adminUpdateComment = async (commentId: string, data: { text?: string; isFeatured?: boolean; isPinned?: boolean }): Promise<any> => {
   return apiFetch(`/admin/comments/${commentId}`, { method: 'PUT', body: JSON.stringify(data) });
 };
 
