@@ -457,9 +457,15 @@ const ChatBubble: React.FC<{
              onContextMenu={(e) => { e.preventDefault(); setShowMenu(true); if (bubbleRef.current) { const r = bubbleRef.current.getBoundingClientRect(); setMenuPos({ top: Math.round(r.bottom), right: Math.round(document.documentElement.clientWidth - r.right) }); } }}>
           <div className={`relative ${hasImage ? 'rounded-2xl overflow-hidden' : `rounded-2xl p-2.5 ${isOwn ? 'rounded-br-sm' : 'rounded-bl-sm'}`}`}
                style={{
-                 background: isOwn ? 'linear-gradient(135deg, color-mix(in srgb, var(--primary) 18%, var(--surface-2)), color-mix(in srgb, var(--primary) 8%, var(--surface-2)))' : 'var(--surface-2)',
-                 border: isOwn ? '1px solid color-mix(in srgb, var(--primary) 15%, transparent)' : '1px solid var(--border)',
-                 boxShadow: isOwn ? '0 2px 8px color-mix(in srgb, var(--primary) 8%, transparent)' : '0 1px 3px rgba(0,0,0,0.03)',
+                 background: comment.isFeatured
+                   ? 'linear-gradient(145deg, #fef9c3, #fef3c7, #fffbeb)'
+                   : isOwn ? 'linear-gradient(135deg, color-mix(in srgb, var(--primary) 18%, var(--surface-2)), color-mix(in srgb, var(--primary) 8%, var(--surface-2)))' : 'var(--surface-2)',
+                 border: comment.isFeatured
+                   ? '1px solid rgba(234, 179, 8, 0.25)'
+                   : isOwn ? '1px solid color-mix(in srgb, var(--primary) 15%, transparent)' : '1px solid var(--border)',
+                 boxShadow: comment.isFeatured
+                   ? '0 2px 8px rgba(234, 179, 8, 0.15)'
+                   : isOwn ? '0 2px 8px color-mix(in srgb, var(--primary) 8%, transparent)' : '0 1px 3px rgba(0,0,0,0.03)',
                  ...(hasImage ? { padding: 0 } : {}),
                }}>
 

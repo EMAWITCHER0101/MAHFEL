@@ -282,9 +282,10 @@ const RenderReply = React.memo<RenderReplyProps>(({ comment, depth, postId, loca
         )}
       </div>
       <div className="flex-1 min-w-0">
-          <div className="rounded-xl px-3 py-2 transition-all duration-200 relative" style={{ background: 'color-mix(in srgb, var(--surface-3) 80%, transparent)', border: '1px solid color-mix(in srgb, var(--border) 40%, transparent)' }}>
+          <div className="rounded-xl px-3 py-2 transition-all duration-200 relative" style={{ background: comment.isFeatured ? 'linear-gradient(145deg, #fef9c3, #fef3c7, #fffbeb)' : 'color-mix(in srgb, var(--surface-3) 80%, transparent)', border: comment.isFeatured ? '1px solid rgba(234, 179, 8, 0.25)' : '1px solid color-mix(in srgb, var(--border) 40%, transparent)', boxShadow: comment.isFeatured ? '0 1px 6px rgba(234, 179, 8, 0.15)' : undefined }}>
             <div className="flex items-center gap-2 mb-1">
               <span className="font-bold text-[10px] cursor-pointer hover:opacity-70 transition-opacity" style={{ color: 'var(--text-1)' }} onClick={() => onOpenProfile?.(comment.userId, comment.author, comment.authorAvatarUrl)}>{comment.author}</span>
+              {comment.isFeatured && <span className="text-[6px] px-1 py-0.5 rounded-full font-black" style={{ background: 'linear-gradient(135deg, #fef3c7, #fde68a)', color: '#b45309', boxShadow: '0 1px 3px rgba(234,179,8,0.2)' }}><i className="fas fa-star"></i></span>}
               <div className="w-0.5 h-0.5 rounded-full" style={{ background: 'var(--text-3)' }}></div>
               <span className="text-[8px] font-medium" style={{ color: 'var(--text-3)' }}>{formatTimeFromISO(comment.isoDate)}</span>
               <button onClick={menu.openAt} className="w-5 h-5 rounded-md flex items-center justify-center transition-all hover:bg-black/5 active:scale-90 opacity-0 group-hover/reply:opacity-50 hover:!opacity-80 flex-shrink-0" style={{ color: 'var(--text-3)' }}>
@@ -567,24 +568,28 @@ const PostBubble: React.FC<{
   };
 
   return (<>
-    <div className={`flex items-start gap-1.5 ${isAdminPost ? 'flex-row-reverse' : ''} ${isFirstInGroup ? 'mt-4' : 'mt-0.5'}`}>
+    <div id={`post-${post._id || (post as any).id || ''}`} className={`flex items-start gap-1.5 ${isAdminPost ? 'flex-row-reverse' : ''} ${isFirstInGroup ? 'mt-4' : 'mt-0.5'}`}>
        <div className={`w-8 flex-shrink-0 ${isFirstInGroup ? '' : 'invisible'}`}>
          {isFirstInGroup && (post.authorAvatarUrl ? <img src={post.authorAvatarUrl} className="w-8 h-8 rounded-full object-cover shadow-sm cursor-pointer active:scale-95 transition-transform" alt={post.author} onClick={(e) => { e.stopPropagation(); onOpenProfile?.(post.userId, post.author, post.authorAvatarUrl); }} /> : <button onClick={(e) => { e.stopPropagation(); onOpenProfile?.(post.userId, post.author, post.authorAvatarUrl); }} className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-bold shadow-sm cursor-pointer active:scale-95 transition-transform" style={{ background: `hsl(${post.author.charCodeAt(0) * 37 % 360}, 55%, 45%)` }}>{post.author[0]}</button>)}
        </div>
 
        <div className={`flex flex-col flex-1 min-w-0 ${isAdminPost ? 'items-end' : 'items-start'}`}>
-          <div
+           <div
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
             className={`relative w-[92%] lg:w-[88%] transition-all duration-200 hover:shadow-md cursor-default ${isFirstInGroup ? 'rounded-2xl' : isAdminPost ? 'rounded-2xl rounded-br-sm' : 'rounded-2xl rounded-bl-sm'}`}
             style={{
-              background: isAdminPost
+              background: (post as any).isFeatured
+                ? 'linear-gradient(145deg, #fef9c3, #fef3c7, #fffbeb)'
+                : isAdminPost
                 ? 'linear-gradient(145deg, color-mix(in srgb, var(--primary) 14%, var(--surface-2)), color-mix(in srgb, var(--primary) 4%, var(--surface-2)))'
                 : 'var(--surface-2)',
-              boxShadow: isAdminPost
+              boxShadow: (post as any).isFeatured
+                ? '0 1px 8px rgba(234, 179, 8, 0.18), 0 0 0 1px rgba(234, 179, 8, 0.15)'
+                : isAdminPost
                 ? '0 1px 6px color-mix(in srgb, var(--primary) 10%, transparent)'
                 : '0 1px 4px rgba(0,0,0,0.03)',
-              border: isAdminPost ? '1px solid color-mix(in srgb, var(--primary) 12%, transparent)' : '1px solid var(--border)',
+              border: (post as any).isFeatured ? '1px solid rgba(234, 179, 8, 0.3)' : isAdminPost ? '1px solid color-mix(in srgb, var(--primary) 12%, transparent)' : '1px solid var(--border)',
             }}>
             {isAdminPost && (
               <div className="h-[2px] rounded-t-2xl" style={{ background: 'linear-gradient(to left, var(--primary), transparent)' }}></div>
@@ -594,8 +599,10 @@ const PostBubble: React.FC<{
                {/* Header */}
                <div className="flex items-center justify-between mb-1">
                  <div className="flex items-center gap-1.5">
-                   <span className="font-black text-[11px] cursor-pointer hover:opacity-70 transition-opacity" style={{ color: isAdminPost ? 'var(--primary)' : 'var(--text-1)' }} onClick={(e) => { e.stopPropagation(); onOpenProfile?.(post.userId, post.author, post.authorAvatarUrl); }}>{post.author}</span>
-                   <span className="text-[8px]" style={{ color: 'var(--text-3)' }}>{formatTimeFromISO(post.isoDate)}</span>
+                    <span className="font-black text-[11px] cursor-pointer hover:opacity-70 transition-opacity" style={{ color: isAdminPost ? 'var(--primary)' : 'var(--text-1)' }} onClick={(e) => { e.stopPropagation(); onOpenProfile?.(post.userId, post.author, post.authorAvatarUrl); }}>{post.author}</span>
+                    {(post as any).isFeatured && <span className="text-[7px] px-1.5 py-0.5 rounded-full font-black" style={{ background: 'linear-gradient(135deg, #fef3c7, #fde68a)', color: '#b45309', boxShadow: '0 1px 4px rgba(234,179,8,0.25)' }}><i className="fas fa-star"></i> ویژه</span>}
+                    {(post as any).isPinned && <span className="text-[7px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600 font-black"><i className="fas fa-thumbtack"></i> سنجاق</span>}
+                    <span className="text-[8px]" style={{ color: 'var(--text-3)' }}>{formatTimeFromISO(post.isoDate)}</span>
                  </div>
 {currentUser && post.author === currentUser && (
                      <button onClick={(e) => { e.stopPropagation(); setIsEditingPost(true); setEditPostText(post.text || ''); }}
@@ -863,9 +870,9 @@ const VideoCommentItem: React.FC<{
 
     if (depth === 0) {
     return (
-      <div className="mt-3 mb-4 sm:mt-0 lg:mb-5">
+        <div className="mt-3 mb-4 sm:mt-0 lg:mb-5">
         <div className="rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-lg"
-          style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+          style={{ background: comment.isFeatured ? 'linear-gradient(145deg, #fef9c3, #fef3c7, #fffbeb)' : 'var(--surface-2)', border: comment.isFeatured ? '1px solid rgba(234, 179, 8, 0.25)' : '1px solid var(--border)', boxShadow: comment.isFeatured ? '0 2px 12px rgba(234, 179, 8, 0.15)' : undefined }}>
           <div
             className="relative aspect-video lg:aspect-[2.2/1] cursor-pointer group overflow-hidden"
             onClick={() => onOpenVideo(video, comment.videoTimestamp || 0)}
@@ -1681,9 +1688,9 @@ const PodcastCommentItem: React.FC<{
       <div className="mt-3 mb-5 sm:mt-0">
         <div className="rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-xl"
           style={{
-            background: 'var(--surface-2)',
-            border: '1px solid var(--border)',
-            boxShadow: '0 2px 20px rgba(6, 182, 212, 0.04)'
+            background: comment.isFeatured ? 'linear-gradient(145deg, #fef9c3, #fef3c7, #fffbeb)' : 'var(--surface-2)',
+            border: comment.isFeatured ? '1px solid rgba(234, 179, 8, 0.25)' : '1px solid var(--border)',
+            boxShadow: comment.isFeatured ? '0 2px 12px rgba(234, 179, 8, 0.15)' : '0 2px 20px rgba(6, 182, 212, 0.04)'
           }}>
           <div className="p-3 pb-0">
             <div className="flex items-center gap-2.5 mb-3" dir="rtl">
@@ -1862,6 +1869,7 @@ const PodcastCommentItem: React.FC<{
 const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts, videos, podcasts, authors, publishedBooks, comments, currentUser, userRole, onPlayVideoFromFeed, onPlayPodcastFromFeed, onPlayPodcastComment, onShowComments, onShowVideoDiscussion, onDeletePost, onShowBook, onShowInstantView, onDeleteComment, onAddComment, onLikeComment, onUpdateComment, onNewPost, onUpdatePost, onToggleSidebar, user, onOpenSearch, onOpenProfile, miniPlayerProps, albums = { mine: [], shared: [] }, savedPostIds = [], onToggleSavePost, onPlayAlbum, onOpenAlbum }) => {
   const [menuState, setMenuState] = useState<{ post: Post | null, rect: DOMRect | null }>({ post: null, rect: null });
   const [feedMode, setFeedMode] = useState<'all' | 'posts' | 'video-comments' | 'podcast-comments'>('all');
+  const [expandedPinned, setExpandedPinned] = useState(false);
   const [likedComments, setLikedComments] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('soha_liked_comments') || '[]')); } catch { return new Set(); }
   });
@@ -2261,6 +2269,55 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
               <p className="text-[10px] font-bold opacity-60">اولین یادداشت را شما بنویسید</p>
             </div>
           )}
+
+          {/* پست‌های سنجاق‌شده */}
+          {(() => {
+            const pinnedPosts = posts.filter((p: any) => p.isPinned);
+            if (pinnedPosts.length === 0) return null;
+            const shown = expandedPinned ? pinnedPosts : pinnedPosts.slice(0, 1);
+            return (
+              <div className="mb-3 animate-fadeIn">
+                <div className="rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(145deg, #fff7ed, #fffbeb, #fef3c7)', border: '1px solid rgba(234, 179, 8, 0.2)', boxShadow: '0 2px 12px rgba(234, 179, 8, 0.1)' }}>
+                  <div className="flex items-center gap-2 px-3 py-2 border-b" style={{ borderColor: 'rgba(234, 179, 8, 0.15)' }}>
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>
+                      <i className="fas fa-thumbtack text-white text-[8px]"></i>
+                    </div>
+                    <span className="text-[10px] font-black" style={{ color: '#92400e' }}>سنجاق‌شده</span>
+                    <span className="text-[8px] px-1.5 py-0.5 rounded-full font-bold" style={{ background: 'rgba(234, 179, 8, 0.15)', color: '#b45309' }}>{toPersianDigits(pinnedPosts.length)}</span>
+                  </div>
+                  <div className="divide-y" style={{ borderColor: 'rgba(234, 179, 8, 0.1)' }}>
+                    {shown.map((p: any) => (
+                      <div key={p._id || p.id} className="px-3 py-2.5 cursor-pointer transition-all hover:bg-white/50 active:scale-[0.98]" onClick={() => {
+                        const el = document.getElementById(`post-${p._id || p.id}`);
+                        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      }}>
+                        <div className="flex items-start gap-2">
+                          <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background: `hsl(${(p.author || 'ک').charCodeAt(0) * 37 % 360}, 55%, 50%)` }}>
+                            <span className="text-white text-[7px] font-bold">{(p.author || 'ک').charAt(0)}</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <span className="text-[9px] font-black" style={{ color: '#92400e' }}>{p.author}</span>
+                              <span className="text-[7px]" style={{ color: '#b45309' }}>{p.date}</span>
+                            </div>
+                            <p className="text-[10px] leading-relaxed line-clamp-2" style={{ color: '#78350f' }}>{p.text || '(بدون متن)'}</p>
+                          </div>
+                          <i className="fas fa-thumbtack text-[8px] flex-shrink-0 mt-1" style={{ color: '#d97706' }}></i>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {pinnedPosts.length > 1 && (
+                    <button onClick={() => setExpandedPinned(!expandedPinned)} className="w-full py-2 text-[9px] font-black flex items-center justify-center gap-1 transition-all hover:bg-white/50" style={{ color: '#b45309', borderTop: '1px solid rgba(234, 179, 8, 0.1)' }}>
+                      <i className={`fas ${expandedPinned ? 'fa-chevron-up' : 'fa-chevron-down'} text-[8px]`}></i>
+                      {expandedPinned ? 'بستن' : `مشاهده همه (${toPersianDigits(pinnedPosts.length)})`}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           {feedItems.map((item, index) => {
             if (item.itemType === 'date') return <DateSeparator key={`${item.date}-${index}`} date={item.date} />;
             if (item.itemType === 'post') {
