@@ -2284,10 +2284,9 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
             return (
               <div className="mb-3 animate-fadeIn sticky top-0 z-20">
                 <div className="rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(145deg, #fff7ed, #fffbeb, #fef3c7)', border: '1px solid rgba(234, 179, 8, 0.2)', boxShadow: '0 2px 12px rgba(234, 179, 8, 0.1)' }}>
-                  <div className="flex items-center gap-2 px-3 py-2 border-b" style={{ borderColor: 'rgba(234, 179, 8, 0.15)' }}>
-                    <i className="fas fa-thumbtack text-orange-500 text-[10px]"></i>
-                    <span className="text-[10px] font-black" style={{ color: '#92400e' }}>سنجاق</span>
-                    <span className="text-[8px] font-black" style={{ color: '#b45309' }}>{toPersianDigits(pinnedPosts.length)}</span>
+                  <div className="flex items-center justify-between px-3 py-2" style={{ borderColor: 'rgba(234, 179, 8, 0.15)' }}>
+                    <span className="text-[10px] font-black flex items-center gap-1.5" style={{ color: '#92400e' }}><i className="fas fa-thumbtack text-orange-500 text-[9px]"></i>سنجاق</span>
+                    <span className="text-[9px] font-black" style={{ color: '#b45309' }}>{toPersianDigits(pinnedPosts.length)}</span>
                   </div>
                   <div className="divide-y" style={{ borderColor: 'rgba(234, 179, 8, 0.1)' }}>
                     {shown.map((p: any) => (
