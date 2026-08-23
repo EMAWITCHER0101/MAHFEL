@@ -443,9 +443,10 @@ const PostBubble: React.FC<{
   onUpdatePost?: (post: Post) => void;
   onDeletePost?: (postId: number) => void;
   currentUser?: string;
+  userRole?: string;
   onSwipeReply?: (target: { postId: number; author: string; text: string; commentId?: string; quotedText?: string }) => void;
   onOpenProfile?: (userId?: string, name?: string, avatar?: string) => void;
-}> = React.memo(({ post, video, podcast, episode, publishedBook, album, saved, onToggleSave, onPlayAlbum, onOpenAlbum, onShowComments, onPlayVideo, onPlayPodcast, onShowBook, onOpenMenu, isFirstInGroup, isLastInGroup, onShowInstantView, onAddComment, onNewPost, onUpdatePost, onDeletePost, currentUser, onSwipeReply, onOpenProfile }) => {
+}> = React.memo(({ post, video, podcast, episode, publishedBook, album, saved, onToggleSave, onPlayAlbum, onOpenAlbum, onShowComments, onPlayVideo, onPlayPodcast, onShowBook, onOpenMenu, isFirstInGroup, isLastInGroup, onShowInstantView, onAddComment, onNewPost, onUpdatePost, onDeletePost, currentUser, userRole, onSwipeReply, onOpenProfile }) => {
   const isAdminPost = post.author === 'سرای هنر و اندیشه' || post.author?.includes('مجموعه:');
   const [liked, setLiked] = useState(() => {
     try { return JSON.parse(localStorage.getItem('soha_liked_posts') || '[]').includes(String(post.id)); } catch { return false; }
@@ -605,7 +606,7 @@ const PostBubble: React.FC<{
                     {(post as any).isPinned && <span className="text-[7px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600 font-black"><i className="fas fa-thumbtack"></i> سنجاق</span>}
                     <span className="text-[8px]" style={{ color: 'var(--text-3)' }}>{formatTimeFromISO(post.isoDate)}</span>
                  </div>
-{currentUser && post.author === currentUser && (
+{currentUser && (post.author === currentUser || userRole === 'admin' || userRole === 'superadmin') && (
                      <button onClick={(e) => { e.stopPropagation(); setIsEditingPost(true); setEditPostText(post.text || ''); }}
                        className="w-6 h-6 rounded-lg flex items-center justify-center transition-all hover:bg-black/5 active:scale-90 opacity-50 hover:opacity-80"
                        style={{ color: 'var(--text-3)' }}>
@@ -692,8 +693,8 @@ const PostBubble: React.FC<{
                  style={{ color: liked ? '#ef4444' : '#475569' }}>
                  <i className={`${liked ? 'fas' : 'far'} fa-heart text-[11px]`}></i>
                  <span className="text-[10px] font-bold">{toPersianDigits(post.likes + (liked ? 1 : 0))}</span>
-               </button>
-{currentUser && post.author === currentUser && (
+                </button>
+{currentUser && (post.author === currentUser || userRole === 'admin' || userRole === 'superadmin') && (
                <button onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
                  className="rounded-lg py-1 px-2 transition-all active:scale-90"
                  style={{ color: '#475569' }}>
@@ -738,7 +739,7 @@ const PostBubble: React.FC<{
         { icon: 'fas fa-quote-right', label: 'نقل‌قول', onClick: () => onSwipeReply?.({ postId: post.id, author: post.author, text: selectedQuoteText || post.text || '', quotedText: selectedQuoteText || post.text || '' }) },
         { divider: true },
         { icon: liked ? 'fas fa-heart' : 'far fa-heart', label: liked ? 'برداشتن لایک' : 'لایک', color: liked ? '#ef4444' : undefined, onClick: () => toggleLike() },
-        ...(currentUser && post.author === currentUser ? [
+        ...(currentUser && (post.author === currentUser || userRole === 'admin' || userRole === 'superadmin') ? [
           { icon: 'fas fa-pen', label: 'ویرایش', onClick: () => { setIsEditingPost(true); setEditPostText(post.text || ''); } },
           { icon: 'fas fa-trash-alt', label: 'حذف', color: '#ef4444', onClick: () => setShowDeleteConfirm(true) },
         ] : []),
@@ -2328,7 +2329,7 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
             if (item.itemType === 'post') {
               return (
                 <div key={item.id}>
-                    <PostBubble post={item} video={item.videoId ? videos.find((v:any) => String(v.id) === String(item.videoId)) : undefined} podcast={item.podcastId ? podcasts.find((p:any) => String(p.id) === String(item.podcastId)) : undefined} episode={item.episodeIndex != null && item.podcastId ? (() => { const p = podcasts.find((pp:any) => String(pp.id) === String(item.podcastId)); return p?.episodes[item.episodeIndex] || null; })() : null} publishedBook={item.bookId ? publishedBooks.find((b:any) => String(b.id) === String(item.bookId)) : undefined} album={item.albumId ? albums.mine.find((a:any) => String(a._id || a.id) === String(item.albumId)) || albums.shared.find((a:any) => String(a._id || a.id) === String(item.albumId)) : undefined} saved={savedPostIds.some((sid: string) => String(sid) === String(item.id || (item as any)._id))} onToggleSave={onToggleSavePost} onPlayAlbum={onPlayAlbum} onOpenAlbum={onOpenAlbum} onShowComments={onShowComments} onPlayVideo={onPlayVideoFromFeed} onPlayPodcast={onPlayPodcastFromFeed} onShowBook={onShowBook} onOpenMenu={(post, rect) => setMenuState({ post, rect })} isFirstInGroup={item.isFirst} isLastInGroup={item.isLast} onShowInstantView={onShowInstantView} onNewPost={onNewPost} onUpdatePost={onUpdatePost} onDeletePost={onDeletePost} currentUser={currentUser} onSwipeReply={(t) => { setReplyTarget(t); inputRef.current?.focus(); }} onOpenProfile={openProfile} />
+                    <PostBubble post={item} video={item.videoId ? videos.find((v:any) => String(v.id) === String(item.videoId)) : undefined} podcast={item.podcastId ? podcasts.find((p:any) => String(p.id) === String(item.podcastId)) : undefined} episode={item.episodeIndex != null && item.podcastId ? (() => { const p = podcasts.find((pp:any) => String(pp.id) === String(item.podcastId)); return p?.episodes[item.episodeIndex] || null; })() : null} publishedBook={item.bookId ? publishedBooks.find((b:any) => String(b.id) === String(item.bookId)) : undefined} album={item.albumId ? albums.mine.find((a:any) => String(a._id || a.id) === String(item.albumId)) || albums.shared.find((a:any) => String(a._id || a.id) === String(item.albumId)) : undefined} saved={savedPostIds.some((sid: string) => String(sid) === String(item.id || (item as any)._id))} onToggleSave={onToggleSavePost} onPlayAlbum={onPlayAlbum} onOpenAlbum={onOpenAlbum} onShowComments={onShowComments} onPlayVideo={onPlayVideoFromFeed} onPlayPodcast={onPlayPodcastFromFeed} onShowBook={onShowBook} onOpenMenu={(post, rect) => setMenuState({ post, rect })} isFirstInGroup={item.isFirst} isLastInGroup={item.isLast} onShowInstantView={onShowInstantView} onNewPost={onNewPost} onUpdatePost={onUpdatePost} onDeletePost={onDeletePost} currentUser={currentUser} userRole={userRole} onSwipeReply={(t) => { setReplyTarget(t); inputRef.current?.focus(); }} onOpenProfile={openProfile} />
                 </div>
               );
             }
