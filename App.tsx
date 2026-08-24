@@ -1368,6 +1368,14 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
             return;
         }
         if (l === '/' || l === '/mahfel' || l === '/mahfel/videos') { setActiveTab('videos'); return; }
+        const adminMatch = l.match(/^\/admin(?:\?tab=(.+))?$/);
+        if (adminMatch) {
+            setAppState('admin');
+            if (adminMatch[1]) {
+                setTimeout(() => { window.dispatchEvent(new CustomEvent('admin-goto-tab', { detail: adminMatch[1] })); }, 300);
+            }
+            return;
+        }
         setActiveTab('mahfel');
     }, [videos, posts, podcasts, publishedBooks, handlePlayVideo]);
 

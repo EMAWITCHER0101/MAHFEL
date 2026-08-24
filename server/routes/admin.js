@@ -540,7 +540,8 @@ router.get('/notes', async (req, res) => {
     const { search, status, authorName, page = 1, limit = 20 } = req.query;
     const filter = { type: 'note' };
     if (status === 'draft') filter.isDraft = true;
-    else if (status === 'published') filter.isDraft = { $ne: true };
+    else if (status === 'pending') { filter.pendingApproval = true; filter.isDraft = { $ne: true }; }
+    else if (status === 'published') { filter.isDraft = { $ne: true }; filter.pendingApproval = { $ne: true }; }
     if (search) filter.$or = [{ title: { $regex: search, $options: 'i' } }, { description: { $regex: search, $options: 'i' } }];
     if (authorName) filter.authorName = authorName;
     const total = await PublishedBook.countDocuments(filter);

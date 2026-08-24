@@ -898,6 +898,16 @@ if (activeTab === 'versions') loadVersions();
         return () => clearTimeout(t);
     }, [currentUsersVersion, activeTab, usersPage, loadUsers]);
 
+    // گوش دادن به رویداد نوتیفیکیشن برای رفتن به تب مشخص
+    useEffect(() => {
+        const handler = (e: Event) => {
+            const tab = (e as CustomEvent).detail;
+            if (tab && typeof tab === 'string') setActiveTab(tab as AdminTab);
+        };
+        window.addEventListener('admin-goto-tab', handler);
+        return () => window.removeEventListener('admin-goto-tab', handler);
+    }, []);
+
     // جستجوی کاربر برای ارسال نوتیفیکیشن شخصی
     useEffect(() => {
         if (notifTarget !== 'user') return;
@@ -1585,7 +1595,7 @@ const renderPostsPanel = () => (
                                 if (!noteTitle.trim()) { showAdminToast('عنوان یادداشت را بنویسید', 'warning'); return; }
                                 setNoteSaving(true);
                                 try {
-                                    const payload = { title: noteTitle.trim(), description: noteContent.trim().replace(/<[^>]*>/g, '').slice(0, 140), contentHtml: noteContent.trim().split('\n').map(p => `<p>${p}</p>`).join(''), authorName: noteAuthorName.trim() || 'سیمای هنر و اندیشه', isDraft: noteIsDraft, type: 'note' };
+                                     const payload = { title: noteTitle.trim(), description: noteContent.trim().replace(/<[^>]*>/g, '').slice(0, 140), contentHtml: noteContent.trim().split('\n').map(p => `<p style="white-space:pre-line">${p.replace(/ /g, '&nbsp;')}</p>`).join(''), authorName: noteAuthorName.trim() || 'سیمای هنر و اندیشه', isDraft: noteIsDraft, type: 'note' };
                                     if (editingNote) {
                                         const r = await adminUpdateNote(editingNote._id, payload);
                                         if (r) { showAdminToast('یادداشت به‌روزرسانی شد', 'success'); setNoteComposer({ open: false }); setEditingNote(null); loadAdminNotes(adminNotesPage); }
@@ -1611,7 +1621,7 @@ const renderPostsPanel = () => (
                         <i className="fas fa-search absolute left-3 top-3.5 text-gray-300"></i>
                     </div>
                     <div className="flex gap-2">
-                        {[{ v: '', l: 'همه', icon: 'fa-feather-alt' }, { v: 'published', l: 'منتشر شده', icon: 'fa-globe' }, { v: 'draft', l: 'پیش‌نویس‌ها', icon: 'fa-pen-alt' }].map(t => (
+                        {[{ v: '', l: 'همه', icon: 'fa-feather-alt' }, { v: 'pending', l: 'درخواست‌ها', icon: 'fa-hourglass-half' }, { v: 'published', l: 'منتشر شده', icon: 'fa-globe' }, { v: 'draft', l: 'پیش‌نویس‌ها', icon: 'fa-pen-alt' }].map(t => (
                             <button key={t.v} onClick={() => { setAdminNotesStatus(t.v); loadAdminNotes(1, adminNotesSearch, t.v); }}
                                 className={`flex-1 py-2 rounded-xl text-[9px] font-black transition-all flex items-center justify-center gap-1 ${adminNotesStatus === t.v ? 'bg-violet-600 text-white' : 'bg-gray-50 text-gray-400'}`}>
                                 <i className={`fas ${t.icon}`}></i>{t.l}
@@ -1646,12 +1656,20 @@ const renderPostsPanel = () => (
                                 </div>
                                 <div className="flex items-center gap-1 flex-shrink-0">
                                     {n.pendingApproval && (
+                                        <>
                                         <button onClick={async () => {
                                             const r = await adminUpdateNote(n._id, { isDraft: false, pendingApproval: false });
                                             if (r) { showAdminToast('یادداشت تأیید و منتشر شد', 'success'); loadAdminNotes(adminNotesPage); }
                                         }} className="w-8 h-8 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 shadow-md transition-all flex items-center justify-center" title="تأیید و انتشار">
                                             <i className="fas fa-check text-[9px]"></i>
                                         </button>
+                                        <button onClick={async () => {
+                                            const r = await adminUpdateNote(n._id, { pendingApproval: false, isDraft: true });
+                                            if (r) { showAdminToast('درخواست رد شد', 'warning'); loadAdminNotes(adminNotesPage); }
+                                        }} className="w-8 h-8 rounded-xl bg-amber-500 text-white hover:bg-amber-600 shadow-md transition-all flex items-center justify-center" title="رد درخواست">
+                                            <i className="fas fa-times text-[9px]"></i>
+                                        </button>
+                                        </>
                                     )}
                                     <button onClick={async () => {
                                         const r = await adminUpdateNote(n._id, { isPinned: !n.isPinned });
@@ -2439,6 +2457,9 @@ const renderPostsPanel = () => (
                                 {versionForm.apkUrl && (
                                     <span className="text-[9px] text-green-600 bg-green-50 px-3 py-1.5 rounded-full font-black truncate max-w-[220px]">{versionForm.apkUrl}</span>
                                 )}
+                                {(versionForm.apkVersion || versionForm.apkUrl) && (
+                                    <button onClick={() => { showConfirmToast('آیا از حذف انتشار APK اطمینان دارید؟', () => { setVersionForm(f => ({ ...f, apkVersion: '', apkUrl: '', apkMessage: '' })); showAdminToast('انتشار APK حذف شد', 'success'); }); }} className="flex items-center gap-1 px-3 py-2.5 rounded-xl bg-red-50 text-red-500 text-[9px] font-black hover:bg-red-100 transition-all active:scale-95"><i className="fas fa-trash text-[8px]"></i> حذف انتشار</button>
+                                )}
                             </div>
                         </div>
                     </FormField>
@@ -2462,6 +2483,9 @@ const renderPostsPanel = () => (
                     <FormField label="پیام به کاربران (اختیاری)">
                         <TextArea rows={2} placeholder="مثلاً: مشکلات نصب نسخه قبلی برطرف شده است" value={versionForm.desktopMessage || ''} onChange={(e: any) => setVersionForm(f => ({ ...f, desktopMessage: e.target.value }))} />
                     </FormField>
+                    {(versionForm.desktopVersion || versionForm.desktopUrl) && (
+                        <button onClick={() => { showConfirmToast('آیا از حذف انتشار دسکتاپ اطمینان دارید؟', () => { setVersionForm(f => ({ ...f, desktopVersion: '', desktopUrl: '', desktopMessage: '' })); showAdminToast('انتشار دسکتاپ حذف شد', 'success'); }); }} className="flex items-center gap-1 px-3 py-2 rounded-xl bg-red-50 text-red-500 text-[9px] font-black hover:bg-red-100 transition-all active:scale-95"><i className="fas fa-trash text-[8px]"></i> حذف انتشار دسکتاپ</button>
+                    )}
                 </div>
             </div>
 
@@ -3259,19 +3283,22 @@ const renderPostsPanel = () => (
     const isSuperAdmin = myRole === 'superadmin';
     const isAdmin = myRole === 'admin';
     const lockedTabs: string[] = [];
+    const effectivePerms = isSuperAdmin ? ALL_ROLE_PERMISSIONS.map(p => p.id) : isAdmin ? (myPerms.length > 0 ? myPerms : (rolePermissions['admin'] || [])) : (rolePermissions[myRole] || []);
     const visibleTabsRaw = isSuperAdmin
         ? tabs
         : isAdmin
             ? tabs.filter(tab => {
+                if (tab.id === 'roles') return false;
                 const perm = TAB_PERMISSIONS[tab.id];
-                if (!perm || myPerms.includes(perm)) return true;
+                if (!perm || effectivePerms.includes(perm)) return true;
                 lockedTabs.push(tab.id);
                 return false;
             })
-            : tabs.map(tab => {
+            : tabs.filter(tab => {
+                if (tab.id === 'roles') return false;
                 const perm = TAB_PERMISSIONS[tab.id];
-                if (perm && !myPerms.includes(perm)) lockedTabs.push(tab.id);
-                return tab;
+                if (perm && !effectivePerms.includes(perm)) lockedTabs.push(tab.id);
+                return true;
             });
     const visibleTabs = [...visibleTabsRaw].sort((a, b) => {
         const ai = tabOrder.indexOf(a.id);

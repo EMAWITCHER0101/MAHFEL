@@ -67,6 +67,19 @@ router.post('/', requireAuth, async (req, res) => {
     if (book.isDraft === false && req.user.role !== 'admin') book.pendingApproval = true;
     await book.save();
     broadcast('data-changed', { type: 'publishedBooks', action: 'create', item: book.toObject() });
+    // درخواست انتشار یادداشت جدید → نوتیفیکیشن به ادمین‌ها
+    try {
+      if (book.pendingApproval && book.type === 'note') {
+        const adminNotif = await Notification.create({
+          title: '📝 درخواست انتشار یادداشت',
+          body: `${book.authorName || 'نویسنده'} یادداشت «${book.title || 'بدون عنوان'}» را برای انتشار ارسال کرد`,
+          link: '/admin?tab=notes',
+          type: 'note_request',
+          targetTab: 'notes',
+        });
+        await sendWebPushToAll({ title: adminNotif.title, body: adminNotif.body, url: adminNotif.link, id: String(adminNotif._id) });
+      }
+    } catch (ignored) {}
     // نوتیفیکیشن همگانی: یادداشت/کتاب جدید منتشرشده (فقط وقتی واقعاً منتشر شده)
     try {
       if (book.type && !book.isDraft && !book.pendingApproval) {
@@ -98,6 +111,19 @@ router.put('/:id', requireAuth, async (req, res) => {
     if (req.body.isDraft === false && existing.isDraft === true && req.user.role !== 'admin') req.body.pendingApproval = true;
     const book = await PublishedBook.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
     broadcast('data-changed', { type: 'publishedBooks', action: 'update', item: book.toObject() });
+    // درخواست انتشار یادداشت توسط نویسنده → نوتیفیکیشن به ادمین‌ها
+    try {
+      if (book && book.pendingApproval && !existing.pendingApproval) {
+        const adminNotif = await Notification.create({
+          title: '📝 درخواست انتشار یادداشت',
+          body: `${book.authorName || 'نویسنده'} یادداشت «${book.title || 'بدون عنوان'}» را برای انتشار ارسال کرد`,
+          link: '/admin?tab=notes',
+          type: 'note_request',
+          targetTab: 'notes',
+        });
+        await sendWebPushToAll({ title: adminNotif.title, body: adminNotif.body, url: adminNotif.link, id: String(adminNotif._id) });
+      }
+    } catch (ignored) {}
     // تازه منتشر شده (ادمین پیش‌نویس را منتشر کرد) → نوتیفیکیشن همگانی
     try {
       if (book && !book.isDraft && !book.pendingApproval && (existing.isDraft || existing.pendingApproval)) {

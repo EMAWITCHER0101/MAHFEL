@@ -384,7 +384,7 @@ export const NoteDetailView: React.FC<{
                 <div className="flex items-center gap-3 text-gray-500 text-xs font-bold mb-10 pb-6 border-b border-white/5 flex-row-reverse">
                     <span className="">{note.authorName}</span><span className="w-1 h-1 rounded-full bg-gray-700"></span><span className="">{note.date || 'بی‌تاریخ'}</span>
                 </div>
-                <div className="prose prose-invert prose-lg prose-primary max-w-none text-justify leading-[2.4] text-gray-300 font-medium mb-16 text-right " dangerouslySetInnerHTML={{ __html: note.contentHtml || note.description }} />
+                <div className="prose prose-invert prose-lg prose-primary max-w-none text-justify leading-[2.4] text-gray-300 font-medium mb-16 text-right " style={{ whiteSpace: 'pre-line' }} dangerouslySetInnerHTML={{ __html: note.contentHtml || note.description }} />
                 {relatedPodcasts.length > 0 && (
                     <section className="mt-16 pt-10 border-t-4 border-primary/10">
                         <h3 className="text-base font-black text-white mb-6 flex items-center gap-2 justify-end ">صوت‌های مرتبط<i className="fas fa-headphones text-primary"></i></h3>
@@ -961,8 +961,8 @@ interface NashrPageProps {
   onUpdateComment?: (commentId: string, newText: string) => void;
   onToggleSidebar?: () => void;
   myNotes?: PublishedBook[];
-  onSaveNote?: (data: { title: string; content: string; isDraft: boolean }) => Promise<PublishedBook | null>;
-  onUpdateNote?: (id: string, data: { title: string; content: string; isDraft?: boolean }) => Promise<PublishedBook | null>;
+  onSaveNote?: (data: { title: string; content: string; isDraft: boolean; pendingApproval?: boolean }) => Promise<PublishedBook | null>;
+  onUpdateNote?: (id: string, data: { title: string; content: string; isDraft?: boolean; pendingApproval?: boolean }) => Promise<PublishedBook | null>;
   onDeleteNote?: (id: string) => Promise<boolean>;
   onRepostToMahfel?: (note: PublishedBook) => Promise<void> | void;
   onOpenAuthorProfile?: (author: { name: string; avatar?: string; authorId?: string }) => void;
@@ -991,7 +991,11 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
   const heroRef = useRef<HTMLDivElement>(null);
 
   const books = useMemo(() => publishedBooks.filter(b => b.buyUrl && (b.type === 'book' || (!b.type && b.cover))), [publishedBooks]);
-  const notes = useMemo(() => publishedBooks.filter(b => b.type === 'note'), [publishedBooks]);
+  const notes = useMemo(() => publishedBooks.filter(b => b.type === 'note').sort((a: any, b: any) => {
+    if (!a.isDraft && !a.pendingApproval && (b.isDraft || b.pendingApproval)) return -1;
+    if ((a.isDraft || a.pendingApproval) && !b.isDraft && !b.pendingApproval) return 1;
+    return 0;
+  }), [publishedBooks]);
 
   // Unique author categories for the notes list
   const noteAuthors = useMemo(() => {
@@ -2021,16 +2025,20 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
             <button onClick={async () => {
               if (!noteTitle.trim() || !noteContent.trim() || noteSaving) return;
               setNoteSaving(true);
+              const isAuthor = user?.role === 'author';
+              const payload = isAuthor
+                ? { pendingApproval: true, isDraft: false }
+                : { isDraft: false };
               if (editingNote) {
-                await onUpdateNote?.(String(editingNote.id), { title: noteTitle, content: noteContent, isDraft: false });
+                await onUpdateNote?.(String(editingNote.id), { title: noteTitle, content: noteContent, ...payload });
               } else {
-                await onSaveNote?.({ title: noteTitle, content: noteContent, isDraft: false });
+                await onSaveNote?.({ title: noteTitle, content: noteContent, isDraft: false, ...payload });
               }
               setNoteSaving(false);
               setIsNoteComposerOpen(false);
               setEditingNote(null);
             }} disabled={!noteTitle.trim() || !noteContent.trim() || noteSaving} className="flex-1 py-3 rounded-xl text-[11px] font-black text-white transition-all active:scale-95 disabled:opacity-30 shadow-lg" style={{ background: 'linear-gradient(135deg, var(--primary), var(--secondary))' }}>
-              <i className="fas fa-paper-plane ml-1.5 text-[9px]" /> انتشار در صفحه نشر
+              <i className={`fas ${user?.role === 'author' ? 'fa-paper-plane' : 'fa-paper-plane'} ml-1.5 text-[9px]`}></i> {user?.role === 'author' ? 'ارسال برای تأیید مدیر' : 'انتشار در صفحه نشر'}
             </button>
           </div>
         </div>
