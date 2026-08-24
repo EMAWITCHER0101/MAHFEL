@@ -1455,7 +1455,7 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
         loadMyNotes();
     }, [loadMyNotes]);
 
-    const handleSaveNote = useCallback(async (data: { title: string; content: string; isDraft: boolean }): Promise<PublishedBook | null> => {
+    const handleSaveNote = useCallback(async (data: { title: string; content: string; isDraft: boolean; pendingApproval?: boolean }): Promise<PublishedBook | null> => {
         if (!user) return null;
         const note = await createPublishedBook({
             type: 'note',
@@ -1463,6 +1463,9 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
             description: data.content.replace(/<[^>]*>/g, '').slice(0, 140),
             contentHtml: data.content,
             isDraft: data.isDraft,
+            pendingApproval: data.pendingApproval,
+            authorName: user.name,
+            authorId: user._id || user.id,
             date: new Date().toLocaleDateString('fa-IR', { year: 'numeric', month: 'long', day: 'numeric' }),
         });
         if (!note) return null;

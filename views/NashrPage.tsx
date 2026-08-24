@@ -994,6 +994,7 @@ const NashrPage: React.FC<NashrPageProps> = ({ publishedBooks, allPodcasts, comm
   const notes = useMemo(() => publishedBooks.filter(b => b.type === 'note').sort((a: any, b: any) => {
     if (!a.isDraft && !a.pendingApproval && (b.isDraft || b.pendingApproval)) return -1;
     if ((a.isDraft || a.pendingApproval) && !b.isDraft && !b.pendingApproval) return 1;
+    return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
     return 0;
   }), [publishedBooks]);
 
