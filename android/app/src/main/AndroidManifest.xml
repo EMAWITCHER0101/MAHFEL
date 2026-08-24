@@ -20,7 +20,8 @@
             android:resizeableActivity="true"
             android:showWhenLocked="true"
             android:turnScreenOn="true"
-            android:exported="true">
+            android:exported="true"
+            android:enableOnBackInvokedCallback="false">
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
