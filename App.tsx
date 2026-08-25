@@ -8,7 +8,6 @@ import WelcomeVideo from './components/WelcomeVideo';
 import { ADMIN_STEPS, USER_STEPS, AUTHOR_STEPS } from './data/guideSteps';
 import ErrorBoundary from './components/ErrorBoundary';
 import { initBackgroundPlayback, isApp, isIos, sendNativeNotification, playInBackgroundAudio, stopBackgroundAudio, updateAudioBackgroundMeta, updateAudioBackgroundState, stopPlaybackService, isNativeMode, setNativeModeActive, nativeCommand, getNativeSnapshot, isVideoBackgroundActive, stopVideoBackground, getAppVersion, isDesktop, getDesktopVersion, isVersionNewer, clearWebMediaSession, getFcmToken, desktopShowNotification } from './services/backgroundPlayback';
-import { App as CapacitorApp } from '@capacitor/app';
 import { getAppUpdate, AppUpdateInfo } from './services/api';
 import UpdateDialog from './components/UpdateDialog';
 import { getPushEnabled, syncWebPushSubscription, getAppNotifEnabled } from './services/webPush';
@@ -255,23 +254,6 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
         };
         window.addEventListener('popstate', onPopState);
         return () => window.removeEventListener('popstate', onPopState);
-    }, []);
-
-    // Capacitor native back button: covers Android 15+ Predictive Back
-    useEffect(() => {
-        if (!isApp()) return;
-        let listenerHandle: any = null;
-        CapacitorApp.addListener('backButton', ({ canGoBack }: { canGoBack: boolean }) => {
-            const stack = layerStackRef.current;
-            if (stack.length > 0) {
-                const tag = stack[stack.length - 1];
-                layerStackRef.current = stack.slice(0, -1);
-                closeLayerRef.current(tag);
-            } else {
-                history.back();
-            }
-        }).then((handle: any) => { listenerHandle = handle; });
-        return () => { if (listenerHandle) listenerHandle.remove(); };
     }, []);
 
     const { isVPN, dismissVPN } = useVPNDetection();
