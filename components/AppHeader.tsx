@@ -19,7 +19,7 @@ interface AppHeaderProps {
 
 const AppHeader: React.FC<AppHeaderProps> = ({ onOpenAdmin, onOpenProfile, onOpenSearch, onOpenSidebar, onToggleTheme, isVisible, liveStream, theme, isAuthenticated, user }) => {
   const isDark = theme === 'dark';
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = ['admin', 'superadmin'].includes(user?.role || '');
 
   const headerVisibilityClass = isVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0';
 

@@ -91,8 +91,19 @@ const Sidebar: React.FC<SidebarProps> = ({
             })}
           </nav>
 
-          {/* Theme + Profile */}
+          {/* Admin + Theme + Profile */}
           <div className="px-2 pb-2.5 space-y-0.5 border-t border-gray-100 dark:border-gray-800 pt-2.5">
+            {user && (user.role === 'admin' || user.role === 'superadmin') && (
+              <button
+                onClick={onOpenAdmin}
+                className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-bold transition-all ${
+                  isDark ? 'text-amber-400 hover:bg-gray-800 hover:text-amber-300' : 'text-amber-600 hover:bg-amber-50 hover:text-amber-700'
+                }`}
+              >
+                <i className="fas fa-cog text-sm" />
+                <span>پنل ادمین</span>
+              </button>
+            )}
             <button
               onClick={onToggleTheme}
               data-guide="theme"

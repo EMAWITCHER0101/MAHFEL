@@ -230,7 +230,7 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ onClose, onLogout, us
                                     <i className="fas fa-chevron-left text-gray-200"></i>
                                 </button>
 
-                                {user.role === 'admin' && (
+                                {['admin', 'superadmin'].includes(user.role) && (
                                     <button onClick={onOpenAdmin} className="w-full text-right p-4 rounded-3xl hover:bg-gray-50 transition-colors flex items-center gap-4 bg-white border border-gray-100 shadow-sm group">
                                         <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
                                             <i className="fas fa-chart-pie text-sm"></i>
