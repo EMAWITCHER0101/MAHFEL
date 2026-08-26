@@ -317,7 +317,7 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
                         }
                         setUser(userData);
                         setIsAuthenticated(true);
-                        setAppState(userData.role === 'admin' ? 'admin' : (userData.interests && userData.interests.length > 0 ? 'ready' : 'interests'));
+                        setAppState(['admin', 'superadmin'].includes(userData.role) ? 'admin' : (userData.interests && userData.interests.length > 0 ? 'ready' : 'interests'));
                         const welcomeKey = `welcome_seen_${userData.id || userData.name}`;
                         const onboardingKey = `onboarding_seen_${userData.id || userData.name}`;
                         if (!localStorage.getItem(welcomeKey)) {
@@ -854,7 +854,7 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
         localStorage.setItem('user_data', JSON.stringify(u));
         window.dispatchEvent(new Event('user-login-changed'));
         syncFcmToken();
-        if (u.role === 'admin') { setAppState('admin'); }
+        if (['admin', 'superadmin'].includes(u.role)) { setAppState('admin'); }
         else { setAppState(u.interests && u.interests.length > 0 ? 'ready' : 'interests'); }
         const welcomeKey = `welcome_seen_${u.id || u.name}`;
         const onboardingKey = `onboarding_seen_${u.id || u.name}`;
