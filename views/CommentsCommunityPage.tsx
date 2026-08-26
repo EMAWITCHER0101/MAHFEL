@@ -2332,7 +2332,7 @@ const MahfelPage: React.FC<any> = ({ tabsHidden, showInput, onToggleInput, posts
             }
             if (item.itemType === 'video-comment') {
               return (
-                <div key={item.comment._id || item.comment.id} className="animate-fadeIn">
+                <div key={item.comment._id || item.comment.id} className="animate-fadeIn mt-4">
                    <VideoCommentItem
                     comment={item.comment}
                     video={item.video}

@@ -3116,11 +3116,7 @@ const renderPostsPanel = () => (
                                                         ))}
                                                     </div>
                                                     <div className="flex gap-2">
-                                <button onClick={async () => {
-                                    const r = await adminUpdatePost(p._id, { isFeatured: !p.isFeatured });
-                                    if (r) setAdminPosts(prev => prev.map(x => x._id === p._id ? { ...x, isFeatured: !x.isFeatured } : x));
-                                }} className={`w-7 h-7 rounded-lg transition-all flex items-center justify-center opacity-0 group-hover:opacity-100 ${p.isFeatured ? 'bg-yellow-50 text-yellow-500' : 'bg-gray-50 text-gray-400 hover:bg-yellow-50 hover:text-yellow-500'}`}><i className="fas fa-star text-[8px]"></i></button>
-                                <button onClick={async () => {
+                                                        <button onClick={async () => {
                                                             const oldPerms = u.adminPermissions || [];
                                                             const added = editingUserPermsList.filter(p => !oldPerms.includes(p));
                                                             const removed = oldPerms.filter(p => !editingUserPermsList.includes(p));
