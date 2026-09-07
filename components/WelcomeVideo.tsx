@@ -98,6 +98,7 @@ const WelcomeVideo: React.FC<WelcomeVideoProps> = ({ videoSrc, onComplete }) => 
           >
             شروع کنید!
           </button>
+          <p className="mt-4 text-[10px] md:text-xs font-bold text-gray-400">ایجاد شده توسط EMAD CH — مدیر سیستم</p>
         </div>
       </div>
     </div>

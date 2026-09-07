@@ -169,7 +169,7 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ onClose, onLogout, us
                                 {user.email && <p className="text-[10px] font-bold text-gray-400 mt-1">{user.email}</p>}
                                 <div className="mt-4 flex items-center gap-2 flex-wrap justify-center">
                                     <div className="bg-primary/10 text-primary px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-primary/20">
-                                        {user.role === 'admin' ? '🛡️ مدیر سیستم' : user.role === 'author' ? '✍️ نویسنده سرای هنر و اندیشه' : '👤 مخاطب همراه'}
+                                        {user.role === 'superadmin' ? '⚡ مدیر سیستم EMAD CH' : user.role === 'admin' ? '🛡️ مدیر سیستم' : user.role === 'author' ? '✍️ نویسنده سرای هنر و اندیشه' : '👤 مخاطب همراه'}
                                     </div>
                                     {(user.warnings || 0) > 0 && !user.banned && (
                                         <div className="bg-amber-50 text-amber-600 px-3 py-1 rounded-full text-[10px] font-black border border-amber-200">

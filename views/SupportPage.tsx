@@ -89,12 +89,12 @@ const SupportPage: React.FC<SupportPageProps> = ({ user, onToggleSidebar, theme 
             {/* توضیحات */}
             <div className="rounded-3xl p-5" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-white shadow-lg" style={{ background: 'linear-gradient(135deg, var(--primary), #0d9488)' }}>
-                  <i className="fas fa-headset text-base"></i>
+                <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-white shadow-lg overflow-hidden" style={{ background: 'linear-gradient(135deg, var(--primary), #0d9488)' }}>
+                  {user?.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : <i className="fas fa-headset text-base"></i>}
                 </div>
                 <div>
                   <h2 className="text-sm font-black" style={{ color: 'var(--text)' }}>در خدمت شما هستیم</h2>
-                  <p className="text-[9px] font-bold" style={{ color: 'var(--text-3)' }}>سؤالات، پیشنهادات و مشکلات خود را با ما در میان بگذارید</p>
+                  <p className="text-[9px] font-bold" style={{ color: 'var(--text-3)' }}>EMAD CH — مدیر سیستم</p>
                 </div>
               </div>
               <ul className="space-y-2 text-[11px] leading-relaxed" style={{ color: 'var(--text-2)' }}>
@@ -163,6 +163,10 @@ const SupportPage: React.FC<SupportPageProps> = ({ user, onToggleSidebar, theme 
           </div>
         )}
       </main>
+
+      <div className="text-center py-4">
+        <p className="text-[9px] font-bold" style={{ color: 'var(--text-3)' }}>ایجاد شده توسط EMAD CH — مدیر سیستم</p>
+      </div>
 
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[500] px-5 py-3 rounded-2xl text-[11px] font-bold text-white shadow-2xl animate-fadeIn"
