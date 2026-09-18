@@ -18,20 +18,17 @@ function ssh(cmd) {
 
 (async () => {
   try {
-    console.log('=== MongoDB Status ===');
-    console.log(await ssh('systemctl status mongod --no-pager 2>&1 | head -15'));
+    console.log('=== Server .env ===');
+    console.log(await ssh('cat /opt/soha/server/.env'));
     
-    console.log('\n=== Node Process ===');
-    console.log(await ssh('ps aux | grep "node server" | grep -v grep'));
+    console.log('\n=== MongoDB config ===');
+    console.log(await ssh('cat /etc/mongod.conf 2>/dev/null | head -30'));
     
-    console.log('\n=== Server Logs (last 30 lines) ===');
-    console.log(await ssh('tail -30 /opt/soha/logs/server.log 2>/dev/null || journalctl -u soha-backend --no-pager -n 30 2>/dev/null || echo "No logs found"'));
+    console.log('\n=== MongoDB port check ===');
+    console.log(await ssh('ss -tlnp | grep 27017'));
     
-    console.log('\n=== Test API ===');
-    console.log(await ssh('curl -s --max-time 5 http://localhost:5000/api/health'));
-    
-    console.log('\n=== Test Podcasts ===');
-    console.log(await ssh('curl -s --max-time 10 http://localhost:5000/api/podcasts 2>&1 | head -c 500'));
+    console.log('\n=== MongoDB replica set status ===');
+    console.log(await ssh('mongosh --eval "rs.status().ok" --quiet 2>&1 || mongo --eval "rs.status().ok" --quiet 2>&1'));
     
   } catch(e) {
     console.error('ERROR:', e.message);

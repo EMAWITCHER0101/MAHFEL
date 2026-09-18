@@ -48,7 +48,7 @@ const WelcomeVideo: React.FC<WelcomeVideoProps> = ({ videoSrc, onComplete }) => 
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onComplete} />
 
       {/* Card */}
-      <div className="relative z-10 w-full max-w-sm md:max-w-4xl bg-white rounded-[2rem] shadow-2xl overflow-hidden animate-scaleIn">
+      <div className="relative z-10 w-full max-w-sm md:max-w-4xl bg-white rounded-xl md:rounded-2xl shadow-2xl overflow-hidden animate-scaleIn">
         {/* Video */}
         <div className="relative aspect-square md:aspect-video bg-black">
           {!videoReady && !videoFailed && (
@@ -81,16 +81,16 @@ const WelcomeVideo: React.FC<WelcomeVideoProps> = ({ videoSrc, onComplete }) => 
         </div>
 
         {/* Content */}
-        <div className="p-6 md:p-10 text-center">
-          <h2 className="text-xl md:text-4xl font-black mb-1 md:mb-3" style={{ color: '#06b6d4' }}>
+        <div className="px-6 pt-5 pb-4 md:px-10 md:pt-8 md:pb-6 text-center">
+          <h2 className="text-xl md:text-4xl font-black mb-1 md:mb-2" style={{ color: '#06b6d4' }}>
             خوش آمدید!
           </h2>
-          <p className="text-sm md:text-xl font-bold mb-5 md:mb-8 leading-relaxed" style={{ color: '#0891b2' }}>
+          <p className="text-sm md:text-xl font-bold mb-4 md:mb-6 leading-relaxed" style={{ color: '#0891b2' }}>
             به اپلیکیشن محفل خوش آمدید
           </p>
           <button
             onClick={onComplete}
-            className="w-full md:w-72 py-3 md:py-4 rounded-xl md:rounded-2xl text-sm md:text-lg font-black text-white shadow-lg transition-all active:scale-95"
+            className="w-full md:w-72 py-3 md:py-3.5 rounded-lg md:rounded-xl text-sm md:text-base font-black text-white shadow-lg transition-all active:scale-95"
             style={{
               background: 'linear-gradient(135deg, #14b8a6, #0d9488)',
               boxShadow: '0 8px 24px rgba(20, 184, 166, 0.4)',
@@ -98,7 +98,7 @@ const WelcomeVideo: React.FC<WelcomeVideoProps> = ({ videoSrc, onComplete }) => 
           >
             شروع کنید!
           </button>
-          <p className="mt-4 text-[10px] md:text-xs font-bold text-gray-400">ایجاد شده توسط EMAD CH — مدیر سیستم</p>
+          <p className="mt-3 md:mt-4 text-[10px] md:text-xs font-bold text-gray-400">ایجاد شده توسط EMAD CH — مدیر سیستم</p>
         </div>
       </div>
     </div>

@@ -350,7 +350,7 @@ const PlaylistPage: React.FC<PlaylistPageProps> = ({
         <div className={`${isDark ? 'bg-gray-900/90 border-b border-white/[0.06]' : 'bg-gray-50 border-b border-gray-200'} backdrop-blur-xl flex justify-center sticky top-0 z-10 gap-1 px-4 lg:-mt-4 lg:pt-3 -mt-2 pt-2`}>
           <button onClick={() => { setActiveTab('about'); if (onPlaylistTabChange) onPlaylistTabChange('about'); }} className={`py-2 px-4 lg:py-2.5 lg:px-5 text-xs lg:text-sm font-bold transition-all rounded-xl             ${activeTab === 'about' ? (isDark ? 'text-white bg-white/10' : 'text-gray-900 bg-gray-200') + ' shadow-sm' : (isDark ? 'text-white/40 hover:text-white/70 hover:bg-white/[0.04]' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100')}`}>درباره</button>
           <button onClick={() => { setActiveTab('episodes'); if (onPlaylistTabChange) onPlaylistTabChange('episodes'); }} className={`py-2 px-4 lg:py-2.5 lg:px-5 text-xs lg:text-sm font-bold transition-all rounded-xl ${activeTab === 'episodes' ? (isDark ? 'text-white bg-white/10' : 'text-gray-900 bg-gray-200') + ' shadow-sm' : (isDark ? 'text-white/40 hover:text-white/70 hover:bg-white/[0.04]' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100')}`}>{'قسمت\u200cها (' + toPersianDigits(podcast.episodes.length) + ')'}</button>
-          <button onClick={() => { setActiveTab('comments'); if (onPlaylistTabChange) onPlaylistTabChange('comments'); }} className={`py-2 px-4 lg:py-2.5 lg:px-5 text-xs lg:text-sm font-bold transition-all rounded-xl ${activeTab === 'comments' ? (isDark ? 'text-white bg-white/10' : 'text-gray-900 bg-gray-200') + ' shadow-sm' : (isDark ? 'text-white/40 hover:text-white/70 hover:bg-white/[0.04]' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100')}`}>{'گفتگوها (' + toPersianDigits(podcastCommentsCount) + ')'}</button>
+          <button onClick={() => { setActiveTab('comments'); if (onPlaylistTabChange) onPlaylistTabChange('comments'); if (onPlayEpisodeAtTime) onPlayEpisodeAtTime(podcast, selectedEpisodeIndex, 0); else onPlayEpisode(podcast, selectedEpisodeIndex); }} className={`py-2 px-4 lg:py-2.5 lg:px-5 text-xs lg:text-sm font-bold transition-all rounded-xl ${activeTab === 'comments' ? (isDark ? 'text-white bg-white/10' : 'text-gray-900 bg-gray-200') + ' shadow-sm' : (isDark ? 'text-white/40 hover:text-white/70 hover:bg-white/[0.04]' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100')}`}>{'گفتگوها (' + toPersianDigits(podcastCommentsCount) + ')'}</button>
         </div>
 
         {/* Content */}
@@ -437,9 +437,9 @@ const PlaylistPage: React.FC<PlaylistPageProps> = ({
 
           {activeTab === 'comments' && (
             <section className="animate-fadeIn">
-              <div className="flex gap-2 overflow-x-auto pb-3 mb-4 no-scrollbar lg:justify-center" dir="ltr">
+              <div className="flex gap-2 overflow-x-auto pb-3 mb-4 no-scrollbar" style={{ scrollBehavior: 'smooth', WebkitOverflowScrolling: 'touch' }} dir="ltr">
                 {podcast.episodes.map((ep, i) => (
-                  <button key={i} onClick={() => { setSelectedEpisodeIndex(i); onEpisodeIndexChange?.(i); setReplyTo(null); setEditCommentId(null); onPlayEpisode(podcast, i); }}
+                  <button key={i} onClick={() => { setSelectedEpisodeIndex(i); onEpisodeIndexChange?.(i); setReplyTo(null); setEditCommentId(null); if (onPlayEpisodeAtTime) onPlayEpisodeAtTime(podcast, i, 0); else onPlayEpisode(podcast, i); }}
                     className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${selectedEpisodeIndex === i ? 'bg-primary text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-400 border border-gray-700 hover:bg-gray-700' : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200')}`}>
                     {toPersianDigits(i + 1)} · {String(ep.title).substring(0, 15)}{String(ep.title).length > 15 ? '..' : ''}
                   </button>

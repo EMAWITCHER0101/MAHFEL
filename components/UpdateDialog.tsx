@@ -20,6 +20,14 @@ export default function UpdateDialog({ update, isMobile, onClose }: UpdateDialog
   const [error, setError] = useState('');
   const mountedRef = useRef(true);
 
+  const handleDismiss = () => {
+    const version = isMobile ? update.apkVersion : update.desktopVersion;
+    if (version) {
+      localStorage.setItem(isMobile ? 'update_dismissed_apk' : 'update_dismissed_desktop', version);
+    }
+    onClose();
+  };
+
   useEffect(() => {
     mountedRef.current = true;
     const onProgress = (e: Event) => {
@@ -126,7 +134,7 @@ export default function UpdateDialog({ update, isMobile, onClose }: UpdateDialog
               {isMobile ? 'دانلود و نصب' : 'دانلود نسخه دسکتاپ'}
             </button>
           )}
-          <button onClick={onClose} style={{
+          <button onClick={handleDismiss} style={{
             flex: phase !== 'downloading' ? 0 : 1, padding: '11px 18px', borderRadius: 10, border: '1px solid #3a3a48',
             cursor: 'pointer', background: 'transparent', color: '#c9ccdb', fontSize: 13.5,
           }}>

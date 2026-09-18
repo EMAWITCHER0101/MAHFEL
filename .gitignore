@@ -54,3 +54,9 @@ ui*.xml
 
 # Junk archive (moved-out garbage, never track)
 _archive/junk/
+
+# Mimo code editor
+.mimocode/
+
+# Soha docs (Obsidian vault)
+soha-docs/
