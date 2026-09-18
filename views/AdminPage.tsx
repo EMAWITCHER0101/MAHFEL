@@ -1112,7 +1112,7 @@ if (activeTab === 'versions') loadVersions();
                         <div key={u._id} className="p-3 flex items-center gap-3">
                             <img src={u.avatar || `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" rx="16" fill="#1ab394"/><text x="16" y="16" font-size="14" fill="white" text-anchor="middle" dominant-baseline="central" font-family="Arial">${(u.name || 'ک').charAt(0)}</text></svg>`)}`} className="w-8 h-8 rounded-full object-cover" />
                             <div className="flex-1 min-w-0">
-                                <p className="text-[10px] font-black text-gray-800 truncate">{u.name || 'بدون نام'}</p>
+                                <p className="text-[10px] font-black text-gray-800">{u.name || 'بدون نام'}</p>
                                 <p className="text-[8px] text-gray-400">{toPersianDigits(u.phoneNumber)}</p>
                             </div>
                             <span className={`text-[7px] px-2 py-0.5 rounded-full font-black ${u.role === 'admin' ? 'bg-red-50 text-red-500' : u.role === 'author' ? 'bg-orange-50 text-orange-500' : 'bg-gray-100 text-gray-500'}`}>{u.role === 'admin' ? 'ادمین' : u.role === 'author' ? 'نویسنده' : 'کاربر'}</span>
@@ -1230,7 +1230,7 @@ if (activeTab === 'versions') loadVersions();
                         />
                         <img src={u.avatar || `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" rx="20" fill="#1ab394"/><text x="20" y="20" font-size="16" fill="white" text-anchor="middle" dominant-baseline="central" font-family="Arial">${(u.name || 'ک').charAt(0)}</text></svg>`)}`} className="w-10 h-10 rounded-full object-cover shadow-sm" />
                         <div className="flex-1 min-w-0">
-                            <p className="text-[11px] font-black text-gray-800 truncate">{u.name || 'بدون نام'}
+                            <p className="text-[11px] font-black text-gray-800">{u.name || 'بدون نام'}
                                 {u.banned && <span className="text-red-500 text-[8px] mr-1">🚫 بن شده</span>}
                                 {u.muted && <span className="text-orange-500 text-[8px] mr-1">🔇 سکوت</span>}
                                 {(u.warnings || 0) > 0 && !u.banned && <span className="text-amber-500 text-[8px] mr-1">⚠️{toPersianDigits(u.warnings)}</span>}
@@ -2458,7 +2458,7 @@ const renderPostsPanel = () => (
                                     <span className="text-[9px] text-green-600 bg-green-50 px-3 py-1.5 rounded-full font-black truncate max-w-[220px]">{versionForm.apkUrl}</span>
                                 )}
                                 {(versionForm.apkVersion || versionForm.apkUrl) && (
-                                    <button onClick={() => { showConfirmToast('آیا از حذف انتشار APK اطمینان دارید؟', () => { setVersionForm(f => ({ ...f, apkVersion: '', apkUrl: '', apkMessage: '' })); showAdminToast('انتشار APK حذف شد', 'success'); }); }} className="flex items-center gap-1 px-3 py-2.5 rounded-xl bg-red-50 text-red-500 text-[9px] font-black hover:bg-red-100 transition-all active:scale-95"><i className="fas fa-trash text-[8px]"></i> حذف انتشار</button>
+                                    <button onClick={() => { showConfirmToast('آیا از حذف انتشار APK اطمینان دارید؟', async () => { const cleared = { ...versionForm, apkVersion: '', apkUrl: '', apkMessage: '' }; setVersionForm(cleared); const res = await adminSaveAppUpdate(cleared); if (res) { loadVersions(); showAdminToast('انتشار APK حذف و ذخیره شد', 'success'); } else { showAdminToast('خطا در ذخیره', 'error'); } }); }} className="flex items-center gap-1 px-3 py-2.5 rounded-xl bg-red-50 text-red-500 text-[9px] font-black hover:bg-red-100 transition-all active:scale-95"><i className="fas fa-trash text-[8px]"></i> حذف انتشار</button>
                                 )}
                             </div>
                         </div>
@@ -2484,7 +2484,7 @@ const renderPostsPanel = () => (
                         <TextArea rows={2} placeholder="مثلاً: مشکلات نصب نسخه قبلی برطرف شده است" value={versionForm.desktopMessage || ''} onChange={(e: any) => setVersionForm(f => ({ ...f, desktopMessage: e.target.value }))} />
                     </FormField>
                     {(versionForm.desktopVersion || versionForm.desktopUrl) && (
-                        <button onClick={() => { showConfirmToast('آیا از حذف انتشار دسکتاپ اطمینان دارید؟', () => { setVersionForm(f => ({ ...f, desktopVersion: '', desktopUrl: '', desktopMessage: '' })); showAdminToast('انتشار دسکتاپ حذف شد', 'success'); }); }} className="flex items-center gap-1 px-3 py-2 rounded-xl bg-red-50 text-red-500 text-[9px] font-black hover:bg-red-100 transition-all active:scale-95"><i className="fas fa-trash text-[8px]"></i> حذف انتشار دسکتاپ</button>
+                        <button onClick={() => { showConfirmToast('آیا از حذف انتشار دسکتاپ اطمینان دارید؟', async () => { const cleared = { ...versionForm, desktopVersion: '', desktopUrl: '', desktopMessage: '' }; setVersionForm(cleared); const res = await adminSaveAppUpdate(cleared); if (res) { loadVersions(); showAdminToast('انتشار دسکتاپ حذف و ذخیره شد', 'success'); } else { showAdminToast('خطا در ذخیره', 'error'); } }); }} className="flex items-center gap-1 px-3 py-2 rounded-xl bg-red-50 text-red-500 text-[9px] font-black hover:bg-red-100 transition-all active:scale-95"><i className="fas fa-trash text-[8px]"></i> حذف انتشار دسکتاپ</button>
                     )}
                 </div>
             </div>

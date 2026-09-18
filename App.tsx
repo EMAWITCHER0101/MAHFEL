@@ -265,6 +265,33 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
         prevVPNRef.current = isVPN;
     }, [isVPN]);
 
+    const prevCommentPodcastRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (playlistTab === 'comments' && selectedPodcast) {
+            const pid = String(selectedPodcast.id || (selectedPodcast as any)._id);
+            if (prevCommentPodcastRef.current !== pid) {
+                prevCommentPodcastRef.current = pid;
+                const ep = selectedPodcast.episodes?.[playlistEpisodeIndex] || selectedPodcast.episodes?.[0];
+                if (ep?.audioUrl) {
+                    setCurrentTrack({ podcast: selectedPodcast, episode: ep, episodeIndex: 0 });
+                    const proxyUrl = `/api/proxy/audio?url=${encodeURIComponent(ep.audioUrl)}`;
+                    if (!audioRef.current) {
+                        audioRef.current = new Audio();
+                        audioRef.current.ontimeupdate = () => { if (!audioRef.current) return; setAudioProgress(audioRef.current.currentTime / (audioRef.current.duration || 1)); };
+                        audioRef.current.onloadedmetadata = () => { if (!audioRef.current) return; setAudioDuration(audioRef.current.duration); };
+                        audioRef.current.onended = () => setIsPlaying(false);
+                    }
+                    audioRef.current.src = proxyUrl;
+                    audioRef.current.play().catch(() => {});
+                    setIsPlaying(true);
+                }
+            }
+        }
+        if (!selectedPodcast) {
+            prevCommentPodcastRef.current = null;
+        }
+    }, [playlistTab, selectedPodcast, playlistEpisodeIndex]);
+
     const videoCurrentTimeRef = useRef(0);
     const videoPlayingRef = useRef(true);
 
@@ -388,7 +415,8 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
                 if (!info) return;
                 if (mobile && !isIos() && info.apkVersion) {
                     const current = getAppVersion();
-                    if (!current || isVersionNewer(info.apkVersion, current)) {
+                    const dismissed = localStorage.getItem('update_dismissed_apk') || '';
+                    if ((!current || isVersionNewer(info.apkVersion, current)) && dismissed !== info.apkVersion) {
                         setUpdateInfo(info);
                         setShowUpdateDialog(true);
                         return;
@@ -396,7 +424,8 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
                 }
                 if (desktop && info.desktopVersion) {
                     const current = getDesktopVersion();
-                    if (!current || isVersionNewer(info.desktopVersion, current)) {
+                    const dismissed = localStorage.getItem('update_dismissed_desktop') || '';
+                    if ((!current || isVersionNewer(info.desktopVersion, current)) && dismissed !== info.desktopVersion) {
                         setUpdateInfo(info);
                         setShowUpdateDialog(true);
                     }
@@ -2141,7 +2170,7 @@ case 'video-mini': setActiveVideo(null); setIsVideoMini(false); break;
                                 onToggleLibrary={() => togglePodcastLibrary(currentTrack.podcast)}
                                 volume={volume} onVolumeChange={setVolume} repeatMode={repeatMode} onRepeatModeChange={setRepeatMode}
                                 isShuffle={isShuffle} onShuffleToggle={() => setIsShuffle(s => !s)}
-                                sleepTimer={sleepTimer} onSleepTimer={setSleepTimer} onPlayEpisode={playEpisode}
+                                sleepTimer={sleepTimer} onSleepTimer={setSleepTimer} onPlayEpisode={playEpisode} onSelectPodcast={setSelectedPodcast}
                                 onPlayInBackground={handlePlayInBackground}
                                 activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); setSelectedPodcast(null); }}
                                 theme={theme} onToggleTheme={toggleTheme} onOpenProfile={() => setIsProfileOpen(true)}

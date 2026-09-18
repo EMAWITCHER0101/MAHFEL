@@ -36,6 +36,7 @@ interface FullScreenPlayerProps {
   sleepTimer: number | null;
   onSleepTimer: (t: number | null) => void;
   onPlayEpisode: (podcast: Podcast, idx: number) => void;
+  onSelectPodcast?: (podcast: Podcast) => void;
   onPlayInBackground: () => void;
   activeTab: Page;
   onTabChange: (tab: Page) => void;
@@ -60,7 +61,7 @@ const FullScreenPlayer: React.FC<FullScreenPlayerProps> = ({
   comments, onAddComment, onDeleteComment, onUpdateComment, onLikeComment, currentUserName,
   playbackRate, onPlaybackRateChange, onOpenFile, onShowInstantView, isInLibrary, onToggleLibrary,
   volume, onVolumeChange, repeatMode, onRepeatModeChange, isShuffle, onShuffleToggle, sleepTimer, onSleepTimer,
-  onPlayEpisode, activeTab, onTabChange, theme, onToggleTheme, onOpenProfile, podcasts,
+  onPlayEpisode, onSelectPodcast, activeTab, onTabChange, theme, onToggleTheme, onOpenProfile, podcasts,
   onToggleEpisode, isEpisodeInLibrary,
 }) => {
   const isDark = theme === 'dark';
@@ -149,7 +150,9 @@ const FullScreenPlayer: React.FC<FullScreenPlayerProps> = ({
         {/* Cover + info */}
         <div className="relative z-10 flex-shrink-0 px-4 pt-12 pb-2">
           <div className="flex gap-4 items-center w-full">
-            <div className={`relative w-[80px] h-[80px] rounded-2xl overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.4)] flex-shrink-0 ring-2 ${isDark ? 'ring-white/[0.08]' : 'ring-gray-200'}`}>
+            <div className="relative">
+              {coverUrl && <div className="absolute -inset-4 rounded-3xl opacity-20 blur-3xl" style={{ background: 'radial-gradient(circle, #06b6d4 0%, #0891b2 50%, transparent 80%)' }}></div>}
+              <div className={`relative w-[80px] h-[80px] rounded-2xl overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.4)] flex-shrink-0 ring-2 ${isDark ? 'ring-white/[0.08]' : 'ring-gray-200'}`}>
               {coverUrl ? (
                 <img src={coverUrl} alt={String(episode.title)} className="w-full h-full object-cover" />
               ) : (
@@ -158,6 +161,7 @@ const FullScreenPlayer: React.FC<FullScreenPlayerProps> = ({
                 </div>
               )}
               {isPlaying && <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>}
+            </div>
             </div>
             <div className="flex-1 min-w-0 text-right">
               <h2 className={`text-[15px] font-black ${isDark ? 'text-white' : 'text-gray-900'} leading-snug line-clamp-1`}>{String(episode.title)}</h2>
@@ -263,7 +267,7 @@ const FullScreenPlayer: React.FC<FullScreenPlayerProps> = ({
               <i className="fas fa-comments text-emerald-400/60 text-[10px]"></i>
               <h3 className={`text-[10px] font-black ${isDark ? 'text-white/60' : 'text-gray-600'}`}>یادداشت‌ها</h3>
             </div>
-            <span className="bg-emerald-500/10 text-emerald-400 text-[8px] font-bold px-2 py-0.5 rounded-full border border-emerald-500/20">{toPersianDigits(comments.length)} نظر</span>
+            <span className="bg-emerald-500/10 text-emerald-400 text-[8px] font-bold px-2 py-0.5 rounded-full border border-emerald-500/20">{toPersianDigits(episodeComments.length)} نظر</span>
           </div>
           <div className={`flex-1 ${isDark ? 'bg-gradient-to-b from-white/[0.06] to-white/[0.02] border-white/[0.08] shadow-black/20' : 'bg-gradient-to-b from-gray-50 to-white border-gray-200 shadow-gray-200/50'} backdrop-blur-2xl rounded-2xl border flex flex-col overflow-y-auto min-h-0 mb-1.5 shadow-lg`}>
             <div className="flex-1 overflow-y-auto space-y-1 p-2 no-scrollbar text-right">
@@ -329,7 +333,7 @@ const FullScreenPlayer: React.FC<FullScreenPlayerProps> = ({
         <div className={`w-72 flex-shrink-0 h-full overflow-y-auto no-scrollbar ${isDark ? 'border-l border-white/[0.06] bg-gray-900' : 'border-l-2 border-gray-200 bg-white'}`}>
           <div className="flex flex-col h-full">
             <div className={`flex items-center justify-between px-5 pt-8 pb-5 ${isDark ? 'border-b border-white/[0.06]' : 'border-b border-gray-200'}`}>
-              <span className={`text-sm font-black ${isDark ? 'text-white/50' : 'text-gray-600'}`}>پیشنهادی</span>
+              <span className={`text-sm font-black ${isDark ? 'text-white/50' : 'text-gray-600'}`}>پلی‌لیست پیشنهادی</span>
               <i className={`fas fa-headphones text-xs ${isDark ? 'text-white/20' : 'text-gray-300'}`}></i>
             </div>
             <div className="flex-1 px-3 py-4 space-y-1">
@@ -338,7 +342,7 @@ const FullScreenPlayer: React.FC<FullScreenPlayerProps> = ({
                 const epCount = p.episodes?.length || 0;
                 const cover = String(p.cover || '');
                 return (
-                  <button key={String(p.id || (p as any)._id)} onClick={() => { onPlayEpisode(p, 0); }}
+                  <button key={String(p.id || (p as any)._id)} onClick={() => { onSelectPodcast?.(p); }}
                     className={`w-full flex items-center gap-2.5 p-2 rounded-xl ${isDark ? 'hover:bg-white/[0.04]' : 'hover:bg-gray-100'} transition-all text-right group`}>
                     <div className={`w-11 h-11 rounded-xl overflow-hidden flex-shrink-0 ring-1 ${isDark ? 'ring-white/[0.06] bg-gray-800' : 'ring-gray-200 bg-gray-100'}`}>
                       {cover ? <img src={cover} alt="" className="w-full h-full object-cover" /> : (
@@ -349,7 +353,7 @@ const FullScreenPlayer: React.FC<FullScreenPlayerProps> = ({
                       <p className={`text-xs font-bold ${isDark ? 'text-white/70 group-hover:text-white' : 'text-gray-700 group-hover:text-gray-900'} truncate transition-colors`}>{String(p.title)}</p>
                       <p className={`text-[10px] ${isDark ? 'text-white/30' : 'text-gray-500'} mt-0.5`}>{String(pAuthor?.name || '')} · {toPersianDigits(epCount)} قسمت</p>
                     </div>
-                    <i className={`fas fa-play text-[9px] ${isDark ? 'text-white/0' : 'text-transparent'} group-hover:text-primary transition-all`}></i>
+                    <i className={`fas fa-list text-[9px] ${isDark ? 'text-white/0' : 'text-transparent'} group-hover:text-primary transition-all`}></i>
                   </button>
                 );
               })}
@@ -497,7 +501,7 @@ const FullScreenPlayer: React.FC<FullScreenPlayerProps> = ({
               <div className={`flex-1 max-w-3xl mx-auto w-full ${isDark ? 'bg-gradient-to-b from-[#041e2b] via-[#062030] to-[#082538] border-white/[0.06]' : 'bg-gradient-to-b from-gray-50 via-white to-white border-gray-200'} rounded-2xl border flex flex-col overflow-hidden min-h-0`}>
                 <div className="flex-shrink-0 flex items-center justify-between px-4 pt-3 pb-1">
                   <h3 className={`text-sm font-black ${isDark ? 'text-white/70' : 'text-gray-700'}`}>یادداشت‌ها</h3>
-                  <span className="bg-primary/15 text-primary text-xs font-black px-2.5 py-0.5 rounded-full">{toPersianDigits(comments.length)} نظر</span>
+                  <span className="bg-primary/15 text-primary text-xs font-black px-2.5 py-0.5 rounded-full">{toPersianDigits(episodeComments.length)} نظر</span>
                 </div>
                 <div className="flex-1 overflow-y-auto space-y-1.5 px-4 pb-2 no-scrollbar text-right">
                   {episodeComments.length > 0 ? episodeComments.map(cmt => renderComment(cmt, true, 0)) : (
