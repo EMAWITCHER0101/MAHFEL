@@ -1,4 +1,4 @@
-import fs from 'fs';
+﻿import fs from 'fs';
 
 const PAGES = [
   'https://soha-sima.ir/album/%d8%a8%d9%84%d8%a7%db%8c-%d8%a8%db%8c-%d8%aa%d8%a7%d8%b1%db%8c%d8%ae%db%8c-%d9%88-%d8%ac%d9%87%d8%a7%d9%86-%d8%a8%db%8c-%d8%a2%db%8c%d9%86%d8%af%d9%87/',
@@ -35,4 +35,4 @@ for (const url of PAGES) {
   }
   await new Promise(r => setTimeout(r, 300));
 }
-fs.writeFileSync('C:\\Users\\EMAD\\AppData\\Local\\Temp\\opencode\\albums-og.json', JSON.stringify(out, null, 2));
+fs.writeFileSync('C:\\Users\\EMAD\\AppData\\Local\\Temp\\soha-tmp\\albums-og.json', JSON.stringify(out, null, 2));

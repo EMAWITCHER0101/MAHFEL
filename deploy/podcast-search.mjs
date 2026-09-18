@@ -1,4 +1,4 @@
-import fs from 'fs';
+﻿import fs from 'fs';
 
 const QUERIES = [
   'راز سکوت', 'ایده پردازی', 'صعود اقتصادی', 'طراحی ستاره', 'سکرات ایمان', 'اقیانوس یگانگی',
@@ -18,4 +18,4 @@ for (const q of QUERIES) {
   } catch (e) { out[q] = { error: e.message }; }
   await new Promise(r => setTimeout(r, 250));
 }
-fs.writeFileSync('C:\\Users\\EMAD\\AppData\\Local\\Temp\\opencode\\podcast-search.json', JSON.stringify(out, null, 2));
+fs.writeFileSync('C:\\Users\\EMAD\\AppData\\Local\\Temp\\soha-tmp\\podcast-search.json', JSON.stringify(out, null, 2));

@@ -1,4 +1,4 @@
-import fs from 'fs';
+﻿import fs from 'fs';
 
 const base = 'https://soha-sima.ir/';
 async function sitemapUrls(url) {
@@ -31,4 +31,4 @@ for (let i = 1; i <= 12; i++) {
 console.log('TOTAL EPISODES:', total);
 const out = {};
 for (const [k, urls] of hits) { out[k] = urls; console.log('\n### ' + k + ' (' + urls.length + ')'); for (const u of urls.slice(0, 10)) console.log('  ', decodeURIComponent(u)); }
-fs.writeFileSync('C:\\Users\\EMAD\\AppData\\Local\\Temp\\opencode\\episode-hits2.json', JSON.stringify(out, null, 2));
+fs.writeFileSync('C:\\Users\\EMAD\\AppData\\Local\\Temp\\soha-tmp\\episode-hits2.json', JSON.stringify(out, null, 2));

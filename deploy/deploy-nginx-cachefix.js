@@ -1,4 +1,4 @@
-const {Client} = require('C:\\Users\\EMAD\\AppData\\Roaming\\npm\\node_modules\\ssh2');
+﻿const {Client} = require('C:\\Users\\EMAD\\AppData\\Roaming\\npm\\node_modules\\ssh2');
 const dotenv = require('dotenv');
 const path = require('path');
 dotenv.config({ path: path.join('E:\\soha\\deploy', '.env.deploy') });
@@ -23,7 +23,7 @@ function run(cmd, tag) {
     .connect({ host: HOST, port: PORT, username: USER, password: PASS, readyTimeout: 20000 }));
   console.log('connected');
   const sftp = await new Promise((res, rej) => c.sftp((e, s) => e ? rej(e) : res(s)));
-  await new Promise((res, rej) => sftp.fastPut('C:\\Users\\EMAD\\AppData\\Local\\Temp\\opencode\\mahfel-nginx-v2.conf', '/etc/nginx/sites-enabled/mahfel', e => e ? rej(e) : res()));
+  await new Promise((res, rej) => sftp.fastPut('C:\\Users\\EMAD\\AppData\\Local\\Temp\\soha-tmp\\mahfel-nginx-v2.conf', '/etc/nginx/sites-enabled/mahfel', e => e ? rej(e) : res()));
   console.log('uploaded nginx conf');
   await run('cp /etc/nginx/sites-enabled/mahfel /root/mahfel-nginx-backup.conf && nginx -t', 'nginx -t');
   await run('systemctl reload nginx && sleep 1 && curl -s -o /dev/null -w "html cache-control check -> %{http_code} " https://app.soha-sima.ir/ -k -D - 2>&1 | grep -i cache-control | head -3', 'reload + verify');

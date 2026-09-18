@@ -1,4 +1,4 @@
-import fs from 'fs';
+﻿import fs from 'fs';
 
 const candidates = [27916, 27881, 27887, 3568, 4984, 3318, 4593, 4902, 4845, 4852, 3745, 27957, 27928, 27969, 27954, 27869, 4598, 3897, 3916];
 const out = {};
@@ -12,4 +12,4 @@ for (const id of candidates) {
   } catch (e) { out[id] = { error: e.message }; console.log(id, 'ERR', e.message); }
   await new Promise(r => setTimeout(r, 250));
 }
-fs.writeFileSync('C:\\Users\\EMAD\\AppData\\Local\\Temp\\opencode\\cand-imgs.json', JSON.stringify(out, null, 2));
+fs.writeFileSync('C:\\Users\\EMAD\\AppData\\Local\\Temp\\soha-tmp\\cand-imgs.json', JSON.stringify(out, null, 2));

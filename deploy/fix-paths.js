@@ -1,4 +1,4 @@
-const { Client } = require('C:\\Users\\EMAD\\AppData\\Roaming\\npm\\node_modules\\ssh2');
+﻿const { Client } = require('C:\\Users\\EMAD\\AppData\\Roaming\\npm\\node_modules\\ssh2');
 require('dotenv').config({ path: 'E:\\soha\\deploy\\.env.deploy' });
 const fs = require('fs');
 const c = new Client();
@@ -16,7 +16,7 @@ c.on('ready', () => {
       });
     });
     w.on('error', err2 => { console.error(err2.message); process.exit(1); });
-    fs.createReadStream('C:\\Users\\EMAD\\AppData\\Local\\Temp\\opencode\\pdfx\\fix-paths.mjs').pipe(w);
+    fs.createReadStream('C:\\Users\\EMAD\\AppData\\Local\\Temp\\soha-tmp\\pdfx\\fix-paths.mjs').pipe(w);
   });
 }).on('error', e => { console.error(e.message); process.exit(1); })
   .connect({ host: process.env.SSH_HOST, port: +process.env.SSH_PORT, username: process.env.SSH_USER, password: process.env.SSH_PASS, readyTimeout: 15000, keepaliveInterval: 10000 });

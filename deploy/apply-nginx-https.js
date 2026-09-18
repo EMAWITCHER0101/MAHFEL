@@ -1,4 +1,4 @@
-const {Client} = require('C:\\Users\\EMAD\\AppData\\Roaming\\npm\\node_modules\\ssh2');
+﻿const {Client} = require('C:\\Users\\EMAD\\AppData\\Roaming\\npm\\node_modules\\ssh2');
 const dotenv = require('dotenv');
 const path = require('path');
 const fs = require('fs');
@@ -6,7 +6,7 @@ dotenv.config({ path: path.join(__dirname, '.env.deploy') });
 const HOST = process.env.SSH_HOST, PORT = parseInt(process.env.SSH_PORT || '9011');
 const USER = process.env.SSH_USER, PASS = process.env.SSH_PASS;
 
-const confPath = 'C:\\Users\\EMAD\\AppData\\Local\\Temp\\opencode\\new-mahfel.conf';
+const confPath = 'C:\\Users\\EMAD\\AppData\\Local\\Temp\\soha-tmp\\new-mahfel.conf';
 const b64 = fs.readFileSync(confPath).toString('base64');
 
 const c = new Client();

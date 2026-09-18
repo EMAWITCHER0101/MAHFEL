@@ -369,7 +369,7 @@ const SLEEP_OPTIONS = [
 **مسیر فایل:** `components/Toast.tsx` — ۵۰ سطر
 
 ### هدف
-پیام کوتاه لحظه‌ای (类似 اسنک‌بار) که به‌صورت خودکار بعد از ۳ ثانیه بسته می‌شود.
+پیام کوتاه لحظه‌ای (مشابه اسنک‌بار) که به‌صورت خودکار بعد از ۳ ثانیه بسته می‌شود.
 
 ### Interface Props
 
@@ -386,7 +386,7 @@ interface ToastProps {
 
 ### مکانیزم
 
--状态 `isVisible` با `useState` کنترل می‌شود (خط ۱۴)
+- State `isVisible` با `useState` کنترل می‌شود (خط ۱۴)
 - پس از `duration` ms، `isVisible` false شده و بعد از ۳۰۰ms (زمان transition) `onClose` فراخوانی می‌شود (خط ۲۱-۲۴)
 - استایل: `fixed top-5 right-5` با `backdrop-blur-md` (خط ۳۱)
 - `z-[9999]` تضمین می‌کند روی همه چیز نمایش داده شود

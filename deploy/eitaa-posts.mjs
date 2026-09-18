@@ -1,4 +1,4 @@
-import fs from 'fs';
+﻿import fs from 'fs';
 
 async function fetchPage(url) {
   const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36' } });
@@ -44,4 +44,4 @@ for (const o of out) {
   console.log('img:', o.img ? 'YES' : 'no');
   console.log('txt:', (o.txt || '').slice(0, 120));
 }
-fs.writeFileSync('C:\\Users\\EMAD\\AppData\\Local\\Temp\\opencode\\eitaa-posts.json', JSON.stringify(out, null, 2));
+fs.writeFileSync('C:\\Users\\EMAD\\AppData\\Local\\Temp\\soha-tmp\\eitaa-posts.json', JSON.stringify(out, null, 2));

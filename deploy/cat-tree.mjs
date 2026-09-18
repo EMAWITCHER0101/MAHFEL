@@ -1,4 +1,4 @@
-import fs from 'fs';
+﻿import fs from 'fs';
 
 const strip = s => String(s || '').replace(/[\u200c\u200f]/g, '').trim();
 
@@ -33,7 +33,7 @@ while (queue.length && guard < 200) {
   await new Promise(r => setTimeout(r, 200));
 }
 
-fs.writeFileSync('C:\\Users\\EMAD\\AppData\\Local\\Temp\\opencode\\cat-tree.json', JSON.stringify(results, null, 2));
+fs.writeFileSync('C:\\Users\\EMAD\\AppData\\Local\\Temp\\soha-tmp\\cat-tree.json', JSON.stringify(results, null, 2));
 console.log('\nTOTAL CATEGORY ENTRIES:', results.length);
 const uniq = new Map();
 for (const r of results) if (!uniq.has(r.title)) uniq.set(r.title, r.href);

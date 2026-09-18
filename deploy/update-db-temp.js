@@ -1,4 +1,4 @@
-const { Client } = require('C:\\Users\\EMAD\\AppData\\Roaming\\npm\\node_modules\\ssh2');
+﻿const { Client } = require('C:\\Users\\EMAD\\AppData\\Roaming\\npm\\node_modules\\ssh2');
 require('dotenv').config({ path: 'E:\\soha\\deploy\\.env.deploy' });
 const fs = require('fs');
 const c = new Client();
@@ -14,9 +14,9 @@ c.on('ready', () => {
     });
     (async () => {
       try {
-        await upload('C:\\Users\\EMAD\\AppData\\Local\\Temp\\opencode\\pdfx\\books-content.json', '/opt/soha/server/books-content.json');
+        await upload('C:\\Users\\EMAD\\AppData\\Local\\Temp\\soha-tmp\\pdfx\\books-content.json', '/opt/soha/server/books-content.json');
         console.log('first done');
-        await upload('C:\\Users\\EMAD\\AppData\\Local\\Temp\\opencode\\pdfx\\update-db.mjs', '/opt/soha/server/update-db.mjs');
+        await upload('C:\\Users\\EMAD\\AppData\\Local\\Temp\\soha-tmp\\pdfx\\update-db.mjs', '/opt/soha/server/update-db.mjs');
         console.log('second done');
         c.exec('cd /opt/soha/server && node update-db.mjs; rm -f update-db.mjs books-content.json', (e, s) => {
           if (e) { console.error('exec err', e.message); c.end(); return; }

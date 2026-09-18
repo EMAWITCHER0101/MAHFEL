@@ -1,4 +1,4 @@
-import fs from 'fs';
+﻿import fs from 'fs';
 
 const BASE = 'https://soha-sima.ir/wp-json/wp/v2/';
 
@@ -38,7 +38,7 @@ for (const q of MISSING) {
   await new Promise(r => setTimeout(r, 400));
 }
 
-fs.writeFileSync('C:\\Users\\EMAD\\AppData\\Local\\Temp\\opencode\\covers-search.json', JSON.stringify(results, null, 2));
+fs.writeFileSync('C:\\Users\\EMAD\\AppData\\Local\\Temp\\soha-tmp\\covers-search.json', JSON.stringify(results, null, 2));
 for (const [q, r] of Object.entries(results)) {
   console.log('### ' + q);
   if (r.error) { console.log('  ERR: ' + r.error); continue; }

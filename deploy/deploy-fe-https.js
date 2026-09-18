@@ -1,4 +1,4 @@
-const {Client} = require('C:\\Users\\EMAD\\AppData\\Roaming\\npm\\node_modules\\ssh2');
+﻿const {Client} = require('C:\\Users\\EMAD\\AppData\\Roaming\\npm\\node_modules\\ssh2');
 const dotenv = require('dotenv');
 const path = require('path');
 const fs = require('fs');
@@ -6,7 +6,7 @@ dotenv.config({ path: path.join(__dirname, '.env.deploy') });
 const HOST = process.env.SSH_HOST, PORT = parseInt(process.env.SSH_PORT || '9011');
 const USER = process.env.SSH_USER, PASS = process.env.SSH_PASS;
 
-const tarPath = 'C:\\Users\\EMAD\\AppData\\Local\\Temp\\opencode\\fe.tar';
+const tarPath = 'C:\\Users\\EMAD\\AppData\\Local\\Temp\\soha-tmp\\fe.tar';
 const REMOTE_TAR = '/tmp/fe.tar';
 const EXTRACT_TO = '/opt/soha/.next/standalone';
 

@@ -1,4 +1,4 @@
-import fs from 'fs';
+﻿import fs from 'fs';
 
 async function get(url) {
   const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
@@ -50,4 +50,4 @@ for (const u of cats) {
   await new Promise(r => setTimeout(r, 250));
 }
 
-fs.writeFileSync('C:\\Users\\EMAD\\AppData\\Local\\Temp\\opencode\\page-imgs.json', JSON.stringify(out, null, 2));
+fs.writeFileSync('C:\\Users\\EMAD\\AppData\\Local\\Temp\\soha-tmp\\page-imgs.json', JSON.stringify(out, null, 2));

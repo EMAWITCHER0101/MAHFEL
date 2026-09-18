@@ -1,4 +1,4 @@
-import fs from 'fs';
+﻿import fs from 'fs';
 
 const strip = s => String(s || '').replace(/[\u200c\u200f]/g, '').trim();
 
@@ -45,4 +45,4 @@ for (const q of MISSING) {
   } catch (e) { out[q] = { error: e.message }; console.log('### ' + q + ' | ' + e.message); }
   await new Promise(r => setTimeout(r, 250));
 }
-fs.writeFileSync('C:\\Users\\EMAD\\AppData\\Local\\Temp\\opencode\\final-search.json', JSON.stringify(out, null, 2));
+fs.writeFileSync('C:\\Users\\EMAD\\AppData\\Local\\Temp\\soha-tmp\\final-search.json', JSON.stringify(out, null, 2));

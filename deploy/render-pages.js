@@ -1,4 +1,4 @@
-const { Client } = require('C:\\Users\\EMAD\\AppData\\Roaming\\npm\\node_modules\\ssh2');
+﻿const { Client } = require('C:\\Users\\EMAD\\AppData\\Roaming\\npm\\node_modules\\ssh2');
 require('dotenv').config({ path: 'E:\\soha\\deploy\\.env.deploy' });
 const fs = require('fs');
 const c = new Client();
@@ -12,7 +12,7 @@ c.on('ready', () => {
     });
     (async () => {
       try {
-        await up('C:\\Users\\EMAD\\AppData\\Local\\Temp\\opencode\\pdfx\\render-server.mjs', '/opt/soha/server/render-pages.mjs');
+        await up('C:\\Users\\EMAD\\AppData\\Local\\Temp\\soha-tmp\\pdfx\\render-server.mjs', '/opt/soha/server/render-pages.mjs');
         console.log('uploaded');
         c.exec('cd /opt/soha/server && node render-pages.mjs', (e, s) => {
           if (e) { console.error(e.message); c.end(); return; }

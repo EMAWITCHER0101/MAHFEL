@@ -1,4 +1,4 @@
-import fs from 'fs';
+﻿import fs from 'fs';
 
 async function get(url) {
   const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
@@ -57,7 +57,7 @@ for (const cat of [
   await new Promise(r => setTimeout(r, 250));
 }
 
-fs.writeFileSync('C:\\Users\\EMAD\\AppData\\Local\\Temp\\opencode\\album-featured.json', JSON.stringify({ albums: out, posts }, null, 2));
+fs.writeFileSync('C:\\Users\\EMAD\\AppData\\Local\\Temp\\soha-tmp\\album-featured.json', JSON.stringify({ albums: out, posts }, null, 2));
 
 for (const p of posts) {
   console.log('\n== ' + p.cat);

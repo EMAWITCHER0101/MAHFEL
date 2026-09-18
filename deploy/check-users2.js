@@ -1,4 +1,4 @@
-const {Client} = require('C:\\Users\\EMAD\\AppData\\Roaming\\npm\\node_modules\\ssh2');
+﻿const {Client} = require('C:\\Users\\EMAD\\AppData\\Roaming\\npm\\node_modules\\ssh2');
 const dotenv = require('dotenv');
 const path = require('path');
 const fs = require('fs');
@@ -24,7 +24,7 @@ function ssh(cmd, timeout) {
 
 (async () => {
   try {
-    const b64 = fs.readFileSync('C:\\Users\\EMAD\\AppData\\Local\\Temp\\opencode\\chk-users.b64', 'utf8').trim();
+    const b64 = fs.readFileSync('C:\\Users\\EMAD\\AppData\\Local\\Temp\\soha-tmp\\chk-users.b64', 'utf8').trim();
     console.log(await ssh(`cd /opt/soha && echo '${b64}' | base64 -d > /tmp/chk.js && node /tmp/chk.js && rm -f /tmp/chk.js`, 30000));
   } catch (e) { console.error('FAILED:', e.message); }
 })();

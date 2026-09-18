@@ -1,4 +1,4 @@
-import fs from 'fs';
+﻿import fs from 'fs';
 
 const ids = [27881, 27871, 4949, 27916, 27856, 3576, 3916, 3897];
 const out = {};
@@ -15,4 +15,4 @@ for (const id of ids) {
   } catch (e) { out[id] = { error: e.message }; console.log(id, 'ERR', e.message); }
   await new Promise(r => setTimeout(r, 250));
 }
-fs.writeFileSync('C:\\Users\\EMAD\\AppData\\Local\\Temp\\opencode\\final-imgs.json', JSON.stringify(out, null, 2));
+fs.writeFileSync('C:\\Users\\EMAD\\AppData\\Local\\Temp\\soha-tmp\\final-imgs.json', JSON.stringify(out, null, 2));

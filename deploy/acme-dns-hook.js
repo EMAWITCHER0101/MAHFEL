@@ -1,7 +1,7 @@
-const fs = require('fs');
+﻿const fs = require('fs');
 
-const STATE = 'C:\\Users\\EMAD\\AppData\\Local\\Temp\\opencode\\acme-dns-state.txt';
-const DONE = 'C:\\Users\\EMAD\\AppData\\Local\\Temp\\opencode\\acme-dns-done.txt';
+const STATE = 'C:\\Users\\EMAD\\AppData\\Local\\Temp\\soha-tmp\\acme-dns-state.txt';
+const DONE = 'C:\\Users\\EMAD\\AppData\\Local\\Temp\\soha-tmp\\acme-dns-done.txt';
 
 const mode = process.argv[2] || 'auth';
 const domain = process.env.CERTBOT_DOMAIN || '';
